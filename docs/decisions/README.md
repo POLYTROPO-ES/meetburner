@@ -28,3 +28,5 @@ Template:
 | [0010](0010-large-amounts.md) | Large amounts: abbreviate or shrink | accepted (suffixes amended by 0011) |
 | [0011](0011-short-and-long-scale.md) | Short vs long scale for abbreviated amounts | accepted |
 | [0012](0012-deploy-on-push.md) | Deploy on push with GitHub Actions, served at meetburner.com | accepted |
+| [0013](0013-windows-frame-ipc.md) | Windows camera frame IPC (shared memory + seqlock) | accepted |
+| [0014](0014-renderer-fonts-and-theme-data.md) | Rust renderer: system fonts and generated theme data | accepted |

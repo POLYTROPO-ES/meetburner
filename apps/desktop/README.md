@@ -7,3 +7,47 @@ Wraps `apps/web`. Camera pipeline is planned in [roadmap](../../docs/plan/roadma
 1. Install Rust and the Tauri prerequisites: https://v2.tauri.app/start/prerequisites/
 2. Generate icons once (required by the Windows build): `npx tauri icon path/to/logo.png` (from this folder).
 3. From the repo root: `npm run dev:desktop`.
+
+## Camera pipeline (M4 + producer half of M6)
+
+`src-tauri/src/camera/`:
+
+| Module | Responsibility |
+|--------|----------------|
+| `frame` | BGRA 1280×720 frame, 4 bytes per pixel, no row padding |
+| `theme` | theme ids, layouts, font choices; `"seasons"` resolved from the UTC month |
+| `themes_data` | **generated** mirror of `packages/core/src/themes.ts` (ADR-0014) |
+| `format` | `format_money`, `format_money_compact`, `format_duration` (mirror of `packages/core`) |
+| `layout` | fullscreen/widget geometry and the `fitCost` rule |
+| `fonts` | loads system fonts per `FontId` (no bundled font files) |
+| `renderer` | draws the counter into a frame (tiny-skia + ab_glyph) |
+| `ipc` | shared-memory frame protocol with a seqlock (ADR-0013) |
+| `sink` | `VirtualCameraSink` trait, `NullSink`, `RecordingSink`, `WinSharedMemSink` |
+| `engine` | 30 fps render thread, never on the Tauri main thread |
+
+Tauri commands: `camera_start(config)`, `camera_update(config)`, `camera_stop()`.
+`config` is the `CounterInput` shape (camelCase): `startAt`, `endAt`, `ratePerMs`, `currency`, `locale`, `labels{totalCost,elapsed,costPerMinute,startsIn}`, `display{theme,layout,costFont,timeFont,costScale,timeScale,overflow}`. Missing fields fall back to defaults and scales are clamped to 50–250 %.
+
+On Windows, frames go to the mapping `Local\MeetBurnerCamera` (event `Local\MeetBurnerCameraFrame`); the DirectShow/MF DLLs read it. On other platforms the sink is a no-op until M5.
+
+### Regenerate the theme mirror
+
+After changing `packages/core/src/themes.ts`:
+
+```powershell
+npm run gen:themes
+```
+
+`npm test` fails if the committed `src-tauri/src/camera/themes_data.rs` is stale.
+
+### Verify
+
+```powershell
+npm test
+npm run build:web
+cd apps/desktop/src-tauri
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
+

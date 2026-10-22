@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "test": "npm test -w @meetburner/core",
+    "gen:themes": "node tools/gen-themes.mts",
     "dev:web": "npm run dev -w @meetburner/web",
     "build:web": "npm run build -w @meetburner/web",
     "deploy:web": "npm run build:web && npx --yes wrangler@4 pages deploy apps/web/dist --project-name meetburner --branch main",

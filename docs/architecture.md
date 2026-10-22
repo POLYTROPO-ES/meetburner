@@ -57,3 +57,26 @@ Web app: static build on Cloudflare Pages with security headers from `apps/web/p
 - The counter frame for the camera is rendered **in Rust**, not captured from the webview: no window needed, constant 30 fps, low CPU.
 - Modes: `counter only` (fullscreen layout, solid themed background) or `overlay` (widget layout composited on a selected physical webcam).
 - One producer (the app) and one platform sink per OS. See [ADR-0002](decisions/0002-virtual-camera.md).
+
+### Implemented pipeline (M4 + producer of M6)
+
+`apps/desktop/src-tauri/src/camera/`:
+
+```
+camera_start/update/stop (Tauri commands)
+        │  CounterInput (startAt, endAt, ratePerMs, currency, locale, labels, display)
+        ▼
+   engine (30 fps thread) ──► renderer (tiny-skia + ab_glyph) ──► Frame (BGRA 1280x720)
+        │                                                              │
+        │  themes_data.rs (generated from themes.ts, ADR-0014)         ▼
+        └─ fonts (system font files, no bundled binaries)      VirtualCameraSink
+                                                                      │
+                                          Windows: WinSharedMemSink ──┘
+                                          Local\MeetBurnerCamera + event (ADR-0013)
+                                                                      │
+                                                          DirectShow / MF DLL (M6/M8)
+```
+
+- The cost is computed from timestamps on every frame (`ratePerMs × elapsed`), never accumulated, so the camera and the windows always agree.
+- Overlay mode keeps the webcam frame as the background and draws the themed card (`widget`) in the bottom-right corner; glyphs are clipped to their box so nothing is painted over the webcam.
+- The Windows producer writes a 48-byte header (magic, version, size, fps, state, frame counter, timestamp, seqlock) followed by the BGRA payload into a named shared-memory mapping. Consumers read it with the seqlock retry loop, so they never block the producer and never get a torn frame.
