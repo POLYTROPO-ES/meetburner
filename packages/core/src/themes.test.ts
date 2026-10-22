@@ -61,6 +61,7 @@ describe('display settings', () => {
       timeFont: 'theme',
       costScale: 1,
       timeScale: 1,
+      overflow: 'compact',
     });
   });
 
