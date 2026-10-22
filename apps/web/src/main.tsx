@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Counter } from './Counter';
 import { Setup } from './Setup';
+import { ShareView } from './ShareView';
 import './styles.css';
 
 function App() {
@@ -11,6 +12,7 @@ function App() {
     addEventListener('hashchange', onHash);
     return () => removeEventListener('hashchange', onHash);
   }, []);
+  if (hash.startsWith('#/share?')) return <ShareView query={hash.slice('#/share?'.length)} />;
   return hash === '#/counter' ? <Counter /> : <Setup />;
 }
 
