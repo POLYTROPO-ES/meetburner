@@ -1737,7 +1737,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "meetcost"
+name = "meetburner"
 version = "0.1.0"
 dependencies = [
  "serde",
