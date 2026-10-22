@@ -64,6 +64,8 @@ export function Setup() {
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
   const money = (v: number) => formatMoney(v, meeting.currency, locale);
   const updateDisplay = (patch: Partial<DisplaySettings>) => setDisplay({ ...display, ...patch });
+  const updateMirror = (patch: Partial<DisplaySettings['mirror']>) =>
+    updateDisplay({ mirror: { ...display.mirror, ...patch } });
 
   const [driver, setDriver] = useState<DriverStatus | null>(null);
   const [driverError, setDriverError] = useState<string | null>(null);
@@ -438,6 +440,44 @@ export function Setup() {
             </label>
           </div>
           {camera.source !== null && <p className="muted">{t(lang, 'cameraSourceHint')}</p>}
+          <p className="muted">{t(lang, 'mirrorSource')}</p>
+          <div className="row">
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={display.mirror.sourceH}
+                onChange={(e) => updateMirror({ sourceH: e.target.checked })}
+              />
+              {t(lang, 'mirrorHorizontal')}
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={display.mirror.sourceV}
+                onChange={(e) => updateMirror({ sourceV: e.target.checked })}
+              />
+              {t(lang, 'mirrorVertical')}
+            </label>
+          </div>
+          <p className="muted">{t(lang, 'mirrorOverlay')}</p>
+          <div className="row">
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={display.mirror.overlayH}
+                onChange={(e) => updateMirror({ overlayH: e.target.checked })}
+              />
+              {t(lang, 'mirrorHorizontal')}
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={display.mirror.overlayV}
+                onChange={(e) => updateMirror({ overlayV: e.target.checked })}
+              />
+              {t(lang, 'mirrorVertical')}
+            </label>
+          </div>
           <p className="muted">{t(lang, 'cameraResolutionHint')}</p>
           <p className="muted">{t(lang, 'cameraLiveHint')}</p>
           {driver?.registered && <p className="muted">{t(lang, 'cameraAlwaysOn')}</p>}

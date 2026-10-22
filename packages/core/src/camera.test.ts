@@ -125,6 +125,7 @@ describe('camera input', () => {
       costScale: 1.5,
       timeScale: 0.8,
       overflow: 'shrink',
+      mirror: { sourceH: false, sourceV: false, overlayH: false, overlayV: false },
     });
   });
 

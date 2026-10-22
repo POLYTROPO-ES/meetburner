@@ -62,6 +62,10 @@ const en = {
   cameraSourceNone: 'No webcam (counter only)',
   cameraSourceHint:
     'The counter is drawn as a card over the webcam. If the camera is busy or unplugged, the counter keeps going on its own.',
+  mirrorSource: 'Camera image',
+  mirrorOverlay: 'Counter card',
+  mirrorHorizontal: 'Mirror horizontally',
+  mirrorVertical: 'Mirror vertically',
   cameraResolution: 'Camera resolution',
   cameraResolutionHint:
     'Meeting apps keep the size they negotiated when they opened the camera; the counter is always scaled to fit. Reselect the camera only if you want a different frame shape.',
@@ -153,6 +157,10 @@ const es: Record<MessageKey, string> = {
   cameraSourceNone: 'Sin webcam (solo contador)',
   cameraSourceHint:
     'El contador se dibuja como una tarjeta sobre la webcam. Si la cámara está ocupada o desconectada, el contador sigue funcionando solo.',
+  mirrorSource: 'Imagen de la cámara',
+  mirrorOverlay: 'Tarjeta del contador',
+  mirrorHorizontal: 'Espejo horizontal',
+  mirrorVertical: 'Espejo vertical',
   cameraResolution: 'Resolución de la cámara',
   cameraResolutionHint:
     'Las apps de reuniones mantienen el tamaño que negociaron al abrir la cámara; el contador siempre se ajusta para caber. Vuelve a elegir la cámara solo si quieres otra forma de vídeo.',

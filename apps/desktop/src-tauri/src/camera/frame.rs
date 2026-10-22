@@ -91,6 +91,31 @@ impl Frame {
         Some(frame)
     }
 
+    /// Mirror of this frame, horizontally and/or vertically (ADR-0022).
+    pub fn flipped(&self, horizontal: bool, vertical: bool) -> Frame {
+        if !horizontal && !vertical {
+            return self.clone();
+        }
+        let mut frame = Frame::new(self.width, self.height);
+        let source_stride = self.stride();
+        let target_stride = frame.stride();
+        for y in 0..self.height {
+            let source_y = if vertical { self.height - 1 - y } else { y };
+            let source_row = &self.pixels[source_y as usize * source_stride..];
+            let target_row = &mut frame.pixels[y as usize * target_stride..];
+            if horizontal {
+                for x in 0..self.width {
+                    let from = (self.width - 1 - x) as usize * 4;
+                    target_row[x as usize * 4..x as usize * 4 + 4]
+                        .copy_from_slice(&source_row[from..from + 4]);
+                }
+            } else {
+                target_row[..source_stride].copy_from_slice(&source_row[..source_stride]);
+            }
+        }
+        frame
+    }
+
     /// Nearest-neighbour resize: cheap enough at 30 fps and keeps the counter sharp.
     pub fn scaled_to(&self, width: u32, height: u32) -> Frame {
         if width == self.width && height == self.height {
@@ -229,5 +254,29 @@ mod tests {
         assert_eq!(big.pixel(3, 3), (9, 9, 9));
         assert_eq!(big.pixel(0, 3), (0, 0, 0));
         assert_eq!(source.scaled_to(2, 2), source, "same size is a copy");
+    }
+
+    #[test]
+    fn flipping_mirrors_the_requested_axes() {
+        let mut source = Frame::new(2, 2);
+        source.set_pixel(0, 0, (1, 1, 1));
+        source.set_pixel(1, 0, (2, 2, 2));
+        source.set_pixel(0, 1, (3, 3, 3));
+        source.set_pixel(1, 1, (4, 4, 4));
+
+        let unchanged = source.flipped(false, false);
+        assert_eq!(unchanged, source);
+
+        let horizontal = source.flipped(true, false);
+        assert_eq!(horizontal.pixel(0, 0), (2, 2, 2));
+        assert_eq!(horizontal.pixel(1, 1), (3, 3, 3));
+
+        let vertical = source.flipped(false, true);
+        assert_eq!(vertical.pixel(0, 0), (3, 3, 3));
+        assert_eq!(vertical.pixel(1, 1), (2, 2, 2));
+
+        let both = source.flipped(true, true);
+        assert_eq!(both.pixel(0, 0), (4, 4, 4));
+        assert_eq!(both.pixel(1, 1), (1, 1, 1));
     }
 }
