@@ -72,6 +72,47 @@ impl Frame {
         self.height
     }
 
+    /// Builds a frame from RGBA bytes (what webcam backends hand out), swapping to BGRA.
+    /// Returns `None` when the buffer and the size disagree.
+    pub fn from_rgba(width: u32, height: u32, rgba: &[u8]) -> Option<Frame> {
+        if width == 0 || height == 0 || rgba.len() != width as usize * height as usize * 4 {
+            return None;
+        }
+        let mut frame = Frame::new(width, height);
+        for (pixel, source) in frame
+            .pixels
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(rgba.as_chunks::<4>().0)
+        {
+            *pixel = [source[2], source[1], source[0], 0xff];
+        }
+        Some(frame)
+    }
+
+    /// Nearest-neighbour resize: cheap enough at 30 fps and keeps the counter sharp.
+    pub fn scaled_to(&self, width: u32, height: u32) -> Frame {
+        if width == self.width && height == self.height {
+            return self.clone();
+        }
+        let mut frame = Frame::new(width, height);
+        let source_stride = self.stride();
+        let target_stride = frame.stride();
+        for y in 0..height {
+            let source_y = (y as u64 * self.height as u64 / height as u64) as u32;
+            let source_row = &self.pixels[source_y as usize * source_stride..];
+            let target_row = &mut frame.pixels[y as usize * target_stride..];
+            for x in 0..width {
+                let source_x = (x as u64 * self.width as u64 / width as u64) as u32;
+                let from = source_x as usize * 4;
+                target_row[x as usize * 4..x as usize * 4 + 4]
+                    .copy_from_slice(&source_row[from..from + 4]);
+            }
+        }
+        frame
+    }
+
     /// Bytes per row: 4 per pixel, no padding.
     pub fn stride(&self) -> usize {
         self.width as usize * 4
@@ -165,5 +206,28 @@ mod tests {
                 .any(|(ratio_w, ratio_h)| w * ratio_h == h * ratio_w);
             assert!(known, "{width}x{height} keeps a known ratio");
         }
+    }
+
+    #[test]
+    fn webcam_rgba_becomes_bgra() {
+        // Two pixels: red then green, as RGBA.
+        let rgba = [255, 0, 0, 255, 0, 255, 0, 255];
+        let frame = Frame::from_rgba(2, 1, &rgba).expect("a valid buffer");
+        assert_eq!(frame.pixel(0, 0), (255, 0, 0));
+        assert_eq!(frame.pixel(1, 0), (0, 255, 0));
+        assert!(Frame::from_rgba(2, 1, &rgba[..7]).is_none(), "short buffer");
+    }
+
+    #[test]
+    fn scaling_keeps_the_corners() {
+        let mut source = Frame::new(2, 2);
+        source.set_pixel(0, 0, (1, 1, 1));
+        source.set_pixel(1, 1, (9, 9, 9));
+        let big = source.scaled_to(4, 4);
+        assert_eq!((big.width(), big.height()), (4, 4));
+        assert_eq!(big.pixel(0, 0), (1, 1, 1));
+        assert_eq!(big.pixel(3, 3), (9, 9, 9));
+        assert_eq!(big.pixel(0, 3), (0, 0, 0));
+        assert_eq!(source.scaled_to(2, 2), source, "same size is a copy");
     }
 }
