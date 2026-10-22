@@ -25,7 +25,7 @@ import {
   type Layout,
   type Participant,
   type ThemeId,
-} from '@meetcost/core';
+} from '@meetburner/core';
 import { CounterView } from './CounterView';
 import { openCounterWindow } from './platform';
 import { useDisplay, useLang, useMeeting } from './storage';
@@ -76,9 +76,12 @@ export function Setup() {
   return (
     <main className="setup">
       <header className="setup-header">
-        <div>
-          <h1>{t(lang, 'appTitle')}</h1>
-          <p className="muted">{t(lang, 'tagline')}</p>
+        <div className="brand">
+          <img src="/favicon.svg" alt="" width={56} height={56} />
+          <div>
+            <h1>{t(lang, 'appTitle')}</h1>
+            <p className="tagline">{t(lang, 'tagline')}</p>
+          </div>
         </div>
         <label>
           {t(lang, 'language')}
@@ -91,6 +94,11 @@ export function Setup() {
           </select>
         </label>
       </header>
+
+      <section className="intro">
+        <h2>{t(lang, 'headline')}</h2>
+        <p className="muted">{t(lang, 'description')}</p>
+      </section>
 
       <section className="grid">
         <label>
