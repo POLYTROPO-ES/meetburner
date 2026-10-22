@@ -3,6 +3,7 @@ import {
   applyCountry,
   COUNTRIES,
   CURRENCIES,
+  encodeSummary,
   findPreset,
   FONT_IDS,
   formatMoney,
@@ -10,6 +11,7 @@ import {
   LANGS,
   MAX_SCALE,
   meetingSnapshot,
+  meetingSummary,
   MIN_SCALE,
   participantHourlyRate,
   presetSalary,
@@ -27,7 +29,7 @@ import {
   type ThemeId,
 } from '@meetburner/core';
 import { CounterView } from './CounterView';
-import { openCounterWindow } from './platform';
+import { openCounterWindow, shareUrl } from './platform';
 import { useDisplay, useLang, useMeeting } from './storage';
 import { useNow } from './useNow';
 
@@ -39,6 +41,7 @@ export function Setup() {
   const [lang, setLang] = useLang();
   const [display, setDisplay] = useDisplay();
   const [popupBlocked, setPopupBlocked] = useState(false);
+  const [sharedLink, setSharedLink] = useState<{ url: string; copied: boolean } | null>(null);
   const running = meeting.startAt !== null && meeting.endAt === null;
   const now = useNow(running);
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
@@ -72,6 +75,17 @@ export function Setup() {
   };
 
   const rate = totalHourlyRate(meeting);
+  const summary = meetingSummary(meeting, now);
+
+  const share = async () => {
+    if (summary === null) return;
+    const url = shareUrl(encodeSummary(summary));
+    const copied = await navigator.clipboard?.writeText(url).then(
+      () => true,
+      () => false,
+    );
+    setSharedLink({ url, copied: copied === true });
+  };
 
   return (
     <main className="setup">
@@ -314,12 +328,23 @@ export function Setup() {
               {t(lang, 'stop')}
             </button>
           )}
+          {summary !== null && (
+            <button type="button" onClick={share}>
+              {t(lang, 'shareCost')}
+            </button>
+          )}
           {meeting.startAt !== null && (
             <button type="button" className="ghost" onClick={() => setMeeting({ ...meeting, startAt: null, endAt: null })}>
               {t(lang, 'reset')}
             </button>
           )}
         </div>
+        {sharedLink && (
+          <p className="share-link">
+            <input readOnly aria-label={t(lang, 'shareCost')} value={sharedLink.url} onFocus={(e) => e.target.select()} />
+            {sharedLink.copied && <span className="muted">{t(lang, 'linkCopied')}</span>}
+          </p>
+        )}
         {popupBlocked && (
           <p className="muted">
             {t(lang, 'popupBlocked')} <a href="#/counter">{t(lang, 'openCounter')}</a>
