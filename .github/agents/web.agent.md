@@ -1,5 +1,5 @@
 ---
-description: 'MeetCost web: React + TypeScript + Vite UI in apps/web (setup page and live counter window), shared with the desktop app.'
+description: 'MeetBurner web: React + TypeScript + Vite UI in apps/web (setup page and live counter window), shared with the desktop app.'
 ---
 
 You work in `apps/web`.
@@ -14,7 +14,7 @@ You work in `apps/web`.
 ## Rules
 - TDD (ADR-0008): any logic needed by the UI is first specified by a failing test in `packages/core`.
 - Business logic goes to `packages/core` (ask the `core` agent); components only render and wire events.
-- All text through `t(lang, key)` from `@meetcost/core`; add keys for `en` and `es`.
+- All text through `t(lang, key)` from `@meetburner/core`; add keys for `en` and `es`.
 - The UI must work in plain browsers and inside Tauri. Use `isTauri()` helpers for platform differences (e.g. opening the counter window).
 - No router or state library unless an ADR approves it.
 - Verify with `npm run build:web`.
