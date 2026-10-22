@@ -19,6 +19,30 @@ export async function cameraStop(): Promise<void> {
   await invoke('camera_stop');
 }
 
+export interface DriverStatus {
+  registered: boolean;
+  available: boolean;
+  path: string | null;
+}
+
+/** Whether the DirectShow driver is registered for this Windows account. */
+export async function cameraDriverStatus(): Promise<DriverStatus> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<DriverStatus>('camera_driver_status');
+}
+
+/** Registers "MeetBurner Camera" for the current user; no admin prompt. */
+export async function cameraRegisterDriver(): Promise<DriverStatus> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<DriverStatus>('camera_register_driver');
+}
+
+/** Removes every registry key the driver created. */
+export async function cameraUnregisterDriver(): Promise<DriverStatus> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<DriverStatus>('camera_unregister_driver');
+}
+
 /** Public web URL used for share links from the desktop app (its own origin is not reachable). */
 const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL ?? 'https://meetburner.com/';
 
