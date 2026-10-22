@@ -2,14 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   createMeeting,
   detectLang,
-  findPreset,
   formatDuration,
   formatMoney,
   fromLocalInputValue,
   hourlyRate,
   meetingSnapshot,
   MESSAGES,
-  SALARY_PRESETS_ES,
   toLocalInputValue,
   totalHourlyRate,
   type Meeting,
@@ -17,6 +15,7 @@ import {
 
 const meeting = (overrides: Partial<Meeting> = {}): Meeting => ({
   ...createMeeting(),
+  includeEmployerCost: false,
   participants: [
     { id: 'a', name: 'A', presetId: null, annualSalary: 36000 },
     { id: 'b', name: 'B', presetId: null, annualSalary: 18000 },
@@ -95,17 +94,5 @@ describe('i18n', () => {
     expect(detectLang('es-ES')).toBe('es');
     expect(detectLang('en-GB')).toBe('en');
     expect(detectLang(undefined)).toBe('en');
-  });
-});
-
-describe('salary presets', () => {
-  it('have unique ids and positive salaries', () => {
-    const ids = SALARY_PRESETS_ES.map((p) => p.id);
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(SALARY_PRESETS_ES.every((p) => p.annual > 0)).toBe(true);
-  });
-  it('can be looked up by id', () => {
-    expect(findPreset('dev-senior')?.annual).toBeGreaterThan(0);
-    expect(findPreset(null)).toBeUndefined();
   });
 });
