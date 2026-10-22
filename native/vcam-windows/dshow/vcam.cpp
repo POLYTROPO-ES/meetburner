@@ -20,6 +20,10 @@ const CLSID CLSID_MeetBurnerCamera = {0xDBD3A890,
                                       {0xAF, 0xEE, 0xB1, 0xBA, 0x2C, 0x2D, 0xAB, 0x49}};
 const wchar_t* const kMeetBurnerCameraName = L"MeetBurner Camera";
 
+extern "C" unsigned int __stdcall MeetBurnerCameraVersion() {
+    return MB_CAMERA_DRIVER_VERSION;
+}
+
 namespace {
 
 const wchar_t* const kPinId = L"Output";

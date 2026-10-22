@@ -35,7 +35,7 @@ import {
 } from '@meetburner/core';
 import { CounterView } from './CounterView';
 import {
-  cameraDriverStatus,
+  cameraDriverEnsure,
   cameraRegisterDriver,
   cameraUnregisterDriver,
   isTauri,
@@ -65,6 +65,7 @@ export function Setup() {
 
   const [driver, setDriver] = useState<DriverStatus | null>(null);
   const [driverError, setDriverError] = useState<string | null>(null);
+  const [driverUpdated, setDriverUpdated] = useState(false);
   // The camera is live while the app is open, as soon as the driver is registered.
   const cameraError = useCameraSync(
     cameraInput(meeting, display, lang, camera),
@@ -73,8 +74,12 @@ export function Setup() {
 
   useEffect(() => {
     if (!isTauri()) return;
-    void cameraDriverStatus()
-      .then(setDriver)
+    // On start, replace a driver older than the one bundled with this build (ADR-0020).
+    void cameraDriverEnsure()
+      .then((result) => {
+        setDriver(result.status);
+        setDriverUpdated(result.updated);
+      })
       .catch((error) => setDriverError(String(error)));
   }, []);
 
@@ -82,6 +87,7 @@ export function Setup() {
     try {
       setDriver(await cameraRegisterDriver());
       setDriverError(null);
+      setDriverUpdated(false);
     } catch (error) {
       setDriverError(String(error));
     }
@@ -91,6 +97,7 @@ export function Setup() {
     try {
       setDriver(await cameraUnregisterDriver());
       setDriverError(null);
+      setDriverUpdated(false);
     } catch (error) {
       setDriverError(String(error));
     }
@@ -98,7 +105,9 @@ export function Setup() {
 
   const driverMessage = driver
     ? driver.registered
-      ? t(lang, 'cameraDriverRegistered')
+      ? driver.installedVersion === null
+        ? t(lang, 'cameraDriverRegistered')
+        : `${t(lang, 'cameraDriverRegistered')} v${driver.installedVersion}`
       : driver.available
         ? t(lang, 'cameraDriverNotRegistered')
         : t(lang, 'cameraDriverMissing')
@@ -425,6 +434,7 @@ export function Setup() {
             </button>
           </div>
           {driverMessage && <p className="muted">{driverMessage}</p>}
+          {driverUpdated && <p className="muted">{t(lang, 'cameraDriverUpdated')}</p>}
           {driverError && <p className="muted">{driverError}</p>}
           {cameraError && <p className="muted">{cameraError}</p>}
         </section>

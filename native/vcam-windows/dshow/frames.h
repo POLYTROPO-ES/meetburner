@@ -33,3 +33,7 @@ void BlitFit(const BYTE* src, UINT32 src_w, UINT32 src_h, BYTE* dst, UINT32 dst_
 
 // Bottom-up BGRA frame shown while the app is not publishing.
 std::vector<BYTE> RenderNotRunning(UINT32 width, UINT32 height);
+
+// Version of this build (`MB_CAMERA_DRIVER_VERSION`), exported by the DLL so the app can
+// re-register an older installation on start (ADR-0020).
+extern "C" unsigned int __stdcall MeetBurnerCameraVersion();

@@ -8,6 +8,8 @@
 #include <new>
 #include <string>
 
+#include "../common/meetburner_camera.h"
+
 namespace {
 
 const wchar_t* const kClsidText = L"{DBD3A890-1830-4222-AFEE-B1BA2C2DAB49}";
@@ -24,6 +26,14 @@ bool CreateKey(const std::wstring& path, HKEY* key) {
 bool SetString(HKEY key, const wchar_t* name, const wchar_t* value) {
     const DWORD bytes = static_cast<DWORD>((wcslen(value) + 1) * sizeof(wchar_t));
     return RegSetValueExW(key, name, 0, REG_SZ, reinterpret_cast<const BYTE*>(value), bytes) ==
+           ERROR_SUCCESS;
+}
+
+// Recorded at registration so the app can tell an old installation apart (ADR-0020).
+bool SetVersion(HKEY key) {
+    const DWORD version = MB_CAMERA_DRIVER_VERSION;
+    return RegSetValueExW(key, L"MeetBurnerDriverVersion", 0, REG_DWORD,
+                          reinterpret_cast<const BYTE*>(&version), sizeof(version)) ==
            ERROR_SUCCESS;
 }
 
@@ -103,6 +113,7 @@ extern "C" HRESULT __stdcall DllRegisterServer() {
 
     if (!CreateKey(clsid, &key)) return Win32Error();
     SetString(key, nullptr, kMeetBurnerCameraName);
+    SetVersion(key);
     RegCloseKey(key);
 
     if (!CreateKey(clsid + L"\\InprocServer32", &key)) return Win32Error();

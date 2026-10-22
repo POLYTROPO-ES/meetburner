@@ -17,6 +17,12 @@
 #define MB_CAMERA_VERSION 1u
 #define MB_CAMERA_STATE_IDLE 0u
 #define MB_CAMERA_STATE_LIVE 1u
+
+/* Driver build: bump it whenever the filter behaves differently, so the app can
+ * re-register an older installation on start (ADR-0020).
+ *   1: first release (top-down frames, mapping re-created on resize)
+ *   2: bottom-up frames, one mapping, stale-frame handling (ADR-0019) */
+#define MB_CAMERA_DRIVER_VERSION 2u
 #define MB_CAMERA_MAX_WIDTH 1920u
 #define MB_CAMERA_MAX_HEIGHT 1920u
 /* The mapping is always created with room for this many pixels (ADR-0019), so a

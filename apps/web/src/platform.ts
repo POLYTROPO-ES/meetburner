@@ -23,12 +23,21 @@ export interface DriverStatus {
   registered: boolean;
   available: boolean;
   path: string | null;
+  /** Version recorded at registration; null for installs predating the check. */
+  installedVersion: number | null;
+  /** Version of the driver bundled with this build. */
+  expectedVersion: number | null;
 }
 
-/** Whether the DirectShow driver is registered for this Windows account. */
-export async function cameraDriverStatus(): Promise<DriverStatus> {
+export interface DriverUpdate {
+  status: DriverStatus;
+  updated: boolean;
+}
+
+/** Re-registers the bundled driver when the installed one is older (ADR-0020). */
+export async function cameraDriverEnsure(): Promise<DriverUpdate> {
   const { invoke } = await import('@tauri-apps/api/core');
-  return invoke<DriverStatus>('camera_driver_status');
+  return invoke<DriverUpdate>('camera_driver_ensure');
 }
 
 /** Registers "MeetBurner Camera" for the current user; no admin prompt. */

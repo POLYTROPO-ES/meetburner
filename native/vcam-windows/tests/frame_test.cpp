@@ -114,6 +114,12 @@ void not_running_frame_is_painted_with_the_theme_background() {
     CHECK(painted > 0);
 }
 
+void driver_reports_its_build_version() {
+    // The app compares this with the version stored at registration (ADR-0020).
+    CHECK(MeetBurnerCameraVersion() == MB_CAMERA_DRIVER_VERSION);
+    CHECK(MeetBurnerCameraVersion() >= 2u);
+}
+
 } // namespace
 
 int main() {
@@ -122,6 +128,7 @@ int main() {
     blit_flips_top_down_into_bottom_up();
     blit_letterboxes_to_keep_the_aspect_ratio();
     not_running_frame_is_painted_with_the_theme_background();
+    driver_reports_its_build_version();
     if (g_failures != 0) {
         printf("%d failure(s)\n", g_failures);
         return 1;
