@@ -11,6 +11,7 @@ You work in `native/vcam-windows` and the Windows sink in `apps/desktop/src-taur
 4. Rust `WinSharedMemSink` implementing `VirtualCameraSink`.
 
 ## Rules
+- TDD (ADR-0008): IPC header layout and ring-buffer logic are covered by Rust and CTest unit tests written before the code.
 - Build with CMake + MSVC, x64. Keep the IPC header in one shared file used by both DLLs; mirror it in Rust with `#[repr(C)]`.
 - When no producer is alive, output a static "not running" frame; never block the consumer app.
 - Installer must register and unregister cleanly; document admin requirement.
