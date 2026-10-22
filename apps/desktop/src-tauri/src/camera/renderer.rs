@@ -3,7 +3,7 @@
 
 use ab_glyph::{point, Font, PxScale, ScaleFont};
 use serde::Deserialize;
-use tiny_skia::{Color, FillRule, Paint, Path, PathBuilder, Pixmap, Transform};
+use tiny_skia::{Color, FillRule, Paint, Path, PathBuilder, Pixmap, PixmapPaint, Transform};
 
 use crate::camera::fonts::Fonts;
 use crate::camera::format::{format_duration, format_money, format_money_compact};
@@ -97,6 +97,18 @@ pub struct DisplayConfig {
     pub cost_scale: f32,
     pub time_scale: f32,
     pub overflow: Overflow,
+    /// Per-layer mirroring; the webcam and the counter are independent (ADR-0022).
+    pub mirror: Mirror,
+}
+
+/// Flips applied to the captured webcam and to the counter layer, independently.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Mirror {
+    pub source_h: bool,
+    pub source_v: bool,
+    pub overlay_h: bool,
+    pub overlay_v: bool,
 }
 
 /// Untrusted shape from the UI: strings for every enum, scales clamped (ADR-0006).
@@ -110,6 +122,7 @@ pub struct DisplayConfigWire {
     pub cost_scale: f32,
     pub time_scale: f32,
     pub overflow: String,
+    pub mirror: Mirror,
 }
 
 impl Default for DisplayConfigWire {
@@ -123,6 +136,7 @@ impl Default for DisplayConfigWire {
             cost_scale: display.cost_scale,
             time_scale: display.time_scale,
             overflow: "compact".into(),
+            mirror: Mirror::default(),
         }
     }
 }
@@ -141,6 +155,7 @@ impl From<DisplayConfigWire> for DisplayConfig {
             cost_scale: clamp_scale(wire.cost_scale),
             time_scale: clamp_scale(wire.time_scale),
             overflow: theme::parse_overflow(&wire.overflow),
+            mirror: wire.mirror,
         }
     }
 }
@@ -163,6 +178,7 @@ impl Default for DisplayConfig {
             cost_scale: 1.0,
             time_scale: 1.0,
             overflow: Overflow::Compact,
+            mirror: Mirror::default(),
         }
     }
 }
@@ -241,6 +257,9 @@ pub fn cost_text(
 
 /// Renders one frame. `background` is the captured webcam frame in overlay mode;
 /// `None` fills the frame with the theme background (counter-only mode).
+///
+/// The counter is drawn on its own transparent layer and then composited, so the webcam and
+/// the counter can be mirrored independently (ADR-0022).
 pub fn render(
     input: &CounterInput,
     fonts: &Fonts,
@@ -248,18 +267,25 @@ pub fn render(
     background: Option<&Frame>,
 ) -> Frame {
     let theme = theme::theme(&input.display.theme, now_ms);
+    let mirror = input.display.mirror;
     let (width, height) = input.size();
     let layout = counter_layout(width as f32, height as f32, input.display.layout);
     let mut pixmap = match background {
-        Some(frame) => pixmap_from_frame(frame),
+        Some(frame) => {
+            let frame = frame
+                .scaled_to(width, height)
+                .flipped(mirror.source_h, mirror.source_v);
+            pixmap_from_frame(&frame)
+        }
         None => {
             let mut pixmap = Pixmap::new(width, height).expect("frame size");
             pixmap.fill(color(theme.background));
             pixmap
         }
     };
+    let mut overlay = Pixmap::new(width, height).expect("frame size");
     if let Some(card) = layout.card {
-        fill_card(&mut pixmap, card, &theme);
+        fill_card(&mut overlay, card, &theme);
     }
 
     let values = counter_values(input, now_ms);
@@ -282,7 +308,7 @@ pub fn render(
         cost.text
     };
     draw_centered(
-        &mut pixmap,
+        &mut overlay,
         &cost_value,
         cost_font_ref,
         cost_px * cost.scale,
@@ -301,7 +327,7 @@ pub fn render(
         format_duration(values.elapsed_ms)
     };
     draw_centered(
-        &mut pixmap,
+        &mut overlay,
         &time_value,
         fonts.get(time_font),
         time_px,
@@ -316,7 +342,7 @@ pub fn render(
         format_money(values.cost_per_minute, &input.currency, &input.locale)
     );
     draw_centered(
-        &mut pixmap,
+        &mut overlay,
         &footer,
         fonts.get(time_font),
         footer_px,
@@ -324,9 +350,47 @@ pub fn render(
         layout.footer,
     );
 
-    draw_decoration(&mut pixmap, &theme, fonts, layout.content);
+    draw_decoration(&mut overlay, &theme, fonts, layout.content);
+
+    if mirror.overlay_h || mirror.overlay_v {
+        flip_pixmap(&mut overlay, mirror.overlay_h, mirror.overlay_v);
+    }
+    pixmap.draw_pixmap(
+        0,
+        0,
+        overlay.as_ref(),
+        &PixmapPaint::default(),
+        Transform::identity(),
+        None,
+    );
 
     frame_from_pixmap(pixmap)
+}
+
+/// Mirrors a layer in place, horizontally and/or vertically.
+fn flip_pixmap(pixmap: &mut Pixmap, horizontal: bool, vertical: bool) {
+    if !horizontal && !vertical {
+        return;
+    }
+    let width = pixmap.width() as usize;
+    let height = pixmap.height() as usize;
+    let stride = width * 4;
+    let data = pixmap.data_mut();
+    let mut flipped = vec![0u8; data.len()];
+    for y in 0..height {
+        let source_y = if vertical { height - 1 - y } else { y };
+        let source_row = &data[source_y * stride..source_y * stride + stride];
+        let target_row = &mut flipped[y * stride..y * stride + stride];
+        if horizontal {
+            for x in 0..width {
+                let from = (width - 1 - x) * 4;
+                target_row[x * 4..x * 4 + 4].copy_from_slice(&source_row[from..from + 4]);
+            }
+        } else {
+            target_row.copy_from_slice(source_row);
+        }
+    }
+    data.copy_from_slice(&flipped);
 }
 
 fn color(rgb: (u8, u8, u8)) -> Color {
@@ -722,6 +786,76 @@ mod tests {
         let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
         assert!(ink_inside(&frame, layout.cost, background) > 0);
         assert!(ink_inside(&frame, layout.time, background) > 0);
+    }
+
+    /// Horizontal span of the pixels painted with the theme background (the widget card).
+    fn card_span(frame: &Frame) -> (u32, u32) {
+        let mut min = u32::MAX;
+        let mut max = 0;
+        for y in 0..frame.height() {
+            for x in 0..frame.width() {
+                if frame.pixel(x, y) == (0x0f, 0x11, 0x15) {
+                    min = min.min(x);
+                    max = max.max(x);
+                }
+            }
+        }
+        (min, max)
+    }
+
+    #[test]
+    fn mirroring_the_source_flips_the_webcam_but_not_the_card() {
+        let mut input = input();
+        input.display.layout = Layout::Widget;
+        input.display.mirror.source_h = true;
+        let webcam = (0x22, 0x44, 0x66);
+        let mut background = Frame::filled(FRAME_WIDTH, FRAME_HEIGHT, webcam);
+        background.set_pixel(0, 0, (255, 0, 0));
+
+        let frame = render(&input, &fonts(), 1_060_000, Some(&background));
+        assert_eq!(
+            frame.pixel(FRAME_WIDTH - 1, 0),
+            (255, 0, 0),
+            "the marker moved to the other edge"
+        );
+        assert_eq!(frame.pixel(0, 0), webcam);
+        let (min, _) = card_span(&frame);
+        assert!(
+            min > FRAME_WIDTH / 2,
+            "the card stays bottom-right: starts at {min}"
+        );
+    }
+
+    #[test]
+    fn mirroring_the_overlay_flips_the_card_but_not_the_webcam() {
+        let mut input = input();
+        input.display.layout = Layout::Widget;
+        let webcam = (0x22, 0x44, 0x66);
+        let mut background = Frame::filled(FRAME_WIDTH, FRAME_HEIGHT, webcam);
+        background.set_pixel(0, 0, (255, 0, 0));
+
+        let normal = render(&input, &fonts(), 1_060_000, Some(&background));
+        let (_, normal_max) = card_span(&normal);
+        assert!(normal_max > FRAME_WIDTH / 2, "card on the right by default");
+
+        input.display.mirror.overlay_h = true;
+        let mirrored = render(&input, &fonts(), 1_060_000, Some(&background));
+        let (mirrored_min, mirrored_max) = card_span(&mirrored);
+        assert!(
+            mirrored_max < FRAME_WIDTH / 2,
+            "the card moved to the left: ends at {mirrored_max}"
+        );
+        assert!(mirrored_min < FRAME_WIDTH / 2);
+        assert_eq!(
+            mirrored.pixel(0, 0),
+            (255, 0, 0),
+            "the webcam keeps its orientation"
+        );
+        assert_eq!(
+            mirrored.pixel(FRAME_WIDTH - 1, FRAME_HEIGHT - 1),
+            webcam,
+            "the mirrored card no longer covers the bottom-right corner"
+        );
     }
 
     #[test]
