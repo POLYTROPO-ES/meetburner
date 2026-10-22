@@ -32,6 +32,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Counter styles: classic, modern, formal, halloween, christmas, 4 seasons, minimalist
 - [x] Layouts fullscreen/widget; user picks font and size for the cost and the time; live preview
 - [x] "Share the cost" link with a meeting summary: total time, total cost, cost/min (ADR-0009)
+- [x] Large amounts that do not fit: abbreviate (K, M, B) or shrink the font, user selectable (ADR-0010)
 - [ ] Polish: responsive, accessibility (labels, contrast), popup-blocked fallback
 - [~] Deploy to Cloudflare Pages (`npm run deploy:web`, `_headers`); needs the Cloudflare project/account
 - **Done when:** a non-technical user can run a meeting counter in < 30 s.
@@ -46,6 +47,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 ### M4. Frame renderer — `desktop`
 - [ ] Rust module `camera::renderer`: renders counter (same themes, fonts and sizes as web) into a BGRA buffer 1280x720
 - [ ] Layout rule: `fullscreen` without source webcam, `widget` over a source webcam (ADR-0006)
+- [ ] Large amounts: apply `fitCost` / `formatMoneyCompact` with the renderer's text metrics (ADR-0010)
 - [ ] Tauri commands: `camera_start(config)`, `camera_update(meeting)`, `camera_stop()`
 - [ ] Snapshot test (PNG golden file)
 - **Done when:** renderer produces 30 fps at < 5% CPU on a mid laptop.
