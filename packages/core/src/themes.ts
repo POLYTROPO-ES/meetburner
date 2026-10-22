@@ -69,7 +69,26 @@ export interface DisplaySettings {
   costScale: number;
   timeScale: number;
   overflow: Overflow;
+  mirror: MirrorSettings;
 }
+
+/**
+ * Desktop camera only: the captured webcam and the counter are mirrored independently, so a
+ * mirrored self-view never turns the numbers into unreadable text (ADR-0022).
+ */
+export interface MirrorSettings {
+  sourceH: boolean;
+  sourceV: boolean;
+  overlayH: boolean;
+  overlayV: boolean;
+}
+
+export const NO_MIRROR: MirrorSettings = {
+  sourceH: false,
+  sourceV: false,
+  overlayH: false,
+  overlayV: false,
+};
 
 export const MIN_SCALE = 0.5;
 export const MAX_SCALE = 2.5;
@@ -82,6 +101,7 @@ export const DEFAULT_DISPLAY: DisplaySettings = {
   costScale: 1,
   timeScale: 1,
   overflow: 'compact',
+  mirror: NO_MIRROR,
 };
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
@@ -95,6 +115,8 @@ const FONT_CHOICES: readonly FontChoice[] = ['theme', ...FONT_IDS];
 /** Validates untrusted (stored) display settings. */
 export function normalizeDisplay(raw: unknown): DisplaySettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const mirror = (r.mirror && typeof r.mirror === 'object' ? r.mirror : {}) as Record<string, unknown>;
+  const flag = (value: unknown): boolean => value === true;
   return {
     theme: oneOf(r.theme, THEME_IDS, DEFAULT_DISPLAY.theme),
     layout: oneOf<Layout>(r.layout, ['fullscreen', 'widget'], DEFAULT_DISPLAY.layout),
@@ -103,6 +125,12 @@ export function normalizeDisplay(raw: unknown): DisplaySettings {
     costScale: scale(r.costScale),
     timeScale: scale(r.timeScale),
     overflow: oneOf(r.overflow, OVERFLOW_MODES, DEFAULT_DISPLAY.overflow),
+    mirror: {
+      sourceH: flag(mirror.sourceH),
+      sourceV: flag(mirror.sourceV),
+      overlayH: flag(mirror.overlayH),
+      overlayV: flag(mirror.overlayV),
+    },
   };
 }
 

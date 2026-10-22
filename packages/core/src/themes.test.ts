@@ -5,6 +5,7 @@ import {
   MAX_SCALE,
   MIN_SCALE,
   MESSAGES,
+  NO_MIRROR,
   normalizeDisplay,
   resolveFont,
   resolveTheme,
@@ -62,7 +63,14 @@ describe('display settings', () => {
       costScale: 1,
       timeScale: 1,
       overflow: 'compact',
+      mirror: { sourceH: false, sourceV: false, overlayH: false, overlayV: false },
     });
+  });
+
+  it('keeps the mirror flags per layer and rejects non-booleans', () => {
+    const d = normalizeDisplay({ mirror: { sourceH: true, overlayV: true, overlayH: 'yes' } });
+    expect(d.mirror).toEqual({ sourceH: true, sourceV: false, overlayH: false, overlayV: true });
+    expect(normalizeDisplay({ mirror: null }).mirror).toEqual(NO_MIRROR);
   });
 
   it('normalize unknown or corrupt input to defaults', () => {
