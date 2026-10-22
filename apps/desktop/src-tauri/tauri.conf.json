@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "MeetCost",
+  "productName": "MeetBurner",
   "version": "0.1.0",
-  "identifier": "app.meetcost.desktop",
+  "identifier": "app.meetburner.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev -w @meetcost/web",
-    "beforeBuildCommand": "npm run build -w @meetcost/web",
+    "beforeDevCommand": "npm run dev -w @meetburner/web",
+    "beforeBuildCommand": "npm run build -w @meetburner/web",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../../web/dist"
   },
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "MeetCost",
+        "title": "MeetBurner",
         "width": 1000,
         "height": 720
       }
