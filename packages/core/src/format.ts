@@ -1,11 +1,23 @@
+const SYMBOL_AFTER = new Set(['EUR']);
+
+/** Separators follow the UI locale; the symbol position follows the currency ($1.00, 1.00 €). */
 export function formatMoney(value: number, currency: string, locale: string): string {
   try {
-    return new Intl.NumberFormat(locale, {
+    const parts = new Intl.NumberFormat(locale, {
       style: 'currency',
       currency,
+      currencyDisplay: 'narrowSymbol',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(value);
+    }).formatToParts(Math.abs(value));
+    const symbol = parts.find((p) => p.type === 'currency')?.value ?? currency;
+    const amount = parts
+      .filter((p) => p.type !== 'currency' && p.type !== 'literal')
+      .map((p) => p.value)
+      .join('');
+    const sign = value < 0 ? '-' : '';
+    if (SYMBOL_AFTER.has(currency)) return `${sign}${amount} ${symbol}`;
+    return `${sign}${symbol}${/[a-z]$/i.test(symbol) ? ' ' : ''}${amount}`;
   } catch {
     return `${value.toFixed(2)} ${currency}`;
   }
