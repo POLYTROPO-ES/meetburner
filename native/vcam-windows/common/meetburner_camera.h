@@ -19,6 +19,9 @@
 #define MB_CAMERA_STATE_LIVE 1u
 #define MB_CAMERA_MAX_WIDTH 1920u
 #define MB_CAMERA_MAX_HEIGHT 1920u
+/* The mapping is always created with room for this many pixels (ADR-0019), so a
+ * resolution change never re-creates it and readers keep one valid view. */
+#define MB_CAMERA_CAPACITY_PIXELS (1920u * 1080u)
 
 #pragma pack(push, 1)
 typedef struct meetburner_frame_header {
@@ -117,7 +120,8 @@ static inline bool mb_read_frame(const mb_reader* reader, void* dst, size_t dst_
             continue;
         }
         if (start.width == 0 || start.height == 0 || start.width > MB_CAMERA_MAX_WIDTH ||
-            start.height > MB_CAMERA_MAX_HEIGHT) {
+            start.height > MB_CAMERA_MAX_HEIGHT ||
+            start.width * start.height > MB_CAMERA_CAPACITY_PIXELS) {
             return false;
         }
         const size_t payload = mb_payload_size(start.width, start.height);

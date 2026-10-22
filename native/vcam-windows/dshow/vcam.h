@@ -87,6 +87,8 @@ private:
     HANDLE stop_event_;
     std::vector<BYTE> scratch_;
     std::vector<BYTE> not_running_;
+    // Last frame actually delivered, reused when a read fails so the preview never flashes.
+    std::vector<BYTE> last_;
 };
 
 class CameraFilter final : public IBaseFilter {
