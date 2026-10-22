@@ -32,9 +32,9 @@ In priority order:
 
 ### Packaging
 
-- `tauri.windows.conf.json` bundles the driver as a Windows resource (`MeetBurnerCamera.dll`), so the NSIS/MSI installers carry it.
-- `npm run build:desktop` runs `postbuild:desktop`, which also copies the DLL to `target/release/resources/` so the portable exe works without an install.
-- Packaging requires the native project to be built first (`cmake ... --config Release`); the README states it.
+- `bundle.resources` includes the committed `resources/` directory, so `cargo build`/`clippy` stay valid even when the DLL has not been built yet (only a placeholder lives there in that case).
+- `beforeBuildCommand` and `postbuild:desktop` run `tools/copy-driver.mjs`, which copies the DLL into `src-tauri/resources/` (bundled into the NSIS/MSI installs) and into `target/release/resources/` (so the portable exe works without installing).
+- Packaging includes the driver when `native/vcam-windows` has been built; without it the app still builds and the buttons report "driver missing".
 
 ### UI
 

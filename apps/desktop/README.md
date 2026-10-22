@@ -37,7 +37,7 @@ On Windows, frames go to the mapping `Local\MeetBurnerCamera` (event `Local\Meet
 
 ### Packaging the driver
 
-`tauri.windows.conf.json` bundles `native/vcam-windows/build/Release/MeetBurnerCamera.dll` as a resource, and `npm run build:desktop` runs `postbuild:desktop` to copy it to `target/release/resources/` for the portable exe. Build the driver first:
+`tools/copy-driver.mjs` runs before `tauri build` and again after it: it copies `native/vcam-windows/build/Release/MeetBurnerCamera.dll` into `src-tauri/resources/` (bundled into the NSIS/MSI installs via `bundle.resources`) and into `target/release/resources/` for the portable exe. Build the driver first:
 
 ```powershell
 cmake -S native/vcam-windows -B native/vcam-windows/build -A x64
