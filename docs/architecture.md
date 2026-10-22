@@ -26,7 +26,8 @@ flowchart LR
 
 ## Cost model (packages/core)
 
-- `hourlyRate = annualSalary / hoursPerYear` (`hoursPerYear` default **1800**, user-configurable).
+- A meeting has a country (ES, PT, FR, DE, IT, NL, GB, US, MX) that sets default currency, hours/year and employer contribution rate ([ADR-0005](decisions/0005-countries-and-total-cost.md)).
+- `hourlyRate = annualSalary × (1 + employerCostRate if total cost) / hoursPerYear` (Spain: 1800 h, all user-configurable).
 - `totalCost(t) = Σ hourlyRate_i × elapsedHours(t)`.
 - `personTime(t) = participants × elapsed(t)`.
 - `elapsed(t) = clamp(min(now, endAt) − startAt, 0)`. A start time in the future shows a "starts in" state.
@@ -40,8 +41,18 @@ flowchart LR
    - Desktop: Tauri `WebviewWindow`.
 3. Counter window re-renders every animation frame (`requestAnimationFrame`) and listens to `storage` events for live edits.
 
+## Counter styles ([ADR-0006](decisions/0006-counter-styles-and-layouts.md))
+
+- Themes (classic, modern, formal, halloween, christmas, 4 seasons, minimalist) are plain data in `packages/core/src/themes.ts`, shared by the web UI (CSS variables) and the Rust camera renderer.
+- Layout `fullscreen` (camera without source webcam) or `widget` (small card over a source webcam).
+- User picks the font and size of the cost and of the time. `CounterView` renders the setup preview and the counter window.
+
+## Hosting
+
+Web app: static build on Cloudflare Pages with security headers from `apps/web/public/_headers` ([ADR-0007](decisions/0007-cloudflare-hosting.md)).
+
 ## Virtual camera (desktop only)
 
 - The counter frame for the camera is rendered **in Rust**, not captured from the webview: no window needed, constant 30 fps, low CPU.
-- Modes: `counter only` (solid background) or `overlay` (counter composited on a selected physical webcam).
+- Modes: `counter only` (fullscreen layout, solid themed background) or `overlay` (widget layout composited on a selected physical webcam).
 - One producer (the app) and one platform sink per OS. See [ADR-0002](decisions/0002-virtual-camera.md).
