@@ -92,10 +92,12 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
   margin: 0;
   font-family: var(--cost-font);
   font-weight: var(--weight);
-  font-size: min(calc(13cqw * var(--cost-scale)), calc(26cqh * var(--cost-scale)));
+  font-size: min(calc(13cqw * var(--cost-scale) * var(--fit, 1)), calc(26cqh * var(--cost-scale) * var(--fit, 1)));
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
+  white-space: nowrap;
 }
+.counter-view .total.measure { position: absolute; visibility: hidden; pointer-events: none; }
 .counter-view.running .total { color: var(--accent); }
 .counter-view .status { margin: 0; color: var(--muted); font-size: 4cqh; }
 .counter-view .time { font-family: var(--time-font); font-variant-numeric: tabular-nums; }
@@ -112,7 +114,7 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
   gap: 0;
   box-shadow: 0 0.5cqw 2cqw rgb(0 0 0 / 0.35);
 }
-.counter-view.widget .total { font-size: calc(6cqw * var(--cost-scale)); }
+.counter-view.widget .total { font-size: calc(6cqw * var(--cost-scale) * var(--fit, 1)); }
 .counter-view.widget .time { margin: 0; font-size: calc(3cqw * var(--time-scale)); color: var(--muted); }
 .counter-view.widget .status { font-size: 2cqw; }
 .counter-view.widget .decoration { font-size: 3cqw; }
