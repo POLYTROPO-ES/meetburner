@@ -1,6 +1,12 @@
-# MeetCost
+# MeetBurner
 
-Shows the live cost of a meeting. Available as a web app and as a desktop app (Windows/Linux in stage 1, macOS in stage 2) that publishes the counter as a **virtual webcam**, optionally overlaid on a real webcam.
+<img src="docs/meetburner-favicon.svg" alt="MeetBurner logo" width="96" />
+
+**Every meeting burns money.**
+
+## See the cost. Feel the burn.
+
+A live meeting-cost overlay that shows the combined cost of everyone's time. Available as a web app and as a desktop app (Windows/Linux in stage 1, macOS in stage 2) that publishes the counter as a **virtual webcam**, optionally overlaid on a real webcam.
 
 - Product scope: [mvp.md](mvp.md)
 - Architecture: [docs/architecture.md](docs/architecture.md)
