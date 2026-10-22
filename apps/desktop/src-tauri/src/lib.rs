@@ -79,6 +79,12 @@ fn camera_stop(state: State<'_, CameraState>) -> Result<(), String> {
     Ok(())
 }
 
+/// Physical cameras the overlay can composite the counter over (M7).
+#[tauri::command]
+fn camera_list_sources() -> Vec<camera::CameraSource> {
+    camera::list_sources()
+}
+
 /// Whether "MeetBurner Camera" is registered for the current Windows account.
 #[tauri::command]
 fn camera_driver_status(app: tauri::AppHandle) -> Result<DriverStatus, String> {
@@ -131,7 +137,8 @@ pub fn run() {
             camera_driver_status,
             camera_driver_ensure,
             camera_register_driver,
-            camera_unregister_driver
+            camera_unregister_driver,
+            camera_list_sources
         ])
         .run(tauri::generate_context!())
         .expect("error while running MeetBurner");

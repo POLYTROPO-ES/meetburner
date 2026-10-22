@@ -76,9 +76,10 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - **Done when:** camera works on Windows 10 and 11.
 
 ### M7. Webcam overlay — `desktop`
-- [ ] Source webcam enumeration and capture (`nokhwa`)
-- [ ] Compositing: position, scale, opacity; mirror option
-- [ ] Fallback to counter-only if source camera is busy/unplugged
+- [x] Source webcam enumeration and capture (`nokhwa`, ADR-0021)
+- [x] Compositing: `widget` card over the webcam frame, scaled to the output size (ADR-0021)
+- [x] Fallback to counter-only if source camera is busy/unplugged
+- [ ] Position, scale and opacity of the card; mirror option
 - **Done when:** overlay works on both Linux and Windows sinks.
 
 ### M8. Windows virtual camera (Media Foundation) — `vcam-windows`

@@ -9,12 +9,17 @@ use crate::camera::fonts::Fonts;
 use crate::camera::frame::FPS;
 use crate::camera::renderer::{render, CounterInput};
 use crate::camera::sink::{SinkError, VirtualCameraSink};
+use crate::camera::source::{FrameSource, NoSource, WebcamSource};
+use crate::camera::theme::Layout;
 
 /// One renderer tick: draws a frame and hands it to the sink.
 pub struct RenderLoop {
     fonts: Fonts,
     sink: Box<dyn VirtualCameraSink>,
+    source: Box<dyn FrameSource>,
     size: Option<(u32, u32)>,
+    /// Webcam the current `source` was opened for, and the size it was asked to fill.
+    source_key: Option<(String, (u32, u32))>,
 }
 
 impl RenderLoop {
@@ -22,7 +27,9 @@ impl RenderLoop {
         RenderLoop {
             fonts,
             sink,
+            source: Box::new(NoSource),
             size: None,
+            source_key: None,
         }
     }
 
@@ -35,13 +42,51 @@ impl RenderLoop {
             self.sink.start(size.0, size.1, FPS)?;
         }
         self.size = Some(size);
-        let frame = render(input, &self.fonts, now_ms, None);
+        self.reconcile_source(input, size);
+        // Only the widget card has a readable panel: overlaying the fullscreen layout would
+        // paint the counter straight over the video (ADR-0021).
+        let background = if input.display.layout == Layout::Widget {
+            self.source.latest()
+        } else {
+            None
+        };
+        let frame = render(input, &self.fonts, now_ms, background.as_ref());
         self.sink.send(&frame)
     }
 
+    /// Opens, re-opens or closes the webcam capture when the payload asks for a different
+    /// source or a different output size.
+    fn reconcile_source(&mut self, input: &CounterInput, size: (u32, u32)) {
+        let wanted = input.source.clone().map(|id| (id, size));
+        if self.source_key == wanted {
+            return;
+        }
+        self.source.stop();
+        self.source = match wanted.as_ref() {
+            Some((id, (width, height))) => match WebcamSource::start(id, *width, *height) {
+                Ok(source) => Box::new(source),
+                Err(error) => {
+                    eprintln!("meetburner: {error}");
+                    Box::new(NoSource)
+                }
+            },
+            None => Box::new(NoSource),
+        };
+        self.source_key = wanted;
+    }
+
     pub fn stop(&mut self) {
+        self.source.stop();
+        self.source_key = None;
         self.sink.stop();
         self.size = None;
+    }
+
+    /// Test seam: injects a frame source without opening a real camera.
+    #[cfg(test)]
+    pub fn set_source(&mut self, source: Box<dyn FrameSource>) {
+        self.source = source;
+        self.source_key = None;
     }
 }
 
@@ -128,7 +173,7 @@ fn create_sink() -> Box<dyn VirtualCameraSink> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::camera::frame::{FRAME_HEIGHT, FRAME_WIDTH};
+    use crate::camera::frame::{Frame, FRAME_HEIGHT, FRAME_WIDTH};
     use crate::camera::renderer::{DisplayConfig, Labels};
     use crate::camera::sink::RecordingSink;
 
@@ -143,6 +188,7 @@ mod tests {
             display: DisplayConfig::default(),
             width: FRAME_WIDTH,
             height: FRAME_HEIGHT,
+            source: None,
         }
     }
 
@@ -208,5 +254,63 @@ mod tests {
         render_loop.tick(&input(), 1_002_000).expect("tick");
         assert_eq!(observer.starts(), 1);
         render_loop.stop();
+    }
+
+    /// Stands in for a webcam so the overlay is testable without hardware.
+    struct FakeSource {
+        frame: Frame,
+    }
+
+    impl FrameSource for FakeSource {
+        fn latest(&self) -> Option<Frame> {
+            Some(self.frame.clone())
+        }
+
+        fn stop(&mut self) {}
+    }
+
+    fn overlay_source() -> Box<dyn FrameSource> {
+        Box::new(FakeSource {
+            frame: Frame::filled(FRAME_WIDTH, FRAME_HEIGHT, (0, 200, 0)),
+        })
+    }
+
+    #[test]
+    fn the_widget_layout_composites_the_webcam_behind_the_card() {
+        let sink = RecordingSink::default();
+        let observer = sink.clone();
+        let mut render_loop = RenderLoop::new(Fonts::load_system().expect("fonts"), Box::new(sink));
+        render_loop.set_source(overlay_source());
+        let mut widget = input();
+        widget.display.layout = Layout::Widget;
+        render_loop.tick(&widget, 1_001_000).expect("tick");
+        let frame = observer.frames().last().cloned().expect("a frame");
+        assert_eq!(frame.pixel(0, 0), (0, 200, 0), "the webcam fills the frame");
+    }
+
+    #[test]
+    fn the_fullscreen_layout_ignores_the_webcam() {
+        let sink = RecordingSink::default();
+        let observer = sink.clone();
+        let mut render_loop = RenderLoop::new(Fonts::load_system().expect("fonts"), Box::new(sink));
+        render_loop.set_source(overlay_source());
+        render_loop.tick(&input(), 1_001_000).expect("tick");
+        let frame = observer.frames().last().cloned().expect("a frame");
+        assert_eq!(frame.pixel(0, 0), (0x0f, 0x11, 0x15), "counter only");
+    }
+
+    #[test]
+    fn a_source_that_cannot_be_opened_falls_back_to_the_counter() {
+        let sink = RecordingSink::default();
+        let observer = sink.clone();
+        let mut render_loop = RenderLoop::new(Fonts::load_system().expect("fonts"), Box::new(sink));
+        let mut widget = input();
+        widget.display.layout = Layout::Widget;
+        widget.source = Some("not-a-camera".into());
+        render_loop
+            .tick(&widget, 1_001_000)
+            .expect("the counter still renders");
+        let frame = observer.frames().last().cloned().expect("a frame");
+        assert_eq!(frame.pixel(0, 0), (0x0f, 0x11, 0x15));
     }
 }

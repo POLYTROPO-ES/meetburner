@@ -58,6 +58,10 @@ pub struct CounterInput {
     pub width: u32,
     #[serde(default = "default_height")]
     pub height: u32,
+    /// Physical webcam to composite the counter card over (M7, ADR-0021). `None` = counter
+    /// only. Ignored unless the layout is `widget`, whose card keeps the text readable.
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 impl CounterInput {
@@ -560,6 +564,7 @@ mod tests {
             display: DisplayConfig::default(),
             width: FRAME_WIDTH,
             height: FRAME_HEIGHT,
+            source: None,
         }
     }
 

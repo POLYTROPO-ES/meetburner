@@ -58,6 +58,10 @@ const en = {
   'overflow.shrink': 'Shrink the font',
   preview: 'Preview',
   camera: 'Camera',
+  cameraSource: 'Overlay on webcam',
+  cameraSourceNone: 'No webcam (counter only)',
+  cameraSourceHint:
+    'The counter is drawn as a card over the webcam. If the camera is busy or unplugged, the counter keeps going on its own.',
   cameraResolution: 'Camera resolution',
   cameraResolutionHint:
     'Meeting apps keep the size they negotiated when they opened the camera; the counter is always scaled to fit. Reselect the camera only if you want a different frame shape.',
@@ -145,6 +149,10 @@ const es: Record<MessageKey, string> = {
   'overflow.shrink': 'Reducir la letra',
   preview: 'Vista previa',
   camera: 'Cámara',
+  cameraSource: 'Superponer en webcam',
+  cameraSourceNone: 'Sin webcam (solo contador)',
+  cameraSourceHint:
+    'El contador se dibuja como una tarjeta sobre la webcam. Si la cámara está ocupada o desconectada, el contador sigue funcionando solo.',
   cameraResolution: 'Resolución de la cámara',
   cameraResolutionHint:
     'Las apps de reuniones mantienen el tamaño que negociaron al abrir la cámara; el contador siempre se ajusta para caber. Vuelve a elegir la cámara solo si quieres otra forma de vídeo.',

@@ -36,11 +36,13 @@ import {
 import { CounterView } from './CounterView';
 import {
   cameraDriverEnsure,
+  cameraListSources,
   cameraRegisterDriver,
   cameraUnregisterDriver,
   isTauri,
   openCounterWindow,
   shareUrl,
+  type CameraSource,
   type DriverStatus,
 } from './platform';
 import { useCamera, useDisplay, useLang, useMeeting } from './storage';
@@ -66,6 +68,7 @@ export function Setup() {
   const [driver, setDriver] = useState<DriverStatus | null>(null);
   const [driverError, setDriverError] = useState<string | null>(null);
   const [driverUpdated, setDriverUpdated] = useState(false);
+  const [sources, setSources] = useState<CameraSource[]>([]);
   // The camera is live while the app is open, as soon as the driver is registered.
   const cameraError = useCameraSync(
     cameraInput(meeting, display, lang, camera),
@@ -81,6 +84,9 @@ export function Setup() {
         setDriverUpdated(result.updated);
       })
       .catch((error) => setDriverError(String(error)));
+    void cameraListSources()
+      .then(setSources)
+      .catch(() => setSources([]));
   }, []);
 
   const registerDriver = async () => {
@@ -390,31 +396,49 @@ export function Setup() {
       {isTauri() && (
         <section>
           <h2>{t(lang, 'camera')}</h2>
-          {display.layout === 'fullscreen' && (
-            <div className="grid">
-              <label>
-                {t(lang, 'cameraResolution')}
-                <select
-                  value={`${camera.width}x${camera.height}`}
-                  onChange={(e) => {
-                    const [width, height] = e.target.value.split('x').map(Number);
-                    setCamera({ ...camera, width, height });
-                  }}
-                >
-                  {CAMERA_RATIOS.map((ratio) => (
-                    <optgroup key={ratio} label={ratio}>
-                      {CAMERA_SIZES.filter((size) => size.ratio === ratio).map((size) => (
-                        <option key={`${size.width}x${size.height}`} value={`${size.width}x${size.height}`}>
-                          {size.width}×{size.height}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
-          {display.layout === 'fullscreen' && <p className="muted">{t(lang, 'cameraResolutionHint')}</p>}
+          <div className="grid">
+            <label>
+              {t(lang, 'cameraSource')}
+              <select
+                value={camera.source ?? ''}
+                onChange={(e) => {
+                  const source = e.target.value === '' ? null : e.target.value;
+                  setCamera({ ...camera, source });
+                  // The card keeps the counter readable over the video (ADR-0021).
+                  setDisplay({ ...display, layout: source === null ? 'fullscreen' : 'widget' });
+                }}
+              >
+                <option value="">{t(lang, 'cameraSourceNone')}</option>
+                {sources.map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {source.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t(lang, 'cameraResolution')}
+              <select
+                value={`${camera.width}x${camera.height}`}
+                onChange={(e) => {
+                  const [width, height] = e.target.value.split('x').map(Number);
+                  setCamera({ ...camera, width, height });
+                }}
+              >
+                {CAMERA_RATIOS.map((ratio) => (
+                  <optgroup key={ratio} label={ratio}>
+                    {CAMERA_SIZES.filter((size) => size.ratio === ratio).map((size) => (
+                      <option key={`${size.width}x${size.height}`} value={`${size.width}x${size.height}`}>
+                        {size.width}×{size.height}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+          </div>
+          {camera.source !== null && <p className="muted">{t(lang, 'cameraSourceHint')}</p>}
+          <p className="muted">{t(lang, 'cameraResolutionHint')}</p>
           <p className="muted">{t(lang, 'cameraLiveHint')}</p>
           {driver?.registered && <p className="muted">{t(lang, 'cameraAlwaysOn')}</p>}
           <div className="row">

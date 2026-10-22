@@ -10,6 +10,7 @@ pub mod ipc;
 pub mod layout;
 pub mod renderer;
 pub mod sink;
+pub mod source;
 pub mod theme;
 pub mod themes_data;
 
@@ -18,4 +19,5 @@ pub use format::{format_duration, format_money, format_money_compact};
 pub use frame::{normalize_size, Frame, FPS, FRAME_HEIGHT, FRAME_WIDTH, SUPPORTED_SIZES};
 pub use layout::{counter_layout, fit_cost, CounterLayout, FitCost, Rect};
 pub use renderer::{fit_font_px, render, CounterInput, CounterValues, DisplayConfig, Labels};
+pub use source::{list_sources, CameraSource, FrameSource, WebcamSource};
 pub use theme::{theme, FontChoice, FontId, Layout, Overflow, Theme};
