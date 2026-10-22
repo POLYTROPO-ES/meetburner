@@ -12,6 +12,7 @@
 #include <new>
 
 #include "../common/meetburner_camera.h"
+#include "frames.h"
 
 const CLSID CLSID_MeetBurnerCamera = {0xDBD3A890,
                                       0x1830,
@@ -27,6 +28,8 @@ const UINT32 kDefaultWidth = 1280;
 const UINT32 kDefaultHeight = 720;
 
 LONG g_objects = 0;
+
+} // namespace
 
 AM_MEDIA_TYPE MakeVideoType(UINT32 width, UINT32 height) {
     AM_MEDIA_TYPE mt;
@@ -44,7 +47,9 @@ AM_MEDIA_TYPE MakeVideoType(UINT32 width, UINT32 height) {
     vih->AvgTimePerFrame = kFrameDuration;
     vih->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     vih->bmiHeader.biWidth = static_cast<LONG>(width);
-    vih->bmiHeader.biHeight = -static_cast<LONG>(height); // top-down rows
+    // Bottom-up rows: Media Foundation (Chrome, Teams, Meet) ignores a negative height and
+    // would show a top-down buffer upside down (ADR-0019).
+    vih->bmiHeader.biHeight = static_cast<LONG>(height);
     vih->bmiHeader.biPlanes = 1;
     vih->bmiHeader.biBitCount = 32;
     vih->bmiHeader.biCompression = BI_RGB;
@@ -92,6 +97,23 @@ bool VideoFormat(const AM_MEDIA_TYPE* mt, UINT32* width, UINT32* height) {
     return true;
 }
 
+// A frame older than this means the app stopped publishing, even if the mapping still holds
+// its last pixels (a killed process keeps the section alive through the readers).
+const uint64_t kStaleMs = 2000;
+
+uint64_t UnixMsNow() {
+    FILETIME file_time;
+    GetSystemTimeAsFileTime(&file_time);
+    ULARGE_INTEGER ticks;
+    ticks.LowPart = file_time.dwLowDateTime;
+    ticks.HighPart = file_time.dwHighDateTime;
+    return (ticks.QuadPart - 116444736000000000ULL) / 10000ULL; // 1601 -> 1970, 100 ns -> ms
+}
+
+bool IsStale(const meetburner_frame_header& header) {
+    return header.timestamp_ms == 0 || UnixMsNow() > header.timestamp_ms + kStaleMs;
+}
+
 // Size the producer is publishing right now, or the default before it starts.
 void ProducerSize(UINT32* width, UINT32* height) {
     *width = kDefaultWidth;
@@ -107,16 +129,51 @@ void ProducerSize(UINT32* width, UINT32* height) {
     mb_reader_close(&reader);
 }
 
-// Nearest-neighbour keeps the stream valid if the producer changes size mid-graph.
-void ScaleNearest(const BYTE* src, UINT32 src_w, UINT32 src_h, BYTE* dst, UINT32 dst_w,
-                  UINT32 dst_h) {
-    for (UINT32 y = 0; y < dst_h; ++y) {
-        const UINT32 sy = static_cast<UINT32>(static_cast<UINT64>(y) * src_h / dst_h);
+// Copies a top-down BGRA frame into a bottom-up destination, preserving the aspect ratio.
+// Row 0 of the destination is the bottom of the picture, so a producer size that differs
+// from the negotiated media type still shows the counter upright inside the frame.
+void BlitFit(const BYTE* src, UINT32 src_w, UINT32 src_h, BYTE* dst, UINT32 dst_w,
+             UINT32 dst_h) {
+    if (!src || !dst || src_w == 0 || src_h == 0 || dst_w == 0 || dst_h == 0) return;
+    const DWORD background = 0xFF0F1115u; // BGRA of RGB(0f, 11, 15)
+    auto* pixels = reinterpret_cast<DWORD*>(dst);
+    const size_t count = static_cast<size_t>(dst_w) * dst_h;
+    for (size_t i = 0; i < count; ++i) pixels[i] = background;
+
+    UINT32 out_w;
+    UINT32 out_h;
+    const UINT64 src_cross = static_cast<UINT64>(src_w) * dst_h;
+    const UINT64 dst_cross = static_cast<UINT64>(dst_w) * src_h;
+    if (src_cross >= dst_cross) {
+        out_w = dst_w;
+        out_h = static_cast<UINT32>(static_cast<UINT64>(dst_w) * src_h / src_w);
+    } else {
+        out_h = dst_h;
+        out_w = static_cast<UINT32>(static_cast<UINT64>(dst_h) * src_w / src_h);
+    }
+    if (out_w == 0) out_w = 1;
+    if (out_h == 0) out_h = 1;
+    if (out_w > dst_w) out_w = dst_w;
+    if (out_h > dst_h) out_h = dst_h;
+    const UINT32 off_x = (dst_w - out_w) / 2;
+    const UINT32 off_y = (dst_h - out_h) / 2;
+    const bool same_size = out_w == src_w && out_h == src_h && out_w == dst_w && out_h == dst_h;
+
+    for (UINT32 vy = 0; vy < out_h; ++vy) {
+        const UINT32 sy =
+            same_size ? vy : static_cast<UINT32>(static_cast<UINT64>(vy) * src_h / out_h);
         const BYTE* src_row = src + static_cast<size_t>(sy) * src_w * 4;
-        BYTE* dst_row = dst + static_cast<size_t>(y) * dst_w * 4;
-        for (UINT32 x = 0; x < dst_w; ++x) {
-            const UINT32 sx = static_cast<UINT32>(static_cast<UINT64>(x) * src_w / dst_w);
-            memcpy(dst_row + static_cast<size_t>(x) * 4, src_row + static_cast<size_t>(sx) * 4, 4);
+        BYTE* dst_row = dst + static_cast<size_t>(dst_h - 1 - (off_y + vy)) * dst_w * 4 +
+                        static_cast<size_t>(off_x) * 4;
+        if (same_size) {
+            memcpy(dst_row, src_row, static_cast<size_t>(src_w) * 4);
+            continue;
+        }
+        for (UINT32 vx = 0; vx < out_w; ++vx) {
+            const UINT32 sx =
+                static_cast<UINT32>(static_cast<UINT64>(vx) * src_w / out_w);
+            memcpy(dst_row + static_cast<size_t>(vx) * 4, src_row + static_cast<size_t>(sx) * 4,
+                   4);
         }
     }
 }
@@ -155,7 +212,13 @@ std::vector<BYTE> RenderNotRunning(UINT32 width, UINT32 height) {
         SelectObject(dc, old_font);
         DeleteObject(font);
         GdiFlush();
-        memcpy(buffer.data(), bits, buffer.size());
+        // The DIB is top-down for GDI; flip it so the buffer is bottom-up like the video.
+        const auto* top_down = static_cast<const BYTE*>(bits);
+        const size_t stride = static_cast<size_t>(width) * 4;
+        for (UINT32 y = 0; y < height; ++y) {
+            memcpy(buffer.data() + static_cast<size_t>(y) * stride,
+                   top_down + static_cast<size_t>(height - 1 - y) * stride, stride);
+        }
         SelectObject(dc, old_bitmap);
     }
     if (bitmap) DeleteObject(bitmap);
@@ -163,6 +226,8 @@ std::vector<BYTE> RenderNotRunning(UINT32 width, UINT32 height) {
     ReleaseDC(nullptr, screen);
     return buffer;
 }
+
+namespace {
 
 class MediaTypeEnumerator final : public IEnumMediaTypes {
 public:
@@ -668,6 +733,9 @@ void CameraPin::DeliverLoop() {
     QueryPerformanceCounter(&started);
     const LONGLONG period_ns = 1000000000LL / 30;
     LONGLONG frame = 0;
+    // Consecutive ticks without a readable frame; ~2 s makes the placeholder honest again.
+    int stale_ticks = 0;
+    const int kStaleLimit = 60;
 
     while (WaitForSingleObject(stop_event_, 0) != WAIT_OBJECT_0) {
         if (!reader_open) {
@@ -691,21 +759,27 @@ void CameraPin::DeliverLoop() {
                 meetburner_frame_header header = {};
                 const bool have = reader_open &&
                                   mb_read_frame(&reader, scratch_.data(), scratch_.size(), &header);
-                if (have && header.state == MB_CAMERA_STATE_LIVE) {
-                    if (header.width == width_ && header.height == height_) {
-                        memcpy(dst, scratch_.data(), dst_size);
-                    } else {
-                        ScaleNearest(scratch_.data(), header.width, header.height, dst, width_,
-                                     height_);
-                    }
+                const bool live = have && header.state == MB_CAMERA_STATE_LIVE && !IsStale(header);
+                if (live) {
+                    BlitFit(scratch_.data(), header.width, header.height, dst, width_, height_);
+                    last_.assign(dst, dst + dst_size);
+                    stale_ticks = 0;
                 } else {
                     if (!have && reader_open) {
-                        // The producer stopped or restarted: reopen the mapping next time.
+                        // No readable frame: reopen the mapping on the next tick.
                         mb_reader_close(&reader);
                         reader_open = false;
                     }
-                    if (not_running_.size() >= dst_size) {
-                        memcpy(dst, not_running_.data(), dst_size);
+                    if (have) {
+                        // A readable but idle or stale frame: the app is not publishing.
+                        last_.clear();
+                    } else if (++stale_ticks > kStaleLimit) {
+                        // Unreadable for ~2 s: stop repeating the old picture (ADR-0019).
+                        last_.clear();
+                    }
+                    const std::vector<BYTE>& shown = last_.size() == dst_size ? last_ : not_running_;
+                    if (shown.size() >= dst_size) {
+                        memcpy(dst, shown.data(), dst_size);
                     } else {
                         memset(dst, 0, dst_size);
                     }

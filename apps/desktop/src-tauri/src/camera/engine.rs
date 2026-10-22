@@ -26,17 +26,15 @@ impl RenderLoop {
         }
     }
 
-    /// Applies the latest input for one frame. A resolution change re-creates the sink
-    /// mapping on the next tick; the render thread never stops (ADR-0015).
+    /// Applies the latest input for one frame. The mapping is created on the first tick and
+    /// kept: a resolution change only changes the size in the frame header, so consumers
+    /// keep reading the same device (ADR-0019).
     pub fn tick(&mut self, input: &CounterInput, now_ms: i64) -> Result<(), SinkError> {
         let size = input.size();
-        if self.size != Some(size) {
-            if self.size.is_some() {
-                self.sink.stop();
-            }
+        if self.size.is_none() {
             self.sink.start(size.0, size.1, FPS)?;
-            self.size = Some(size);
         }
+        self.size = Some(size);
         let frame = render(input, &self.fonts, now_ms, None);
         self.sink.send(&frame)
     }
@@ -178,7 +176,7 @@ mod tests {
     }
 
     #[test]
-    fn a_resolution_change_restarts_the_sink_without_stopping_the_loop() {
+    fn a_resolution_change_keeps_the_same_sink_and_device() {
         let sink = RecordingSink::default();
         let observer = sink.clone();
         let mut render_loop = RenderLoop::new(Fonts::load_system().expect("fonts"), Box::new(sink));
@@ -191,13 +189,14 @@ mod tests {
             .tick(&small, 1_002_000)
             .expect("tick after resize");
 
-        assert_eq!(observer.sizes(), vec![(1280, 720), (640, 360)]);
-        assert_eq!(observer.starts(), 2);
+        assert_eq!(observer.starts(), 1, "the mapping is created once");
+        assert_eq!(observer.stops(), 0, "the device is never torn down");
+        assert_eq!(observer.sizes(), vec![(1280, 720)]);
         let frames = observer.frames();
         assert_eq!((frames[1].width(), frames[1].height()), (640, 360));
 
         render_loop.stop();
-        assert_eq!(observer.stops(), 2, "one restart plus the final stop");
+        assert_eq!(observer.stops(), 1);
     }
 
     #[test]

@@ -1,13 +1,15 @@
 # vcam-windows
 
-Owner: `vcam-windows` agent. See [ADR-0002](../../docs/decisions/0002-virtual-camera.md), [ADR-0013](../../docs/decisions/0013-windows-frame-ipc.md) and [ADR-0016](../../docs/decisions/0016-dshow-filter-and-per-user-registration.md).
+Owner: `vcam-windows` agent. See [ADR-0002](../../docs/decisions/0002-virtual-camera.md), [ADR-0013](../../docs/decisions/0013-windows-frame-ipc.md), [ADR-0016](../../docs/decisions/0016-dshow-filter-and-per-user-registration.md) and [ADR-0019](../../docs/decisions/0019-camera-frame-orientation-and-mapping.md).
 
 ```
 CMakeLists.txt
 common/meetburner_camera.h   frame contract + seqlock reader (DLL and tests)
 dshow/                       DirectShow source filter ("MeetBurner Camera")
+dshow/frames.h               media type, bottom-up blit, "not running" frame
+dshow/vcam.cpp               bottom-up RGB32 source filter
 scripts/                     register.ps1 / unregister.ps1 (HKCU, no UAC)
-tests/                       reader_test (CTest), dshow_probe, graph_test
+tests/                       reader_test + frame_test (CTest), dshow_probe, graph_test
 ```
 
 ## What already exists (Rust producer)
@@ -27,7 +29,7 @@ The DLLs only have to read. The contract below is frozen by ADR-0013.
 | File mapping | `Local\MeetBurnerCamera` |
 | Frame-ready event (auto-reset) | `Local\MeetBurnerCameraFrame` |
 
-Mapping size: `48 + width * height * 4` bytes. Frames are BGRA (top-down, no row padding) at the size the producer publishes.
+Mapping size: always `48 + 1920 * 1080 * 4` bytes, whatever the resolution (ADR-0019). Frames are BGRA, top-down in the mapping, no row padding; the header carries the size actually published.
 
 ```c
 #pragma pack(push, 1)
@@ -54,16 +56,23 @@ _Static_assert(sizeof(meetburner_frame_header) == 48, "header must stay 48 bytes
 2. Read the header; require `magic == 0x4D42434D` and `version == 1`.
 3. If `sequence` is odd, retry (do not touch the payload).
 4. Copy the payload, read the header again; accept only when the two `sequence` values are equal and even.
-5. If `state == 0` or no frame arrived in ~1 s, output the "not running" frame.
+5. If `state == 0`, or `timestamp_ms` is more than 2 s behind the wall clock, show the "not running" frame; repeat the last good frame for at most ~2 s first, so a hiccup never flashes.
 
 Readers must never write to the mapping and must never block: a stuck consumer cannot stall the producer.
 
 ### Resolution changes
 
 The producer can change the output size while the app runs (16:9, 9:16, 4:3, 3:4 and 1:1 sizes, ADR-0015).
-When that happens it closes the mapping and creates a new one with the new length, so a consumer that
-still holds the old view will stop seeing fresh timestamps: re-open the mapping after the ~1 s stale
-timeout and use the new `width`/`height` from the header.
+Since ADR-0019 the mapping is **never** re-created: only `width`/`height` in the header change, so a reader
+keeps its view for the whole session. Re-read the header on every frame and scale the result into the
+negotiated media type, keeping the aspect ratio (as `BlitFit` does).
+
+### Row order
+
+RGB32 reaches consumers **bottom-up** (`biHeight > 0`): Media Foundation — Chrome, Meet, new Teams —
+ignores a negative height and shows a top-down buffer upside down, which made the counter look rotated 180°.
+The producer writes top-down, the filter flips while copying (`BlitFit`) and `RenderNotRunning` flips its
+GDI DIB too. `tests/frame_test.cpp` pins both.
 
 ## Build, register and test
 

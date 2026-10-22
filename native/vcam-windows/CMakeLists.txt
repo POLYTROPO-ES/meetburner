@@ -26,6 +26,15 @@ target_compile_definitions(reader_test PRIVATE UNICODE _UNICODE _WIN32_WINNT=0x0
 target_compile_options(reader_test PRIVATE /W4 /utf-8)
 add_test(NAME meetburner_reader COMMAND reader_test)
 
+# Unit tests for the frame helpers: DIB row order and the aspect-fit blit (ADR-0019).
+add_executable(frame_test tests/frame_test.cpp dshow/vcam.cpp)
+target_include_directories(frame_test PRIVATE common dshow)
+target_compile_definitions(frame_test PRIVATE
+    UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0601)
+target_compile_options(frame_test PRIVATE /W4 /permissive- /utf-8)
+target_link_libraries(frame_test PRIVATE strmiids uuid ole32 oleaut32 user32 gdi32)
+add_test(NAME meetburner_frame COMMAND frame_test)
+
 # Diagnostic: prints what a DirectShow consumer sees for the registered device.
 add_executable(dshow_probe tests/dshow_probe.cpp)
 target_compile_definitions(dshow_probe PRIVATE UNICODE _UNICODE _WIN32_WINNT=0x0601)

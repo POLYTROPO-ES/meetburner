@@ -52,6 +52,8 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Fullscreen output resolution selector: 16:9, 9:16, 4:3, 3:4 and 1:1 sizes, applied live (ADR-0015)
 - [x] Cost font fills 90 % of the width by default; the size slider multiplies that fit (ADR-0015)
 - [x] Live updates: every parameter change reaches the camera on the next frame; only a resolution change re-creates the mapping
+- [x] One fixed-capacity mapping for the whole session: a resolution change only changes the header, so meeting apps never lose the device (ADR-0019)
+- [x] Bottom-up RGB32 frames and last-frame fallback: upright in Meet/Chrome/ffmpeg and no "Camera not running" flashes (ADR-0019)
 - [x] Always on: the camera publishes from app start while the driver is registered, with an idle frame before the meeting starts; failures are shown in the setup page (ADR-0018)
 - [~] Snapshot test: structural frame tests (colours, ink per text box, nothing outside the widget card) instead of PNG goldens, because system fonts differ per machine (ADR-0014)
 - [ ] Emoji decorations: needs a face with the glyph (system emoji font), currently skipped

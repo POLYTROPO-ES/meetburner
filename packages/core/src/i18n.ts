@@ -59,6 +59,8 @@ const en = {
   preview: 'Preview',
   camera: 'Camera',
   cameraResolution: 'Camera resolution',
+  cameraResolutionHint:
+    'Meeting apps keep the size they negotiated when they opened the camera; the counter is always scaled to fit. Reselect the camera only if you want a different frame shape.',
   cameraLiveHint: 'Changes apply to the camera immediately, no restart needed.',
   cameraAlwaysOn: 'The camera is live while MeetBurner is open: preview it in your meeting app.',
   cameraRegister: 'Register webcam for meets',
@@ -143,6 +145,8 @@ const es: Record<MessageKey, string> = {
   preview: 'Vista previa',
   camera: 'Cámara',
   cameraResolution: 'Resolución de la cámara',
+  cameraResolutionHint:
+    'Las apps de reuniones mantienen el tamaño que negociaron al abrir la cámara; el contador siempre se ajusta para caber. Vuelve a elegir la cámara solo si quieres otra forma de vídeo.',
   cameraLiveHint: 'Los cambios se aplican a la cámara al instante, sin reiniciar.',
   cameraAlwaysOn: 'La cámara está activa mientras MeetBurner está abierto: puedes previsualizarla en la app de reuniones.',
   cameraRegister: 'Registrar la cámara para las reuniones',

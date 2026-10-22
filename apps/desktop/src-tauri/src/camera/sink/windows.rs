@@ -16,7 +16,7 @@ use windows_sys::Win32::System::Memory::MEMORY_MAPPED_VIEW_ADDRESS;
 
 use crate::camera::engine::now_ms;
 use crate::camera::frame::Frame;
-use crate::camera::ipc::{self, mapping_len, STATE_LIVE};
+use crate::camera::ipc::{self, CAPACITY_LEN, STATE_LIVE};
 use crate::camera::sink::{SinkError, VirtualCameraSink};
 
 /// Names must match `native/vcam-windows/common/meetburner_camera.h`.
@@ -24,6 +24,7 @@ pub const MAPPING_NAME: &str = "Local\\MeetBurnerCamera";
 pub const EVENT_NAME: &str = "Local\\MeetBurnerCameraFrame";
 
 /// The app is the only producer; meeting apps read the mapping through the DLL.
+/// The mapping is created once with room for the largest supported size (ADR-0019).
 pub struct WinSharedMemSink {
     mapping_name: String,
     event_name: String,
@@ -31,8 +32,6 @@ pub struct WinSharedMemSink {
     view: *mut u8,
     event: HANDLE,
     len: usize,
-    width: u32,
-    height: u32,
     fps: u32,
 }
 
@@ -53,8 +52,6 @@ impl WinSharedMemSink {
             view: std::ptr::null_mut(),
             event: std::ptr::null_mut(),
             len: 0,
-            width: 0,
-            height: 0,
             fps: 0,
         }
     }
@@ -80,11 +77,13 @@ impl Default for WinSharedMemSink {
 }
 
 impl VirtualCameraSink for WinSharedMemSink {
-    fn start(&mut self, width: u32, height: u32, fps: u32) -> Result<(), SinkError> {
+    /// The requested size is informational: the mapping always has room for the largest
+    /// supported frame, and every frame carries its own size in the header.
+    fn start(&mut self, _width: u32, _height: u32, fps: u32) -> Result<(), SinkError> {
         if self.is_running() {
             return Ok(());
         }
-        let len = mapping_len(width, height);
+        let len = CAPACITY_LEN;
         let mapping_name = wide(&self.mapping_name);
         let mapping = unsafe {
             CreateFileMappingW(
@@ -123,8 +122,6 @@ impl VirtualCameraSink for WinSharedMemSink {
         self.view = view.Value as *mut u8;
         self.event = event;
         self.len = len;
-        self.width = width;
-        self.height = height;
         self.fps = fps;
         self.write_idle();
         Ok(())
@@ -133,11 +130,6 @@ impl VirtualCameraSink for WinSharedMemSink {
     fn send(&mut self, frame: &Frame) -> Result<(), SinkError> {
         if !self.is_running() {
             return Err(SinkError::NotStarted);
-        }
-        if frame.width() != self.width || frame.height() != self.height {
-            return Err(SinkError::Io(
-                "frame size does not match the shared memory mapping".into(),
-            ));
         }
         // SAFETY: the view is mapped for `self.len` bytes until `stop`.
         let buf = unsafe { slice::from_raw_parts_mut(self.view, self.len) };
@@ -186,7 +178,7 @@ mod tests {
     use super::*;
     use windows_sys::Win32::System::Memory::{OpenFileMappingW, FILE_MAP_READ};
 
-    use crate::camera::ipc::ReadFrame;
+    use crate::camera::ipc::{mapping_len, ReadFrame};
 
     fn unique_names(tag: &str) -> (String, String) {
         let id = std::process::id();
@@ -266,12 +258,23 @@ mod tests {
     }
 
     #[test]
-    fn rejects_frames_of_a_different_size() {
+    fn a_new_size_is_sent_without_reopening_the_mapping() {
         let (mapping, event) = unique_names("size");
         let mut sink = WinSharedMemSink::with_names(&mapping, &event);
         sink.start(2, 2, 30).expect("start");
-        assert!(sink.send(&Frame::filled(4, 4, (1, 1, 1))).is_err());
-        assert!(sink.send(&Frame::filled(2, 2, (1, 1, 1))).is_ok());
+        // The reader keeps this one view for the whole session, like the DLL does.
+        let reader = TestReader::open(&mapping, CAPACITY_LEN);
+
+        sink.send(&Frame::filled(2, 2, (1, 2, 3)))
+            .expect("first size");
+        let small = reader.read().expect("the small frame");
+        assert_eq!((small.header.width, small.header.height), (2, 2));
+
+        sink.send(&Frame::filled(4, 4, (4, 5, 6)))
+            .expect("new size");
+        let big = reader.read().expect("the resized frame is readable");
+        assert_eq!((big.header.width, big.header.height), (4, 4));
+        assert_eq!(big.frame, Frame::filled(4, 4, (4, 5, 6)));
         sink.stop();
     }
 

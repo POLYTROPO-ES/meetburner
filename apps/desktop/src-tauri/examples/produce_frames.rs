@@ -2,8 +2,11 @@
 //! the virtual-camera mapping without starting the app.
 //!
 //! ```text
-//! cargo run --example produce_frames -- [seconds] [width] [height]
+//! cargo run --example produce_frames -- [seconds] [width] [height] [switch_w switch_h]
 //! ```
+//!
+//! With `switch_w switch_h` it changes the output size halfway through without stopping,
+//! which is how a resolution change behaves in the app (ADR-0019).
 //!
 //! It is Windows-only because the shared-memory sink is (ADR-0013).
 
@@ -30,6 +33,10 @@ fn main() {
         .next()
         .and_then(|value| value.parse().ok())
         .unwrap_or(FRAME_HEIGHT);
+    let switch_to: Option<(u32, u32)> = args
+        .next()
+        .and_then(|value| value.parse::<u32>().ok())
+        .zip(args.next().and_then(|value| value.parse::<u32>().ok()));
 
     let input = CounterInput {
         // A meeting that started 65 s ago, so the elapsed time and the cost are visible.
@@ -48,9 +55,21 @@ fn main() {
     let mut render_loop = RenderLoop::new(fonts, Box::new(WinSharedMemSink::new()));
     println!("publishing {width}x{height} frames for {seconds}s (Ctrl+C to stop)");
 
-    let deadline = Instant::now() + Duration::from_secs(seconds);
+    let started = Instant::now();
+    let deadline = started + Duration::from_secs(seconds);
+    let half = started + Duration::from_secs(seconds / 2);
+    let mut published = (width, height);
     while Instant::now() < deadline {
-        if let Err(error) = render_loop.tick(&input, now_ms()) {
+        if let Some((next_width, next_height)) = switch_to {
+            if published != (next_width, next_height) && Instant::now() >= half {
+                published = (next_width, next_height);
+                println!("switching to {next_width}x{next_height} without stopping the mapping");
+            }
+        }
+        let mut current = input.clone();
+        current.width = published.0;
+        current.height = published.1;
+        if let Err(error) = render_loop.tick(&current, now_ms()) {
             eprintln!("frame dropped: {error}");
         }
         std::thread::sleep(Duration::from_millis(33));
