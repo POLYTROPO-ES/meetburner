@@ -1,4 +1,4 @@
-# Project Golas for meetcost
+# Project Golas for MeetBurner (formerly meetcost)
 I want a webapp and a windows/mac/linux app that do this
 
 1.- Tou add what salary have each person in the meet
