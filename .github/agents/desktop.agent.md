@@ -14,6 +14,8 @@ You work in `apps/desktop` (mainly `src-tauri`).
 - Packaging: NSIS/MSI (Windows), `.deb`/AppImage (Linux), DMG (macOS, stage 2).
 
 ## Rules
+- TDD (ADR-0008): write the failing `cargo test` first (e.g. renderer golden images, layout math), then implement.
+- Camera layout: `fullscreen` when no source webcam, `widget` (small corner card) when overlaying a webcam; themes come from `packages/core/src/themes.ts` (ADR-0006).
 - Cost values come from the UI (computed by `packages/core`); Rust only needs `startAt`, `endAt`, total rate per ms and translated labels to render.
 - Rendering runs on its own thread; never block the Tauri main thread.
 - Verify with `cargo fmt --check && cargo clippy -- -D warnings && cargo test`.
