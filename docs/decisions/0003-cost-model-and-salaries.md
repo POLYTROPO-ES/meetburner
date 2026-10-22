@@ -1,6 +1,6 @@
 # 0003. Cost model and salary presets
 
-- Status: accepted
+- Status: superseded by [0005](0005-countries-and-total-cost.md)
 - Date: 2026-10-22
 
 ## Context
