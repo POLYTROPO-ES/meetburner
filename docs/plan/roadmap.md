@@ -79,7 +79,8 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Source webcam enumeration and capture (`nokhwa`, ADR-0021)
 - [x] Compositing: `widget` card over the webcam frame, scaled to the output size (ADR-0021)
 - [x] Fallback to counter-only if source camera is busy/unplugged
-- [ ] Position, scale and opacity of the card; mirror option
+- [x] Mirror the camera image and the counter independently, H and V (ADR-0022)
+- [ ] Position, scale and opacity of the card
 - **Done when:** overlay works on both Linux and Windows sinks.
 
 ### M8. Windows virtual camera (Media Foundation) — `vcam-windows`
