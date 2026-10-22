@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createMeeting, detectLang, LANGS, normalizeDisplay, type DisplaySettings, type Lang, type Meeting } from '@meetburner/core';
+import {
+  createMeeting,
+  detectLang,
+  LANGS,
+  normalizeCamera,
+  normalizeDisplay,
+  type CameraSettings,
+  type DisplaySettings,
+  type Lang,
+  type Meeting,
+} from '@meetburner/core';
 
 const MEETING_KEY = 'meetburner.meeting';
 const LANG_KEY = 'meetburner.lang';
 const DISPLAY_KEY = 'meetburner.display';
+const CAMERA_KEY = 'meetburner.camera';
 
 function parseMeeting(raw: string | null): Meeting {
   try {
@@ -26,6 +37,14 @@ function parseDisplay(raw: string | null): DisplaySettings {
     return normalizeDisplay(raw ? JSON.parse(raw) : null);
   } catch {
     return normalizeDisplay(null);
+  }
+}
+
+function parseCamera(raw: string | null): CameraSettings {
+  try {
+    return normalizeCamera(raw ? JSON.parse(raw) : null);
+  } catch {
+    return normalizeCamera(null);
   }
 }
 
@@ -55,3 +74,4 @@ function useStored<T>(key: string, parse: (raw: string | null) => T, serialize: 
 export const useMeeting = () => useStored(MEETING_KEY, parseMeeting, JSON.stringify);
 export const useLang = () => useStored(LANG_KEY, parseLang, String);
 export const useDisplay = () => useStored(DISPLAY_KEY, parseDisplay, JSON.stringify);
+export const useCamera = () => useStored(CAMERA_KEY, parseCamera, JSON.stringify);
