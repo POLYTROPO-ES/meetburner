@@ -78,5 +78,8 @@ camera_start/update/stop (Tauri commands)
 ```
 
 - The cost is computed from timestamps on every frame (`ratePerMs × elapsed`), never accumulated, so the camera and the windows always agree.
+- The cost font is fitted to 90 % of the available width by default; the user size multiplies that fit, and the compact/shrink rule applies past the box.
+- The output size is part of the camera payload (`640×360`, `1280×720`, `1920×1080`); the setup page offers it in fullscreen mode. Unknown sizes fall back to 720p.
+- `camera_update` pushes every parameter change to the render thread, which applies it on the next frame. A resolution change closes and re-creates the shared mapping inside the render thread; nothing stops (ADR-0015).
 - Overlay mode keeps the webcam frame as the background and draws the themed card (`widget`) in the bottom-right corner; glyphs are clipped to their box so nothing is painted over the webcam.
 - The Windows producer writes a 48-byte header (magic, version, size, fps, state, frame counter, timestamp, seqlock) followed by the BGRA payload into a named shared-memory mapping. Consumers read it with the seqlock retry loop, so they never block the producer and never get a torn frame.

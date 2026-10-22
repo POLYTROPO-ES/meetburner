@@ -59,6 +59,13 @@ _Static_assert(sizeof(meetburner_frame_header) == 48, "header must stay 48 bytes
 
 Readers must never write to the mapping and must never block: a stuck consumer cannot stall the producer.
 
+### Resolution changes
+
+The producer can change the output size while the app runs (640x360, 1280x720, 1920x1080, ADR-0015).
+When that happens it closes the mapping and creates a new one with the new length, so a consumer that
+still holds the old view will stop seeing fresh timestamps: re-open the mapping after the ~1 s stale
+timeout and use the new `width`/`height` from the header.
+
 ## Next steps
 
 1. `common/meetburner_camera.h` with the struct above + the reader loop.
