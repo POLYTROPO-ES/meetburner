@@ -10,6 +10,7 @@
     "test": "npm test -w @meetcost/core",
     "dev:web": "npm run dev -w @meetcost/web",
     "build:web": "npm run build -w @meetcost/web",
+    "deploy:web": "npm run build:web && npx wrangler@4 pages deploy apps/web/dist --project-name meetcost",
     "dev:desktop": "npm run tauri -w @meetcost/desktop -- dev",
     "build:desktop": "npm run tauri -w @meetcost/desktop -- build"
   },
