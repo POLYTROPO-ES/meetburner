@@ -10,7 +10,7 @@
     "test": "npm test -w @meetburner/core",
     "dev:web": "npm run dev -w @meetburner/web",
     "build:web": "npm run build -w @meetburner/web",
-    "deploy:web": "npm run build:web && npx wrangler@4 pages deploy apps/web/dist --project-name meetburner",
+    "deploy:web": "npm run build:web && npx --yes wrangler@4 pages deploy apps/web/dist --project-name meetburner --branch main",
     "dev:desktop": "npm run tauri -w @meetburner/desktop -- dev",
     "build:desktop": "npm run tauri -w @meetburner/desktop -- build"
   },
