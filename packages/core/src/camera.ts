@@ -39,9 +39,11 @@ export const CAMERA_SIZES: readonly CameraSize[] = [
 export interface CameraSettings {
   width: number;
   height: number;
+  /** Physical webcam to overlay the counter on (M7); null = counter only. */
+  source: string | null;
 }
 
-export const DEFAULT_CAMERA: CameraSettings = { width: 1280, height: 720 };
+export const DEFAULT_CAMERA: CameraSettings = { width: 1280, height: 720, source: null };
 
 const isSupported = (width: unknown, height: unknown): boolean =>
   CAMERA_SIZES.some((size) => size.width === width && size.height === height);
@@ -53,6 +55,7 @@ export function normalizeCamera(raw: unknown): CameraSettings {
   return {
     width: supported ? (r.width as number) : DEFAULT_CAMERA.width,
     height: supported ? (r.height as number) : DEFAULT_CAMERA.height,
+    source: typeof r.source === 'string' && r.source.length > 0 ? r.source : null,
   };
 }
 
@@ -84,6 +87,8 @@ export interface CameraInput {
   display: CameraDisplay;
   width: number;
   height: number;
+  /** Webcam to overlay the counter on, or null for counter only (M7). */
+  source: string | null;
 }
 
 const MS_PER_HOUR = 3_600_000;
@@ -125,5 +130,6 @@ export function cameraInput(
     },
     width: size.width,
     height: size.height,
+    source: size.source,
   };
 }

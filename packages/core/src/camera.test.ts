@@ -20,11 +20,18 @@ describe('camera settings', () => {
       expect(normalizeCamera({ width: size.width, height: size.height })).toEqual({
         width: size.width,
         height: size.height,
+        source: null,
       });
     }
     expect(normalizeCamera({ width: 500, height: 500 })).toEqual(DEFAULT_CAMERA);
     expect(normalizeCamera(null)).toEqual(DEFAULT_CAMERA);
     expect(normalizeCamera('nope')).toEqual(DEFAULT_CAMERA);
+  });
+
+  it('remembers the webcam chosen for the overlay', () => {
+    expect(normalizeCamera({ width: 1280, height: 720, source: '1' }).source).toBe('1');
+    expect(normalizeCamera({ width: 1280, height: 720, source: '' }).source).toBeNull();
+    expect(normalizeCamera({ width: 1280, height: 720, source: 7 }).source).toBeNull();
   });
 
   it('offers a default size from the supported list', () => {
@@ -60,6 +67,7 @@ describe('camera settings', () => {
       expect(normalizeCamera({ width: size.width, height: size.height })).toEqual({
         width: size.width,
         height: size.height,
+        source: null,
       });
     }
   });
@@ -124,7 +132,18 @@ describe('camera input', () => {
     const input = cameraInput(meeting(), DEFAULT_DISPLAY, 'en', {
       width: 1920,
       height: 1080,
+      source: null,
     });
     expect({ width: input.width, height: input.height }).toEqual({ width: 1920, height: 1080 });
+  });
+
+  it('sends the webcam to overlay on', () => {
+    const input = cameraInput(meeting(), DEFAULT_DISPLAY, 'en', {
+      width: 1280,
+      height: 720,
+      source: '2',
+    });
+    expect(input.source).toBe('2');
+    expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'en', DEFAULT_CAMERA).source).toBeNull();
   });
 });

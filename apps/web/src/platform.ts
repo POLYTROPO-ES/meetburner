@@ -34,6 +34,17 @@ export interface DriverUpdate {
   updated: boolean;
 }
 
+export interface CameraSource {
+  id: string;
+  name: string;
+}
+
+/** Physical cameras the counter can be overlaid on (M7). */
+export async function cameraListSources(): Promise<CameraSource[]> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<CameraSource[]>('camera_list_sources');
+}
+
 /** Re-registers the bundled driver when the installed one is older (ADR-0020). */
 export async function cameraDriverEnsure(): Promise<DriverUpdate> {
   const { invoke } = await import('@tauri-apps/api/core');
