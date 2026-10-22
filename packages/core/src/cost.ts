@@ -1,3 +1,6 @@
+import { findCountry, type CountryCode } from './countries';
+import { presetSalary } from './salaries';
+
 export const DEFAULT_HOURS_PER_YEAR = 1800;
 const MS_PER_HOUR = 3_600_000;
 
@@ -11,8 +14,13 @@ export interface Participant {
 }
 
 export interface Meeting {
+  country: CountryCode;
   currency: string;
   hoursPerYear: number;
+  /** When true, cost = gross salary + employer contributions (total cost). */
+  includeEmployerCost: boolean;
+  /** Fraction of gross salary, e.g. 0.32 for +32%. */
+  employerCostRate: number;
   participants: Participant[];
   /** Epoch ms. */
   startAt: number | null;
@@ -33,22 +41,49 @@ export interface MeetingSnapshot {
 export const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'MXN', 'ARS', 'COP', 'CLP', 'BRL'] as const;
 
 export function createMeeting(): Meeting {
+  return applyCountry(
+    {
+      country: 'ES',
+      currency: 'EUR',
+      hoursPerYear: DEFAULT_HOURS_PER_YEAR,
+      includeEmployerCost: true,
+      employerCostRate: 0,
+      participants: [],
+      startAt: null,
+      endAt: null,
+    },
+    'ES',
+  );
+}
+
+/** Sets the country defaults and re-prices participants that use a preset. */
+export function applyCountry(meeting: Meeting, code: CountryCode): Meeting {
+  const country = findCountry(code);
   return {
-    currency: 'EUR',
-    hoursPerYear: DEFAULT_HOURS_PER_YEAR,
-    participants: [],
-    startAt: null,
-    endAt: null,
+    ...meeting,
+    country: country.code,
+    currency: country.currency,
+    hoursPerYear: country.hoursPerYear,
+    employerCostRate: country.employerCostRate,
+    participants: meeting.participants.map((p) => ({
+      ...p,
+      annualSalary: presetSalary(p.presetId, country.code) ?? p.annualSalary,
+    })),
   };
 }
 
-export function hourlyRate(annualSalary: number, hoursPerYear = DEFAULT_HOURS_PER_YEAR): number {
+export function hourlyRate(annualSalary: number, hoursPerYear = DEFAULT_HOURS_PER_YEAR, employerCostRate = 0): number {
   if (!(annualSalary > 0) || !(hoursPerYear > 0)) return 0;
-  return annualSalary / hoursPerYear;
+  return (annualSalary * (1 + Math.max(0, employerCostRate || 0))) / hoursPerYear;
+}
+
+export function participantHourlyRate(p: Participant, meeting: Meeting): number {
+  const extra = meeting.includeEmployerCost ? meeting.employerCostRate : 0;
+  return hourlyRate(p.annualSalary, meeting.hoursPerYear, extra);
 }
 
 export function totalHourlyRate(meeting: Meeting): number {
-  return meeting.participants.reduce((sum, p) => sum + hourlyRate(p.annualSalary, meeting.hoursPerYear), 0);
+  return meeting.participants.reduce((sum, p) => sum + participantHourlyRate(p, meeting), 0);
 }
 
 export function meetingSnapshot(meeting: Meeting, now: number): MeetingSnapshot {
