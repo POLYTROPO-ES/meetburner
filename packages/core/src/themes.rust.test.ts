@@ -4,9 +4,12 @@ import { THEMES } from './themes';
 import { RUST_THEMES_PATH, renderRustThemes } from './themes.rust';
 
 describe('Rust theme mirror', () => {
+  // Git may check the file out with CRLF on Windows; compare logical lines.
+  const normalize = (text: string) => text.replace(/\r\n/g, '\n');
+
   it('keeps the generated Rust file in sync with themes.ts', () => {
     const generated = readFileSync(new URL(RUST_THEMES_PATH, import.meta.url), 'utf8');
-    expect(generated).toBe(renderRustThemes(THEMES));
+    expect(normalize(generated)).toBe(normalize(renderRustThemes(THEMES)));
   });
 
   it('renders every theme with its colours, font, weight and radius', () => {

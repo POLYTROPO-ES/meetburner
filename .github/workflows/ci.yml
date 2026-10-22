@@ -42,3 +42,15 @@ jobs:
       - name: Test
         working-directory: apps/desktop/src-tauri
         run: cargo test
+
+  native:
+    name: Windows camera filter (CMake + CTest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S native/vcam-windows -B native/vcam-windows/build -A x64
+      - name: Build
+        run: cmake --build native/vcam-windows/build --config Release
+      - name: Test
+        run: ctest --test-dir native/vcam-windows/build -C Release --output-on-failure
