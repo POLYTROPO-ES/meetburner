@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createMeeting, detectLang, LANGS, normalizeDisplay, type DisplaySettings, type Lang, type Meeting } from '@meetcost/core';
+import { createMeeting, detectLang, LANGS, normalizeDisplay, type DisplaySettings, type Lang, type Meeting } from '@meetburner/core';
 
-const MEETING_KEY = 'meetcost.meeting';
-const LANG_KEY = 'meetcost.lang';
-const DISPLAY_KEY = 'meetcost.display';
+const MEETING_KEY = 'meetburner.meeting';
+const LANG_KEY = 'meetburner.lang';
+const DISPLAY_KEY = 'meetburner.display';
 
 function parseMeeting(raw: string | null): Meeting {
   try {
