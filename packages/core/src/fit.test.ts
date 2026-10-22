@@ -17,6 +17,13 @@ describe('formatMoneyCompact', () => {
   it('moves to the next unit instead of showing 1,000.00K', () => {
     expect(formatMoneyCompact(999_999, 'USD', 'en-US')).toBe('$1.00M');
   });
+
+  it('uses the long scale in Spanish: 10^9 is "mil M" and B is a European billion (10^12)', () => {
+    expect(formatMoneyCompact(1_234_567, 'EUR', 'es-ES')).toBe('1,23M €');
+    expect(formatMoneyCompact(2_500_000_000, 'EUR', 'es-ES')).toBe('2,50 mil M €');
+    expect(formatMoneyCompact(7e12, 'EUR', 'es-ES')).toBe('7,00B €');
+    expect(formatMoneyCompact(2_500_000_000, 'USD', 'es-ES')).toBe('$2,50 mil M');
+  });
 });
 
 describe('fitCost', () => {
