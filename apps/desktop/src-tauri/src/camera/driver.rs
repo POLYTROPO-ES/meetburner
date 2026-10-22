@@ -7,6 +7,8 @@ pub const DRIVER_FILE: &str = "MeetBurnerCamera.dll";
 pub const CLSID_TEXT: &str = "{DBD3A890-1830-4222-AFEE-B1BA2C2DAB49}";
 /// `CLSID_VideoInputDeviceCategory`, the list meeting apps enumerate.
 pub const CATEGORY_TEXT: &str = "{860BB310-5D01-11D0-BD3B-00A0C911CE86}";
+/// Value written by `DllRegisterServer` with `MB_CAMERA_DRIVER_VERSION` (ADR-0020).
+pub const VERSION_VALUE: &str = "MeetBurnerDriverVersion";
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,6 +16,10 @@ pub struct DriverStatus {
     pub registered: bool,
     pub available: bool,
     pub path: Option<String>,
+    /// Version recorded when the driver was registered (`None` for pre-ADR-0020 installs).
+    pub installed_version: Option<u32>,
+    /// Version of the driver bundled with this build.
+    pub expected_version: Option<u32>,
 }
 
 /// Where the driver can live, in priority order. `resource_dir` and `exe_dir` come from
@@ -71,6 +77,55 @@ pub fn register(dll: &Path) -> Result<(), String> {
     }
 }
 
+/// Version recorded by the last registration, if the driver was registered by a build that
+/// writes it.
+pub fn registered_version() -> Option<u32> {
+    #[cfg(windows)]
+    {
+        imp::registered_version()
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
+/// Version a DLL file reports through its `MeetBurnerCameraVersion` export.
+pub fn dll_version(dll: &Path) -> Option<u32> {
+    #[cfg(windows)]
+    {
+        imp::call_u32_export(dll, "MeetBurnerCameraVersion")
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = dll;
+        None
+    }
+}
+
+/// A registration older than the bundled driver has to be replaced. Never downgrades: when
+/// the bundled driver is older or unknown, the installation is left alone (ADR-0020).
+pub fn needs_update(installed: Option<u32>, expected: Option<u32>) -> bool {
+    match (installed, expected) {
+        (None, Some(_)) => true,
+        (Some(installed), Some(expected)) => installed < expected,
+        _ => false,
+    }
+}
+
+/// Re-registers the bundled driver when the installation is older (ADR-0020). Does nothing
+/// while the driver is not registered: registering stays an explicit user action (ADR-0017).
+pub fn ensure(dll: &Path) -> Result<bool, String> {
+    if registered_path().is_none() {
+        return Ok(false);
+    }
+    if !needs_update(registered_version(), dll_version(dll)) {
+        return Ok(false);
+    }
+    register(dll)?;
+    Ok(true)
+}
+
 /// Removes every registry key the driver owns. Works even if the DLL is gone.
 pub fn remove_registration() -> Result<(), String> {
     #[cfg(windows)]
@@ -94,10 +149,10 @@ mod imp {
     };
     use windows_sys::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
     use windows_sys::Win32::System::Registry::{
-        RegDeleteTreeW, RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_SZ,
+        RegDeleteTreeW, RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
     };
 
-    use super::{CATEGORY_TEXT, CLSID_TEXT};
+    use super::{CATEGORY_TEXT, CLSID_TEXT, VERSION_VALUE};
 
     fn wide(value: &str) -> Vec<u16> {
         std::ffi::OsStr::new(value)
@@ -131,6 +186,41 @@ mod imp {
         })();
         unsafe { FreeLibrary(module) };
         outcome
+    }
+
+    /// Reads `MeetBurnerCameraVersion` from the DLL without keeping it loaded.
+    pub fn call_u32_export(dll: &Path, symbol: &str) -> Option<u32> {
+        let path = wide(&dll.display().to_string());
+        let module = unsafe { LoadLibraryW(path.as_ptr()) };
+        if module.is_null() {
+            return None;
+        }
+        let name = CString::new(symbol).ok();
+        let value = name.and_then(|name| {
+            let entry = unsafe { GetProcAddress(module, name.as_ptr() as *const u8) }?;
+            Some(unsafe { entry() } as u32)
+        });
+        unsafe { FreeLibrary(module) };
+        value
+    }
+
+    pub fn registered_version() -> Option<u32> {
+        let subkey = wide(&format!("Software\\Classes\\CLSID\\{CLSID_TEXT}"));
+        let name = wide(VERSION_VALUE);
+        let mut value: u32 = 0;
+        let mut size = std::mem::size_of::<u32>() as u32;
+        let status = unsafe {
+            RegGetValueW(
+                HKEY_CURRENT_USER,
+                subkey.as_ptr(),
+                name.as_ptr(),
+                RRF_RT_REG_DWORD,
+                std::ptr::null_mut(),
+                &mut value as *mut u32 as *mut c_void,
+                &mut size,
+            )
+        };
+        (status == ERROR_SUCCESS).then_some(value)
     }
 
     pub fn registered_path() -> Option<String> {
@@ -209,6 +299,28 @@ mod tests {
         assert_eq!(find(&[dir.join(DRIVER_FILE)]), None);
     }
 
+    #[test]
+    fn an_older_registration_is_replaced_but_a_newer_one_is_kept() {
+        assert!(
+            needs_update(None, Some(2)),
+            "no version means a pre-0020 install"
+        );
+        assert!(needs_update(Some(1), Some(2)));
+        assert!(!needs_update(Some(2), Some(2)), "already current");
+        assert!(!needs_update(Some(3), Some(2)), "never downgrade");
+        assert!(!needs_update(Some(1), None), "nothing to compare against");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_driver_reports_its_build_version() {
+        let Some(dll) = find(&[dev_driver_path()]) else {
+            return; // CI does not build the native project
+        };
+        let version = dll_version(&dll).expect("the driver exports MeetBurnerCameraVersion");
+        assert!(version >= 2, "unexpected driver version {version}");
+    }
+
     #[cfg(windows)]
     #[test]
     fn registers_and_cleans_up_when_the_dev_driver_exists() {
@@ -225,7 +337,11 @@ mod tests {
             recorded.to_lowercase().contains("meetburnercamera.dll"),
             "unexpected InprocServer32: {recorded}"
         );
+        // The version stored by DllRegisterServer is the one the DLL exports, so `ensure`
+        // can tell an old installation apart (ADR-0020).
+        assert_eq!(registered_version(), dll_version(&dll));
         remove_registration().expect("clean the registration");
         assert!(registered_path().is_none());
+        assert!(registered_version().is_none());
     }
 }

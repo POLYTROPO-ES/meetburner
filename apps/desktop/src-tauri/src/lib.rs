@@ -29,8 +29,18 @@ fn driver_status(app: &tauri::AppHandle) -> DriverStatus {
     DriverStatus {
         registered: registered.is_some(),
         available: found.is_some(),
-        path: registered.or_else(|| found.map(|path| path.display().to_string())),
+        path: registered.or_else(|| found.as_deref().map(|path| path.display().to_string())),
+        installed_version: driver::registered_version(),
+        expected_version: found.as_deref().and_then(driver::dll_version),
     }
+}
+
+/// Result of checking the registration on start: the status, plus whether it was refreshed.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DriverUpdate {
+    status: DriverStatus,
+    updated: bool,
 }
 
 #[tauri::command]
@@ -75,6 +85,21 @@ fn camera_driver_status(app: tauri::AppHandle) -> Result<DriverStatus, String> {
     Ok(driver_status(&app))
 }
 
+/// Called on start: re-registers the bundled driver when the installed one is older
+/// (ADR-0020). Never registers on its own: that stays an explicit user action (ADR-0017).
+#[tauri::command]
+fn camera_driver_ensure(app: tauri::AppHandle) -> Result<DriverUpdate, String> {
+    let found = driver::find(&driver_candidates(&app));
+    let updated = match found.as_deref() {
+        Some(dll) => driver::ensure(dll)?,
+        None => false,
+    };
+    Ok(DriverUpdate {
+        status: driver_status(&app),
+        updated,
+    })
+}
+
 /// Registers the driver bundled with the app; no admin prompt, no scripts.
 #[tauri::command]
 fn camera_register_driver(app: tauri::AppHandle) -> Result<DriverStatus, String> {
@@ -104,6 +129,7 @@ pub fn run() {
             camera_update,
             camera_stop,
             camera_driver_status,
+            camera_driver_ensure,
             camera_register_driver,
             camera_unregister_driver
         ])
