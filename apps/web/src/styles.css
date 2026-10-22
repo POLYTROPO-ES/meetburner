@@ -43,27 +43,60 @@ label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.9rem; c
   .participant { grid-template-columns: 1fr 1fr; }
 }
 
-/* Counter */
-.counter {
-  min-height: 100vh;
+.checkbox { flex-direction: row; align-items: center; gap: 0.5rem; }
+.display-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start; }
+.preview { margin: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+@media (max-width: 720px) {
+  .display-settings { grid-template-columns: 1fr; }
+}
+
+/* Counter (themed through CSS variables set by CounterView) */
+.counter-page { height: 100vh; position: relative; }
+.counter-stop { position: absolute; right: 0.75rem; bottom: 0.75rem; opacity: 0.6; }
+.counter-stop:hover { opacity: 1; }
+
+.counter-view {
+  container-type: size;
+  width: 100%;
+  height: 100%;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 1rem;
+  color: var(--text);
+  background: linear-gradient(135deg, var(--bg), var(--bg-alt));
   text-align: center;
+  overflow: hidden;
 }
-.counter .label { margin: 0; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-size: 0.85rem; }
-.counter .total {
+.counter-view.embedded { height: auto; aspect-ratio: 16 / 9; border: 1px solid var(--border); border-radius: 8px; }
+.counter-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1cqh; padding: 3cqw; }
+.counter-view .decoration { position: absolute; top: 0; right: 0; font-size: 6cqh; transform: translate(40%, -40%); }
+.counter-view .label { margin: 0; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-size: 4cqh; }
+.counter-view .total {
   margin: 0;
-  font-size: clamp(2.5rem, 12vw, 6rem);
-  font-weight: 700;
+  font-family: var(--cost-font);
+  font-weight: var(--weight);
+  font-size: min(calc(13cqw * var(--cost-scale)), calc(26cqh * var(--cost-scale)));
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
-.counter.running .total { color: var(--accent); }
-.counter .status { margin: 0; color: var(--muted); }
-.stats { display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; margin: 0.75rem 0; }
-.stats dt { color: var(--muted); font-size: 0.8rem; }
-.stats dd { margin: 0; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.counter-view.running .total { color: var(--accent); }
+.counter-view .status { margin: 0; color: var(--muted); font-size: 4cqh; }
+.counter-view .time { font-family: var(--time-font); font-variant-numeric: tabular-nums; }
+.stats { display: flex; gap: 4cqw; flex-wrap: wrap; justify-content: center; margin: 1cqh 0 0; }
+.stats dt { color: var(--muted); font-size: 3.5cqh; }
+.stats dd { margin: 0; font-size: min(calc(3.5cqw * var(--time-scale)), calc(7cqh * var(--time-scale))); font-variant-numeric: tabular-nums; }
+
+/* Widget: small card meant to sit over a webcam image */
+.counter-view.widget { background: transparent; align-items: flex-end; justify-content: flex-end; padding: 3cqw; }
+.counter-view.widget .counter-card {
+  background: linear-gradient(135deg, var(--bg), var(--bg-alt));
+  border-radius: var(--radius);
+  padding: 1.5cqw 2.5cqw;
+  gap: 0;
+  box-shadow: 0 0.5cqw 2cqw rgb(0 0 0 / 0.35);
+}
+.counter-view.widget .total { font-size: calc(6cqw * var(--cost-scale)); }
+.counter-view.widget .time { margin: 0; font-size: calc(3cqw * var(--time-scale)); color: var(--muted); }
+.counter-view.widget .status { font-size: 2cqw; }
+.counter-view.widget .decoration { font-size: 3cqw; }
+.counter-view.embedded.widget { background: repeating-conic-gradient(#2a2f3a 0 25%, #20242c 0 50%) 0 0 / 24px 24px; }
