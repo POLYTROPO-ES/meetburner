@@ -1,4 +1,4 @@
-import { meetingSnapshot, t } from '@meetcost/core';
+import { meetingSnapshot, t } from '@meetburner/core';
 import { CounterView } from './CounterView';
 import { useDisplay, useLang, useMeeting } from './storage';
 import { useNow } from './useNow';

@@ -9,7 +9,7 @@ import {
   type Lang,
   type Meeting,
   type MeetingSnapshot,
-} from '@meetcost/core';
+} from '@meetburner/core';
 
 interface Props {
   meeting: Meeting;

@@ -1,5 +1,5 @@
 {
-  "name": "meetcost",
+  "name": "meetburner",
   "private": true,
   "workspaces": [
     "packages/*",
@@ -7,12 +7,12 @@
     "apps/desktop"
   ],
   "scripts": {
-    "test": "npm test -w @meetcost/core",
-    "dev:web": "npm run dev -w @meetcost/web",
-    "build:web": "npm run build -w @meetcost/web",
-    "deploy:web": "npm run build:web && npx wrangler@4 pages deploy apps/web/dist --project-name meetcost",
-    "dev:desktop": "npm run tauri -w @meetcost/desktop -- dev",
-    "build:desktop": "npm run tauri -w @meetcost/desktop -- build"
+    "test": "npm test -w @meetburner/core",
+    "dev:web": "npm run dev -w @meetburner/web",
+    "build:web": "npm run build -w @meetburner/web",
+    "deploy:web": "npm run build:web && npx wrangler@4 pages deploy apps/web/dist --project-name meetburner",
+    "dev:desktop": "npm run tauri -w @meetburner/desktop -- dev",
+    "build:desktop": "npm run tauri -w @meetburner/desktop -- build"
   },
   "devDependencies": {
     "typescript": "^5.9.0",
