@@ -1,11 +1,12 @@
 :root {
   color-scheme: dark;
-  --bg: #0f1115;
-  --panel: #181b22;
-  --border: #2a2f3a;
-  --text: #e8eaf0;
-  --muted: #8b93a7;
-  --accent: #ff5d5d;
+  --bg: #171717;
+  --panel: #202020;
+  --border: #333;
+  --text: #fff7e9;
+  --muted: #a8a29e;
+  --accent: #ff6a18;
+  accent-color: var(--accent);
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
@@ -34,6 +35,10 @@ label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.9rem; c
 /* Setup */
 .setup { max-width: 960px; margin: 0 auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
 .setup-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.brand { display: flex; align-items: center; gap: 0.75rem; }
+.brand h1 { margin: 0; }
+.tagline { margin: 0; font-weight: 600; color: var(--accent); }
+.intro h2 { font-size: 1.6rem; background: linear-gradient(90deg, #ff4b24, #ffb52e); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
 .participants { list-style: none; padding: 0; margin: 0 0 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .participant { display: grid; grid-template-columns: 1fr 2fr 9rem 7rem auto; gap: 0.5rem; align-items: center; }
