@@ -12,7 +12,7 @@ export async function openCounterWindow(title: string): Promise<boolean> {
     }
     return true;
   }
-  const popup = window.open('#/counter', 'meetcost-counter', 'popup,width=560,height=380');
+  const popup = window.open('#/counter', 'meetburner-counter', 'popup,width=560,height=380');
   popup?.focus();
   return popup !== null;
 }
