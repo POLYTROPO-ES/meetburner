@@ -23,6 +23,19 @@ export function formatMoney(value: number, currency: string, locale: string): st
   }
 }
 
+const COMPACT_SUFFIXES = ['', 'K', 'M', 'B', 'T'];
+
+/** Money abbreviated with K/M/B/T for amounts too wide to show in full ($1.23M, 1,23M €). */
+export function formatMoneyCompact(value: number, currency: string, locale: string): string {
+  let scaled = value;
+  let unit = 0;
+  while (unit < COMPACT_SUFFIXES.length - 1 && Math.round(Math.abs(scaled) * 100) / 100 >= 1000) {
+    scaled /= 1000;
+    unit++;
+  }
+  return formatMoney(scaled, currency, locale).replace(/(\d)(?!.*\d)/, `$1${COMPACT_SUFFIXES[unit]}`);
+}
+
 export function formatDuration(ms: number): string {
   const total = Math.floor(Math.max(0, ms) / 1000);
   const h = Math.floor(total / 3600);
