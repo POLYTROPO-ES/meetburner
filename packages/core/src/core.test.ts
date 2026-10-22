@@ -75,6 +75,12 @@ describe('format', () => {
   it('formats money with two decimals', () => {
     expect(formatMoney(1234.5, 'USD', 'en-US')).toBe('$1,234.50');
   });
+  it('puts $ before the amount and € after it, whatever the UI language', () => {
+    expect(formatMoney(1234.5, 'USD', 'es')).toBe('$1234,50');
+    expect(formatMoney(1234.5, 'EUR', 'en')).toBe('1,234.50 €');
+    expect(formatMoney(1234.5, 'EUR', 'es')).toBe('1234,50 €');
+    expect(formatMoney(-3, 'EUR', 'en')).toBe('-3.00 €');
+  });
   it('falls back on invalid currency', () => {
     expect(formatMoney(1, 'NOPE!', 'en')).toBe('1.00 NOPE!');
   });
