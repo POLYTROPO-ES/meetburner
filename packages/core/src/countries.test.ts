@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyCountry,
   COUNTRIES,
+  countriesByName,
   createMeeting,
   findCountry,
   hourlyRate,
@@ -25,6 +26,11 @@ describe('countries', () => {
       expect(c.employerCostRate).toBeGreaterThanOrEqual(0);
       expect(c.employerCostRate).toBeLessThan(1);
     }
+  });
+
+  it('sort alphabetically by name in the UI language', () => {
+    expect(countriesByName('en').map((c) => c.code)).toEqual(['FR', 'DE', 'IT', 'MX', 'NL', 'PT', 'ES', 'GB', 'US']);
+    expect(countriesByName('es').map((c) => c.code)).toEqual(['DE', 'ES', 'US', 'FR', 'IT', 'MX', 'NL', 'PT', 'GB']);
   });
 
   it('default Spain to EUR and 1800 h/year', () => {
