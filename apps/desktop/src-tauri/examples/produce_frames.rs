@@ -17,7 +17,7 @@ fn main() {
     use meetburner_lib::camera::engine::{now_ms, RenderLoop};
     use meetburner_lib::camera::fonts::Fonts;
     use meetburner_lib::camera::frame::{FRAME_HEIGHT, FRAME_WIDTH};
-    use meetburner_lib::camera::renderer::{CounterInput, DisplayConfig, Labels};
+    use meetburner_lib::camera::renderer::{CounterInput, DisplayConfig, Labels, Mirror};
     use meetburner_lib::camera::sink::windows::WinSharedMemSink;
     use meetburner_lib::camera::theme::Layout;
 
@@ -44,6 +44,20 @@ fn main() {
     let mut display = DisplayConfig::default();
     if source.is_some() {
         display.layout = Layout::Widget;
+    }
+    // `MEETBURNER_MIRROR=sourceH,overlayV` mirrors either layer (ADR-0022).
+    if let Ok(value) = std::env::var("MEETBURNER_MIRROR") {
+        let mut mirror = Mirror::default();
+        for flag in value.split(',') {
+            match flag.trim().to_ascii_lowercase().as_str() {
+                "sourceh" => mirror.source_h = true,
+                "sourcev" => mirror.source_v = true,
+                "overlayh" => mirror.overlay_h = true,
+                "overlayv" => mirror.overlay_v = true,
+                _ => {}
+            }
+        }
+        display.mirror = mirror;
     }
 
     let input = CounterInput {
