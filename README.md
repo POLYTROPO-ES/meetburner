@@ -15,7 +15,7 @@ apps/
   web/            React + TS + Vite UI (also the desktop frontend)
   desktop/        Tauri 2 shell (src-tauri = Rust)
 packages/
-  core/           Pure TS: cost model, Spain salary presets, i18n (en/es)
+  core/           Pure TS: cost model, countries, salary presets, themes, i18n (en/es)
 native/
   vcam-windows/   DirectShow filter (stage 1) + Media Foundation vcam (stage 1b)
   vcam-linux/     v4l2loopback setup + notes
@@ -29,7 +29,12 @@ docs/
 ## Requirements
 
 - Node.js 20+ (npm workspaces)
-- Desktop: Rust stable + Tauri 2 prerequisites (https://v2.tauri.app/start/prerequisites/)
+- Desktop: Rust stable (rustup) + Tauri 2 prerequisites (https://v2.tauri.app/start/prerequisites/): MSVC C++ build tools and WebView2 on Windows
+- Windows virtual camera: CMake (the one bundled with Visual Studio 2022 works: use a *Developer PowerShell for VS 2022*)
+
+## Development workflow
+
+TDD red/green/refactor ([ADR-0008](docs/decisions/0008-tdd.md)): write a failing test, make it pass, then refactor.
 
 ## Commands
 
@@ -38,5 +43,6 @@ npm install
 npm test            # core unit tests
 npm run dev:web     # web app on http://localhost:5173
 npm run build:web
+npm run deploy:web  # Cloudflare Pages (needs `npx wrangler login` or CLOUDFLARE_API_TOKEN)
 npm run dev:desktop # requires Rust
 ```
