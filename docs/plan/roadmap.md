@@ -6,22 +6,33 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 
 ### M0. Foundations — `architect`
 - [x] Monorepo layout, README, ADRs, roadmap, agent files
+- [x] Local toolchain: Node 24, Rust (rustup), MSVC (VS 2022), WebView2, CMake (bundled with VS 2022)
+- [x] Local git repo with per-file commits
 - [ ] CI (GitHub Actions): `npm ci && npm test && npm run build:web` on every PR
 - [ ] CI: `cargo fmt --check`, `cargo clippy`, `cargo test` in `apps/desktop/src-tauri`
+- [ ] CD: deploy `main` to Cloudflare Pages (`CLOUDFLARE_API_TOKEN` secret, ADR-0007)
 
-### M1. Core model — `core`
-- [~] `hourlyRate`, `meetingSnapshot`, formatting helpers
-- [~] Spain salary presets (EUR/year) and configurable hours/year (default 1800)
-- [~] i18n dictionary en/es
-- [~] Unit tests (Vitest)
+### M1. Core model — `core` (TDD, ADR-0008)
+- [x] `hourlyRate`, `meetingSnapshot`, formatting helpers
+- [x] Configurable hours/year (default 1800 in Spain)
+- [x] Countries (ES, PT, FR, DE, IT, NL, GB, US, MX) with currency, hours/year, employer contribution rate (ADR-0005)
+- [x] Total (employer) cost on by default, can be switched off
+- [x] Role salary presets per country (rough estimates)
+- [x] Themes + display settings as shared data (ADR-0006)
+- [x] i18n dictionary en/es
+- [x] Unit tests (Vitest)
+- [ ] Replace rough salary estimates with official sources (INE, Eurostat, ONS, BLS, INEGI…), keeping source and date per value
+- [ ] Southern-hemisphere option for the "4 seasons" style
 - **Done when:** 100% of core functions covered, no runtime dependencies.
 
 ### M2. Web app — `web`
-- [~] Setup page: currency, hours/year, start time, participants (preset or custom)
-- [~] Start opens counter popup; fluid counter (rAF) with total cost, elapsed, person-time, cost/min
-- [~] Persistence in `localStorage`, live sync between windows (`storage` event)
-- [ ] Polish: responsive, dark theme, accessibility (labels, contrast), popup-blocked fallback
-- [ ] Deploy to static hosting
+- [x] Setup page: country, currency, hours/year, total cost, start time, participants (preset or custom)
+- [x] Start opens counter popup; fluid counter (rAF) with total cost, elapsed, person-time, cost/min
+- [x] Persistence in `localStorage`, live sync between windows (`storage` event)
+- [x] Counter styles: classic, modern, formal, halloween, christmas, 4 seasons, minimalist
+- [x] Layouts fullscreen/widget; user picks font and size for the cost and the time; live preview
+- [ ] Polish: responsive, accessibility (labels, contrast), popup-blocked fallback
+- [~] Deploy to Cloudflare Pages (`npm run deploy:web`, `_headers`); needs the Cloudflare project/account
 - **Done when:** a non-technical user can run a meeting counter in < 30 s.
 
 ### M3. Desktop shell — `desktop`
@@ -32,7 +43,8 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - **Done when:** installers build in CI for Windows and Linux.
 
 ### M4. Frame renderer — `desktop`
-- [ ] Rust module `camera::renderer`: renders counter (same look as web) into a BGRA buffer 1280x720
+- [ ] Rust module `camera::renderer`: renders counter (same themes, fonts and sizes as web) into a BGRA buffer 1280x720
+- [ ] Layout rule: `fullscreen` without source webcam, `widget` over a source webcam (ADR-0006)
 - [ ] Tauri commands: `camera_start(config)`, `camera_update(meeting)`, `camera_stop()`
 - [ ] Snapshot test (PNG golden file)
 - **Done when:** renderer produces 30 fps at < 5% CPU on a mid laptop.
@@ -63,7 +75,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - **Done when:** MF camera visible on Windows 11 without breaking DirectShow one.
 
 ### M9. Stage 1 release — `architect` + `desktop`
-- [ ] Code signing (Windows), release workflow, changelog
+- [ ] Code signing (Windows): certificate pending (owner is getting one); release workflow, changelog
 - [ ] User docs: install, Linux module setup, troubleshooting
 
 ## Stage 2 — macOS
