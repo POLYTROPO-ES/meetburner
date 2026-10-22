@@ -5,7 +5,7 @@
 
 ## Context
 
-The key feature: when the user hits **Start**, a system camera named "MeetCost Camera" shows the counter, either alone or overlaid on a real webcam. Meeting apps (Teams, Zoom, Meet in Chrome/Edge, Slack…) must be able to select it.
+The key feature: when the user hits **Start**, a system camera named "MeetBurner Camera" shows the counter, either alone or overlaid on a real webcam. Meeting apps (Teams, Zoom, Meet in Chrome/Edge, Slack…) must be able to select it.
 
 ## Decision
 
@@ -28,18 +28,18 @@ trait VirtualCameraSink {
 
 1. **DirectShow source filter** (`native/vcam-windows/dshow`, C++ DLL, design inspired by the MIT-licensed *softcam* project).
    - Registered once with `regsvr32` by the installer (admin).
-   - Frames passed through a named shared-memory ring buffer (`Local\MeetCostCamera`) + named event.
+   - Frames passed through a named shared-memory ring buffer (`Local\MeetBurnerCamera`) + named event.
    - Visible to DirectShow consumers (Zoom, OBS, many Electron apps, Chrome fallback).
 2. **Media Foundation virtual camera** (`native/vcam-windows/mf`, Windows 11 22000+).
    - COM media source DLL + `MFCreateVirtualCamera` from the app.
    - Reads the same shared memory. Required for apps that only enumerate MF devices (new Teams, Windows Camera app).
    - Disabled automatically on Windows 10.
 
-When no producer is running, both sinks emit a static "MeetCost – not running" frame.
+When no producer is running, both sinks emit a static "MeetBurner – not running" frame.
 
 ### Linux (stage 1)
 
-- `v4l2loopback` kernel module: `modprobe v4l2loopback devices=1 video_nr=42 card_label="MeetCost Camera" exclusive_caps=1`.
+- `v4l2loopback` kernel module: `modprobe v4l2loopback devices=1 video_nr=42 card_label="MeetBurner Camera" exclusive_caps=1`.
 - App offers a one-click setup via `pkexec` and documents the distro package (`v4l2loopback-dkms`).
 - Rust writes YUYV frames to `/dev/video42` with the `v4l` crate.
 
@@ -52,7 +52,7 @@ When no producer is running, both sinks emit a static "MeetCost – not running"
 ### Overlay
 
 - User selects source webcam, overlay position (corner/top/bottom bar), scale and opacity.
-- The physical webcam is opened by MeetCost; meeting apps select "MeetCost Camera" instead.
+- The physical webcam is opened by MeetBurner; meeting apps select "MeetBurner Camera" instead.
 
 ## Consequences
 
