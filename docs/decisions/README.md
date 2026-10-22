@@ -27,3 +27,4 @@ Template:
 | [0009](0009-share-links.md) | Share links carry the summary in the URL | accepted |
 | [0010](0010-large-amounts.md) | Large amounts: abbreviate or shrink | accepted (suffixes amended by 0011) |
 | [0011](0011-short-and-long-scale.md) | Short vs long scale for abbreviated amounts | accepted |
+| [0012](0012-deploy-on-push.md) | Deploy on push with GitHub Actions, served at meetburner.com | accepted |
