@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   applyCountry,
   CAMERA_RATIOS,
@@ -34,7 +34,15 @@ import {
   type ThemeId,
 } from '@meetburner/core';
 import { CounterView } from './CounterView';
-import { isTauri, openCounterWindow, shareUrl } from './platform';
+import {
+  cameraDriverStatus,
+  cameraRegisterDriver,
+  cameraUnregisterDriver,
+  isTauri,
+  openCounterWindow,
+  shareUrl,
+  type DriverStatus,
+} from './platform';
 import { useCamera, useDisplay, useLang, useMeeting } from './storage';
 import { useCameraSync } from './useCameraSync';
 import { useNow } from './useNow';
@@ -55,6 +63,42 @@ export function Setup() {
   const money = (v: number) => formatMoney(v, meeting.currency, locale);
   const updateDisplay = (patch: Partial<DisplaySettings>) => setDisplay({ ...display, ...patch });
   useCameraSync(cameraInput(meeting, display, lang, camera), camera.enabled);
+
+  const [driver, setDriver] = useState<DriverStatus | null>(null);
+  const [driverError, setDriverError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    void cameraDriverStatus()
+      .then(setDriver)
+      .catch((error) => setDriverError(String(error)));
+  }, []);
+
+  const registerDriver = async () => {
+    try {
+      setDriver(await cameraRegisterDriver());
+      setDriverError(null);
+    } catch (error) {
+      setDriverError(String(error));
+    }
+  };
+
+  const unregisterDriver = async () => {
+    try {
+      setDriver(await cameraUnregisterDriver());
+      setDriverError(null);
+    } catch (error) {
+      setDriverError(String(error));
+    }
+  };
+
+  const driverMessage = driver
+    ? driver.registered
+      ? t(lang, 'cameraDriverRegistered')
+      : driver.available
+        ? t(lang, 'cameraDriverNotRegistered')
+        : t(lang, 'cameraDriverMissing')
+    : null;
 
   const updateParticipant = (id: string, patch: Partial<Participant>) =>
     setMeeting({
@@ -367,6 +411,24 @@ export function Setup() {
             )}
           </div>
           <p className="muted">{t(lang, 'cameraLiveHint')}</p>
+          <div className="row">
+            <button
+              type="button"
+              onClick={registerDriver}
+              disabled={driver === null || driver.registered || !driver.available}
+            >
+              {t(lang, 'cameraRegister')}
+            </button>
+            <button
+              type="button"
+              onClick={unregisterDriver}
+              disabled={driver === null || !driver.registered}
+            >
+              {t(lang, 'cameraUnregister')}
+            </button>
+          </div>
+          {driverMessage && <p className="muted">{driverMessage}</p>}
+          {driverError && <p className="muted">{driverError}</p>}
           {meeting.startAt === null && <p className="muted">{t(lang, 'cameraNeedsStart')}</p>}
         </section>
       )}

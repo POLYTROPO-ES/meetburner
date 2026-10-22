@@ -40,7 +40,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 ### M3. Desktop shell — `desktop`
 - [~] Tauri 2 app loading `apps/web` (dev URL / dist)
 - [ ] Counter opens as native `WebviewWindow` (always-on-top option)
-- [~] Camera settings page: enable + output resolution (fullscreen) done (ADR-0015); mode, source webcam and overlay layout still pending
+- [~] Camera settings page: enable + output resolution (fullscreen) done (ADR-0015); Register/Clean webcam buttons done (ADR-0017); mode, source webcam and overlay layout still pending
 - [ ] Packaging: Windows NSIS/MSI, Linux `.deb` + AppImage
 - **Done when:** installers build in CI for Windows and Linux.
 
@@ -66,7 +66,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] C++ DLL source filter + shared memory reader (`native/vcam-windows/dshow`, ADR-0016)
 - [x] `WinSharedMemSink` in Rust (producer), ADR-0013
 - [x] Per-user registration + unregister scripts (`native/vcam-windows/scripts`), ADR-0016
-- [ ] Installer registers/unregisters the DLL (x64)
+- [x] Installer bundles the DLL; the app registers/cleans it with two buttons (ADR-0017)
 - [x] Verified with ffmpeg (DirectShow) at 1280x720 and 720x1280, 30 fps
 - [ ] Verified in Zoom, OBS, Chrome/Edge (Meet), Teams (classic)
 - **Done when:** camera works on Windows 10 and 11.
