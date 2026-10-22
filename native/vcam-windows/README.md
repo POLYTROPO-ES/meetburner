@@ -74,7 +74,7 @@ cmake --build native/vcam-windows/build --config Release
 ctest --test-dir native/vcam-windows/build -C Release --output-on-failure
 ```
 
-Register for the current user (no UAC) and remove every key again:
+Register for the current user (no UAC) and remove every key again. **Normal users do this from the app** with the *Register webcam for meets* / *Clean webcam for meets* buttons (ADR-0017); the scripts remain for CI, diagnostics and manual testing:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File native/vcam-windows/scripts/register.ps1
