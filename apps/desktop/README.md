@@ -26,6 +26,8 @@ Wraps `apps/web`. Camera pipeline is planned in [roadmap](../../docs/plan/roadma
 | `engine` | 30 fps render thread, never on the Tauri main thread |
 
 Tauri commands: `camera_start(config)`, `camera_update(config)`, `camera_stop()`.
+
+The camera is live while the app is open: the UI starts it as soon as the driver is registered and stops it when the driver is cleaned (ADR-0018). Before the meeting starts the renderer publishes an idle frame (`00:00:00` / `0,00 €`), so meeting apps can preview the device. Camera errors are returned to the UI and shown in the setup page; they never stop the app.
 `config` is the `CounterInput` shape (camelCase): `startAt`, `endAt`, `ratePerMs`, `currency`, `locale`, `labels{totalCost,elapsed,costPerMinute,startsIn}`, `display{theme,layout,costFont,timeFont,costScale,timeScale,overflow}`, `width`, `height`. Missing fields fall back to defaults and scales are clamped to 50–250 %.
 
 - **Output size**: 16:9 (1920x1080, 1280x720, 640x360), 9:16 (1080x1920, 720x1280, 360x640), 4:3 (1440x1080, 960x720, 640x480), 3:4 (1080x1440, 720x960, 480x640) and 1:1 (1080x1080, 720x720, 480x480); default 1280x720 and anything else falls back to 720p. The setup page shows the selector in `fullscreen` layout only (ADR-0015).

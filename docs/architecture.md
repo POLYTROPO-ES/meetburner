@@ -78,6 +78,7 @@ camera_start/update/stop (Tauri commands)
 ```
 
 - The cost is computed from timestamps on every frame (`ratePerMs × elapsed`), never accumulated, so the camera and the windows always agree.
+- The pipeline is live while the app is open and the driver is registered: before the meeting starts the payload is a zero-length window, so the meeting app can preview `00:00:00` / `0,00 €` (ADR-0018).
 - The cost font is fitted to 90 % of the available width by default; the user size multiplies that fit, and the compact/shrink rule applies past the box.
 - The output size is part of the camera payload (`640×360`, `1280×720`, `1920×1080`); the setup page offers it in fullscreen mode. Unknown sizes fall back to 720p.
 - `camera_update` pushes every parameter change to the render thread, which applies it on the next frame. A resolution change closes and re-creates the shared mapping inside the render thread; nothing stops (ADR-0015).
