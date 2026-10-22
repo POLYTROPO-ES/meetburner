@@ -1,0 +1,20 @@
+{
+  "name": "meetcost",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/web",
+    "apps/desktop"
+  ],
+  "scripts": {
+    "test": "npm test -w @meetcost/core",
+    "dev:web": "npm run dev -w @meetcost/web",
+    "build:web": "npm run build -w @meetcost/web",
+    "dev:desktop": "npm run tauri -w @meetcost/desktop -- dev",
+    "build:desktop": "npm run tauri -w @meetcost/desktop -- build"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.5"
+  }
+}
