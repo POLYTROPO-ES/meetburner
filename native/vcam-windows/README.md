@@ -61,7 +61,7 @@ Readers must never write to the mapping and must never block: a stuck consumer c
 
 ### Resolution changes
 
-The producer can change the output size while the app runs (640x360, 1280x720, 1920x1080, ADR-0015).
+The producer can change the output size while the app runs (16:9, 9:16, 4:3, 3:4 and 1:1 sizes, ADR-0015).
 When that happens it closes the mapping and creates a new one with the new length, so a consumer that
 still holds the old view will stop seeing fresh timestamps: re-open the mapping after the ~1 s stale
 timeout and use the new `width`/`height` from the header.

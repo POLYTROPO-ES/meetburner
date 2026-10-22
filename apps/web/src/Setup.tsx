@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   applyCountry,
+  CAMERA_RATIOS,
   CAMERA_SIZES,
   cameraInput,
   countriesByName,
@@ -352,10 +353,14 @@ export function Setup() {
                     setCamera({ ...camera, width, height });
                   }}
                 >
-                  {CAMERA_SIZES.map((size) => (
-                    <option key={size.height} value={`${size.width}x${size.height}`}>
-                      {size.height}p ({size.width}×{size.height})
-                    </option>
+                  {CAMERA_RATIOS.map((ratio) => (
+                    <optgroup key={ratio} label={ratio}>
+                      {CAMERA_SIZES.filter((size) => size.ratio === ratio).map((size) => (
+                        <option key={`${size.width}x${size.height}`} value={`${size.width}x${size.height}`}>
+                          {size.width}×{size.height}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </label>

@@ -28,7 +28,7 @@ Wraps `apps/web`. Camera pipeline is planned in [roadmap](../../docs/plan/roadma
 Tauri commands: `camera_start(config)`, `camera_update(config)`, `camera_stop()`.
 `config` is the `CounterInput` shape (camelCase): `startAt`, `endAt`, `ratePerMs`, `currency`, `locale`, `labels{totalCost,elapsed,costPerMinute,startsIn}`, `display{theme,layout,costFont,timeFont,costScale,timeScale,overflow}`, `width`, `height`. Missing fields fall back to defaults and scales are clamped to 50–250 %.
 
-- **Output size**: `640x360`, `1280x720` (default) or `1920x1080`; anything else falls back to 720p. The setup page shows the selector in `fullscreen` layout only (ADR-0015).
+- **Output size**: 16:9 (1920x1080, 1280x720, 640x360), 9:16 (1080x1920, 720x1280, 360x640), 4:3 (1440x1080, 960x720, 640x480), 3:4 (1080x1440, 720x960, 480x640) and 1:1 (1080x1080, 720x720, 480x480); default 1280x720 and anything else falls back to 720p. The setup page shows the selector in `fullscreen` layout only (ADR-0015).
 - **Cost size**: the renderer fits the money to 90 % of the available width by default; `costScale` multiplies that fit (100 % = fill the width).
 - **Live updates**: every edit calls `camera_update`, applied on the next frame (≤ 33 ms). A resolution change re-creates the shared mapping in the render thread; the app never stops.
 

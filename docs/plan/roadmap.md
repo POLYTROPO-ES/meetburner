@@ -49,7 +49,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Layout rule: `fullscreen` without source webcam, `widget` over a source webcam (ADR-0006)
 - [x] Large amounts: apply `fitCost` / `formatMoneyCompact` with the renderer's text metrics (ADR-0010)
 - [x] Tauri commands: `camera_start(config)`, `camera_update(meeting)`, `camera_stop()`
-- [x] Fullscreen output resolution selector (640x360, 1280x720, 1920x1080), applied live (ADR-0015)
+- [x] Fullscreen output resolution selector: 16:9, 9:16, 4:3, 3:4 and 1:1 sizes, applied live (ADR-0015)
 - [x] Cost font fills 90 % of the width by default; the size slider multiplies that fit (ADR-0015)
 - [x] Live updates: every parameter change reaches the camera on the next frame; only a resolution change re-creates the mapping
 - [~] Snapshot test: structural frame tests (colours, ink per text box, nothing outside the widget card) instead of PNG goldens, because system fonts differ per machine (ADR-0014)

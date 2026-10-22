@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CAMERA_SIZES, cameraInput, DEFAULT_CAMERA, normalizeCamera } from './camera';
+import { CAMERA_RATIOS, CAMERA_SIZES, cameraInput, DEFAULT_CAMERA, normalizeCamera } from './camera';
 import { createMeeting, totalHourlyRate } from './cost';
 import { DEFAULT_DISPLAY } from './themes';
 
@@ -32,7 +32,41 @@ describe('camera settings', () => {
   });
 
   it('offers a default size from the supported list', () => {
-    expect(CAMERA_SIZES).toContainEqual({ width: DEFAULT_CAMERA.width, height: DEFAULT_CAMERA.height });
+    expect(CAMERA_SIZES).toContainEqual({
+      width: DEFAULT_CAMERA.width,
+      height: DEFAULT_CAMERA.height,
+      ratio: '16:9',
+    });
+  });
+
+  it('offers every ratio in its natural orientation', () => {
+    expect([...CAMERA_RATIOS]).toEqual(['16:9', '9:16', '4:3', '3:4', '1:1']);
+    for (const ratio of CAMERA_RATIOS) {
+      expect(CAMERA_SIZES.some((size) => size.ratio === ratio)).toBe(true);
+    }
+    const landscape = CAMERA_SIZES.filter((size) => size.width > size.height).map((size) => size.ratio);
+    const portrait = CAMERA_SIZES.filter((size) => size.width < size.height).map((size) => size.ratio);
+    const square = CAMERA_SIZES.filter((size) => size.width === size.height).map((size) => size.ratio);
+    expect(landscape).toEqual(expect.arrayContaining(['16:9', '4:3']));
+    expect(portrait).toEqual(expect.arrayContaining(['9:16', '3:4']));
+    expect(square).toContain('1:1');
+  });
+
+  it('keeps the exact ratio of every entry', () => {
+    for (const size of CAMERA_SIZES) {
+      const [width, height] = size.ratio.split(':').map(Number);
+      expect(size.width * height).toBe(size.height * width);
+    }
+  });
+
+  it('accepts every offered size, portrait and square included', () => {
+    for (const size of CAMERA_SIZES) {
+      expect(normalizeCamera({ enabled: true, width: size.width, height: size.height })).toEqual({
+        enabled: true,
+        width: size.width,
+        height: size.height,
+      });
+    }
   });
 });
 

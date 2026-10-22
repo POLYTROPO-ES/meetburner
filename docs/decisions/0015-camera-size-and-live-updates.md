@@ -16,7 +16,18 @@ Three desktop requests shaped the camera after the first renderer release:
 ### Output size
 
 - `width` and `height` are part of the camera payload (`CounterInput` in Rust, `CameraInput` in `packages/core/src/camera.ts`).
-- Allowed sizes: **640×360**, **1280×720** and **1920×1080**. Anything else falls back to 1280×720, so untrusted persisted settings can never ask for a 4K 60 fps stream.
+- Allowed sizes, grouped by ratio (landscape, portrait and square):
+
+  | Ratio | Sizes |
+  |-------|-------|
+  | 16:9 | 1920×1080, 1280×720, 640×360 |
+  | 9:16 | 1080×1920, 720×1280, 360×640 |
+  | 4:3 | 1440×1080, 960×720, 640×480 |
+  | 3:4 | 1080×1440, 720×960, 480×640 |
+  | 1:1 | 1080×1080, 720×720, 480×480 |
+
+- Anything else falls back to 1280×720, so untrusted persisted settings can never ask for an unsupported stream.
+- Portrait and square frames use the same layout rules: the fullscreen counter keeps the 90 % width fit and the widget stays proportional to the frame.
 - The resolution selector is shown for the `fullscreen` layout only. Overlay mode (M7) will inherit the source webcam size instead.
 - The list lives in both `packages/core/src/camera.ts` and `apps/desktop/src-tauri/src/camera/frame.rs`; the Rust side is the enforcement point, so a stale UI list can only degrade to 720p.
 

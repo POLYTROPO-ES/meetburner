@@ -2,12 +2,39 @@ import { totalHourlyRate, type Meeting } from './cost';
 import { t, type Lang } from './i18n';
 import type { DisplaySettings } from './themes';
 
+/** Aspect ratios offered by the desktop virtual camera (ADR-0015). */
+export const CAMERA_RATIOS = ['16:9', '9:16', '4:3', '3:4', '1:1'] as const;
+export type CameraRatio = (typeof CAMERA_RATIOS)[number];
+
+export interface CameraSize {
+  width: number;
+  height: number;
+  ratio: CameraRatio;
+}
+
 /** Output sizes offered by the desktop virtual camera. Mirrors the Rust allowlist (ADR-0015). */
-export const CAMERA_SIZES = [
-  { width: 640, height: 360 },
-  { width: 1280, height: 720 },
-  { width: 1920, height: 1080 },
-] as const;
+export const CAMERA_SIZES: readonly CameraSize[] = [
+  // 16:9 landscape
+  { width: 1920, height: 1080, ratio: '16:9' },
+  { width: 1280, height: 720, ratio: '16:9' },
+  { width: 640, height: 360, ratio: '16:9' },
+  // 9:16 portrait
+  { width: 1080, height: 1920, ratio: '9:16' },
+  { width: 720, height: 1280, ratio: '9:16' },
+  { width: 360, height: 640, ratio: '9:16' },
+  // 4:3 landscape
+  { width: 1440, height: 1080, ratio: '4:3' },
+  { width: 960, height: 720, ratio: '4:3' },
+  { width: 640, height: 480, ratio: '4:3' },
+  // 3:4 portrait
+  { width: 1080, height: 1440, ratio: '3:4' },
+  { width: 720, height: 960, ratio: '3:4' },
+  { width: 480, height: 640, ratio: '3:4' },
+  // 1:1 square
+  { width: 1080, height: 1080, ratio: '1:1' },
+  { width: 720, height: 720, ratio: '1:1' },
+  { width: 480, height: 480, ratio: '1:1' },
+];
 
 export interface CameraSettings {
   enabled: boolean;

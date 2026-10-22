@@ -770,6 +770,38 @@ mod tests {
     }
 
     #[test]
+    fn portrait_and_square_frames_render() {
+        let fonts = fonts();
+        for (width, height) in [(720u32, 1280u32), (1080, 1080), (360, 640)] {
+            let mut input = input();
+            input.width = width;
+            input.height = height;
+            let frame = render(&input, &fonts, 1_060_000, None);
+            assert_eq!((frame.width(), frame.height()), (width, height));
+            let layout = counter_layout(width as f32, height as f32, Layout::Fullscreen);
+            assert!(
+                ink_inside(&frame, layout.cost, (0x0f, 0x11, 0x15)) > 0,
+                "the cost is drawn on {width}x{height}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_widget_stays_inside_a_portrait_frame() {
+        let mut input = input();
+        input.width = 720;
+        input.height = 1280;
+        input.display.layout = Layout::Widget;
+        let webcam = (0x22, 0x44, 0x66);
+        let background = Frame::filled(720, 1280, webcam);
+        let frame = render(&input, &fonts(), 1_060_000, Some(&background));
+        let layout = counter_layout(720.0, 1280.0, Layout::Widget);
+        let card = layout.card.expect("card");
+        let outside = ink_outside(&frame, card, webcam);
+        assert_eq!(outside, 0, "{outside} pixels are drawn over the webcam");
+    }
+
+    #[test]
     fn parses_the_output_size_from_the_ui() {
         let input: CounterInput =
             serde_json::from_str(r#"{"width":1920,"height":1080}"#).expect("size parses");
