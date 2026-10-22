@@ -4,6 +4,10 @@
 //! `FrameHeader` (48 bytes) followed by `width * height` pixels of BGRA.
 //! A seqlock (`sequence` odd while writing) lets consumers read a frame
 //! without ever seeing a torn copy, and without blocking the producer.
+//!
+//! The mapping is always created with `CAPACITY_LEN` bytes, enough for the largest
+//! supported size, so changing resolution never closes it: consumers keep a valid
+//! view and only the header size changes (ADR-0019).
 
 use std::sync::atomic::{fence, Ordering};
 
@@ -35,6 +39,12 @@ pub struct FrameHeader {
 
 pub const HEADER_SIZE: usize = std::mem::size_of::<FrameHeader>();
 
+/// Largest supported frame (1920x1080 and 1080x1920 have the same pixel count).
+pub const CAPACITY_PIXELS: usize = 1920 * 1080;
+
+/// Size of the mapping: one value for the whole app run, whatever the resolution.
+pub const CAPACITY_LEN: usize = HEADER_SIZE + CAPACITY_PIXELS * 4;
+
 pub const fn mapping_len(width: u32, height: u32) -> usize {
     HEADER_SIZE + width as usize * height as usize * 4
 }
@@ -63,8 +73,8 @@ pub fn write_frame(
     fps: u32,
     state: u32,
 ) -> Result<(), SinkError> {
-    let len = mapping_len(frame.width(), frame.height());
-    if buf.len() < len {
+    let len = HEADER_SIZE + frame.pixels().len();
+    if frame.width() == 0 || frame.height() == 0 || len > buf.len() {
         return Err(SinkError::Io(
             "shared memory is too small for this frame".into(),
         ));
@@ -196,6 +206,26 @@ mod tests {
         let mut buf = buffer(4, 2);
         let too_big = Frame::filled(8, 8, (1, 1, 1));
         assert!(write_frame(&mut buf, &too_big, 1, 30, STATE_LIVE).is_err());
+    }
+
+    #[test]
+    fn any_supported_size_fits_the_fixed_capacity_mapping() {
+        let mut buf = vec![0u8; CAPACITY_LEN];
+        assert_eq!(CAPACITY_LEN, HEADER_SIZE + 1920 * 1080 * 4);
+        for (width, height) in [(1280, 720), (1920, 1080), (1080, 1920), (480, 480)] {
+            let frame = Frame::filled(width, height, (5, 6, 7));
+            write_frame(&mut buf, &frame, 1, 30, STATE_LIVE).expect("write");
+            let read = read_frame(&buf).expect("read");
+            assert_eq!((read.header.width, read.header.height), (width, height));
+            assert_eq!(read.frame, frame);
+        }
+    }
+
+    #[test]
+    fn a_frame_bigger_than_the_capacity_is_rejected() {
+        let mut buf = vec![0u8; CAPACITY_LEN];
+        let too_big = Frame::filled(1920, 1080, (1, 1, 1));
+        assert!(write_frame(&mut buf[..CAPACITY_LEN - 4], &too_big, 1, 30, STATE_LIVE).is_err());
     }
 
     #[test]
