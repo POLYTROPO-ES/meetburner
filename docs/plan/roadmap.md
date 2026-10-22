@@ -53,7 +53,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [ ] Detect `v4l2loopback`; one-click setup via `pkexec modprobe ...`
 - [ ] `V4l2Sink` implements `VirtualCameraSink` (YUYV)
 - [ ] Verified in Chrome (Meet), Zoom, OBS, Firefox
-- **Done when:** "MeetCost Camera" selectable and live in Meet on Ubuntu 24.04 and Fedora.
+- **Done when:** "MeetBurner Camera" selectable and live in Meet on Ubuntu 24.04 and Fedora.
 
 ### M6. Windows virtual camera (DirectShow) — `vcam-windows`
 - [ ] C++ DLL source filter + shared memory reader (`native/vcam-windows/dshow`)
