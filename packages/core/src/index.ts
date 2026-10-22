@@ -1,3 +1,4 @@
+export * from './camera';
 export * from './cost';
 export * from './countries';
 export * from './format';
