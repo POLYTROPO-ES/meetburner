@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createMeeting, detectLang, LANGS, type Lang, type Meeting } from '@meetcost/core';
+import { createMeeting, detectLang, LANGS, normalizeDisplay, type DisplaySettings, type Lang, type Meeting } from '@meetcost/core';
 
 const MEETING_KEY = 'meetcost.meeting';
 const LANG_KEY = 'meetcost.lang';
+const DISPLAY_KEY = 'meetcost.display';
 
 function parseMeeting(raw: string | null): Meeting {
   try {
@@ -18,6 +19,14 @@ function parseMeeting(raw: string | null): Meeting {
 
 function parseLang(raw: string | null): Lang {
   return LANGS.includes(raw as Lang) ? (raw as Lang) : detectLang(navigator.language);
+}
+
+function parseDisplay(raw: string | null): DisplaySettings {
+  try {
+    return normalizeDisplay(raw ? JSON.parse(raw) : null);
+  } catch {
+    return normalizeDisplay(null);
+  }
 }
 
 /** State persisted in localStorage and kept in sync across windows. */
@@ -45,3 +54,4 @@ function useStored<T>(key: string, parse: (raw: string | null) => T, serialize: 
 
 export const useMeeting = () => useStored(MEETING_KEY, parseMeeting, JSON.stringify);
 export const useLang = () => useStored(LANG_KEY, parseLang, String);
+export const useDisplay = () => useStored(DISPLAY_KEY, parseDisplay, JSON.stringify);
