@@ -70,6 +70,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] `WinSharedMemSink` in Rust (producer), ADR-0013
 - [x] Per-user registration + unregister scripts (`native/vcam-windows/scripts`), ADR-0016
 - [x] Installer bundles the DLL; the app registers/cleans it with two buttons (ADR-0017)
+- [x] Driver version check: an older registration is re-registered with the bundled DLL on start (ADR-0020)
 - [x] Verified with ffmpeg (DirectShow) at 1280x720 and 720x1280, 30 fps
 - [ ] Verified in Zoom, OBS, Chrome/Edge (Meet), Teams (classic)
 - **Done when:** camera works on Windows 10 and 11.

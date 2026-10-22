@@ -35,3 +35,4 @@ Template:
 | [0017](0017-app-registers-the-driver.md) | The app registers the camera driver | accepted |
 | [0018](0018-always-on-camera.md) | The virtual camera is live while the app is open | accepted |
 | [0019](0019-camera-frame-orientation-and-mapping.md) | Camera frames: bottom-up rows, one mapping and no flicker | accepted |
+| [0020](0020-driver-version-and-self-update.md) | The app updates an outdated driver on start | accepted |

@@ -31,6 +31,11 @@ The DLLs only have to read. The contract below is frozen by ADR-0013.
 
 Mapping size: always `48 + 1920 * 1080 * 4` bytes, whatever the resolution (ADR-0019). Frames are BGRA, top-down in the mapping, no row padding; the header carries the size actually published.
 
+The DLL exports `MeetBurnerCameraVersion()` and `DllRegisterServer` stores it as
+`HKCU\…\CLSID\{DBD3A890-…}\MeetBurnerDriverVersion`; the app re-registers an older installation on
+start (ADR-0020). Bump `MB_CAMERA_DRIVER_VERSION` in `common/meetburner_camera.h` whenever the filter
+behaves differently.
+
 ```c
 #pragma pack(push, 1)
 typedef struct {
@@ -73,6 +78,24 @@ RGB32 reaches consumers **bottom-up** (`biHeight > 0`): Media Foundation — Chr
 ignores a negative height and shows a top-down buffer upside down, which made the counter look rotated 180°.
 The producer writes top-down, the filter flips while copying (`BlitFit`) and `RenderNotRunning` flips its
 GDI DIB too. `tests/frame_test.cpp` pins both.
+
+## Which apps see the device
+
+The filter registers itself under `CLSID_VideoInputDeviceCategory` (`{860BB310-5D01-11D0-BD3B-00A0C911CE86}`),
+the DirectShow camera list of the current Windows account. Media Foundation enumerates that list too
+(through the frame-server bridge), so the device is not Chrome-only:
+
+| Consumer | Capture stack | Sees "MeetBurner Camera" |
+|----------|---------------|--------------------------|
+| Chrome, Edge (Meet, Teams web, Discord web…) | Media Foundation | yes — same Chromium stack, same result |
+| Firefox | DirectShow / Media Foundation backend | yes |
+| Zoom, Teams (classic and new), Slack, Discord | DirectShow / Media Foundation | yes |
+| OBS Studio | DirectShow | yes |
+| Windows Camera app | Media Foundation | yes |
+| ffmpeg | DirectShow | yes (verified) |
+
+Verified so far: ffmpeg (DirectShow) and Google Meet in Chrome. The rest of the list is the M6 manual
+matrix: same registration path, so a failure there is a bug in the filter, not in the visibility rules.
 
 ## Build, register and test
 
