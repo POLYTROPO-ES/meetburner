@@ -40,6 +40,7 @@ flowchart LR
    - Web: `window.open` popup.
    - Desktop: Tauri `WebviewWindow`.
 3. Counter window re-renders every animation frame (`requestAnimationFrame`) and listens to `storage` events for live edits.
+4. **Share the cost** builds a `#/share?t=…&c=…&m=…&cur=…` link carrying only the aggregate figures (total time, total cost, cost/min) and copies it to the clipboard. `ShareView` decodes and validates it ([ADR-0009](decisions/0009-share-links.md)).
 
 ## Counter styles ([ADR-0006](decisions/0006-counter-styles-and-layouts.md))
 

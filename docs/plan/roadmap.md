@@ -31,6 +31,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Persistence in `localStorage`, live sync between windows (`storage` event)
 - [x] Counter styles: classic, modern, formal, halloween, christmas, 4 seasons, minimalist
 - [x] Layouts fullscreen/widget; user picks font and size for the cost and the time; live preview
+- [x] "Share the cost" link with a meeting summary: total time, total cost, cost/min (ADR-0009)
 - [ ] Polish: responsive, accessibility (labels, contrast), popup-blocked fallback
 - [~] Deploy to Cloudflare Pages (`npm run deploy:web`, `_headers`); needs the Cloudflare project/account
 - **Done when:** a non-technical user can run a meeting counter in < 30 s.
