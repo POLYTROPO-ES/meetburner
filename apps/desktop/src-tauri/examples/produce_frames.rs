@@ -19,6 +19,7 @@ fn main() {
     use meetburner_lib::camera::frame::{FRAME_HEIGHT, FRAME_WIDTH};
     use meetburner_lib::camera::renderer::{CounterInput, DisplayConfig, Labels};
     use meetburner_lib::camera::sink::windows::WinSharedMemSink;
+    use meetburner_lib::camera::theme::Layout;
 
     let mut args = std::env::args().skip(1);
     let seconds: u64 = args
@@ -38,6 +39,13 @@ fn main() {
         .and_then(|value| value.parse::<u32>().ok())
         .zip(args.next().and_then(|value| value.parse::<u32>().ok()));
 
+    // `MEETBURNER_SOURCE=<id>` composites the counter over that camera (M7).
+    let source = std::env::var("MEETBURNER_SOURCE").ok();
+    let mut display = DisplayConfig::default();
+    if source.is_some() {
+        display.layout = Layout::Widget;
+    }
+
     let input = CounterInput {
         // A meeting that started 65 s ago, so the elapsed time and the cost are visible.
         start_at: now_ms() - 65_000,
@@ -46,14 +54,18 @@ fn main() {
         currency: "EUR".into(),
         locale: "es".into(),
         labels: Labels::default(),
-        display: DisplayConfig::default(),
+        display,
         width,
         height,
+        source,
     };
 
     let fonts = Fonts::load_system().expect("a system font is available");
     let mut render_loop = RenderLoop::new(fonts, Box::new(WinSharedMemSink::new()));
     println!("publishing {width}x{height} frames for {seconds}s (Ctrl+C to stop)");
+    for source in meetburner_lib::camera::list_sources() {
+        println!("webcam source {} = {}", source.id, source.name);
+    }
 
     let started = Instant::now();
     let deadline = started + Duration::from_secs(seconds);
