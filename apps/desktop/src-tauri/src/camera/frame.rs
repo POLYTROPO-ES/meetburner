@@ -4,6 +4,40 @@ pub const FRAME_WIDTH: u32 = 1280;
 pub const FRAME_HEIGHT: u32 = 720;
 pub const FPS: u32 = 30;
 
+/// Output sizes the desktop app offers for the camera. Mirrors `CAMERA_SIZES` in
+/// `packages/core/src/camera.ts` (ADR-0015): the same ratios in landscape, portrait and square.
+pub const SUPPORTED_SIZES: &[(u32, u32)] = &[
+    // 16:9 landscape
+    (1920, 1080),
+    (1280, 720),
+    (640, 360),
+    // 9:16 portrait
+    (1080, 1920),
+    (720, 1280),
+    (360, 640),
+    // 4:3 landscape
+    (1440, 1080),
+    (960, 720),
+    (640, 480),
+    // 3:4 portrait
+    (1080, 1440),
+    (720, 960),
+    (480, 640),
+    // 1:1 square
+    (1080, 1080),
+    (720, 720),
+    (480, 480),
+];
+
+/// Only the sizes in `SUPPORTED_SIZES` are produced; anything else falls back to 1280x720.
+pub fn normalize_size(width: u32, height: u32) -> (u32, u32) {
+    if SUPPORTED_SIZES.contains(&(width, height)) {
+        (width, height)
+    } else {
+        (FRAME_WIDTH, FRAME_HEIGHT)
+    }
+}
+
 /// Tightly packed 32-bit BGRA pixels, top-down.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Frame {
@@ -107,5 +141,29 @@ mod tests {
         let frame = Frame::filled(3, 2, (0x0f, 0x11, 0x15));
         assert_eq!(frame.pixel(0, 0), (0x0f, 0x11, 0x15));
         assert_eq!(frame.pixel(2, 1), (0x0f, 0x11, 0x15));
+    }
+
+    #[test]
+    fn only_supported_sizes_are_produced() {
+        for size in SUPPORTED_SIZES {
+            assert_eq!(normalize_size(size.0, size.1), *size);
+        }
+        assert_eq!(normalize_size(800, 600), (FRAME_WIDTH, FRAME_HEIGHT));
+        assert_eq!(normalize_size(0, 0), (FRAME_WIDTH, FRAME_HEIGHT));
+        assert_eq!(normalize_size(1920, 720), (FRAME_WIDTH, FRAME_HEIGHT));
+    }
+
+    #[test]
+    fn covers_landscape_portrait_and_square_frames() {
+        assert!(SUPPORTED_SIZES.iter().any(|(w, h)| w > h), "landscape");
+        assert!(SUPPORTED_SIZES.iter().any(|(w, h)| w < h), "portrait");
+        assert!(SUPPORTED_SIZES.iter().any(|(w, h)| w == h), "square");
+        for (width, height) in SUPPORTED_SIZES {
+            let (w, h) = (*width as u64, *height as u64);
+            let known = [(16u64, 9u64), (9, 16), (4, 3), (3, 4), (1, 1)]
+                .iter()
+                .any(|(ratio_w, ratio_h)| w * ratio_h == h * ratio_w);
+            assert!(known, "{width}x{height} keeps a known ratio");
+        }
     }
 }

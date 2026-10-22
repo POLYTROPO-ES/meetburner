@@ -1,4 +1,23 @@
+import type { CameraInput } from '@meetburner/core';
+
 export const isTauri = () => '__TAURI_INTERNALS__' in window;
+
+/** Starts the Rust virtual camera (desktop only). */
+export async function cameraStart(input: CameraInput): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('camera_start', { config: input });
+}
+
+/** Pushes a configuration change; the camera applies it on the next frame (ADR-0015). */
+export async function cameraUpdate(input: CameraInput): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('camera_update', { config: input });
+}
+
+export async function cameraStop(): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('camera_stop');
+}
 
 /** Public web URL used for share links from the desktop app (its own origin is not reachable). */
 const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL ?? 'https://meetburner.com/';

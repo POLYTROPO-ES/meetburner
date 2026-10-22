@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import {
   applyCountry,
+  CAMERA_RATIOS,
+  CAMERA_SIZES,
+  cameraInput,
   countriesByName,
   CURRENCIES,
   encodeSummary,
@@ -31,8 +34,9 @@ import {
   type ThemeId,
 } from '@meetburner/core';
 import { CounterView } from './CounterView';
-import { openCounterWindow, shareUrl } from './platform';
-import { useDisplay, useLang, useMeeting } from './storage';
+import { isTauri, openCounterWindow, shareUrl } from './platform';
+import { useCamera, useDisplay, useLang, useMeeting } from './storage';
+import { useCameraSync } from './useCameraSync';
 import { useNow } from './useNow';
 
 const DEFAULT_PRESET = 'dev-mid';
@@ -42,6 +46,7 @@ export function Setup() {
   const [meeting, setMeeting] = useMeeting();
   const [lang, setLang] = useLang();
   const [display, setDisplay] = useDisplay();
+  const [camera, setCamera] = useCamera();
   const [popupBlocked, setPopupBlocked] = useState(false);
   const [sharedLink, setSharedLink] = useState<{ url: string; copied: boolean } | null>(null);
   const running = meeting.startAt !== null && meeting.endAt === null;
@@ -49,6 +54,7 @@ export function Setup() {
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
   const money = (v: number) => formatMoney(v, meeting.currency, locale);
   const updateDisplay = (patch: Partial<DisplaySettings>) => setDisplay({ ...display, ...patch });
+  useCameraSync(cameraInput(meeting, display, lang, camera), camera.enabled);
 
   const updateParticipant = (id: string, patch: Partial<Participant>) =>
     setMeeting({
@@ -323,6 +329,47 @@ export function Setup() {
           </figure>
         </div>
       </section>
+
+      {isTauri() && (
+        <section>
+          <h2>{t(lang, 'camera')}</h2>
+          <div className="grid">
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={camera.enabled}
+                disabled={meeting.startAt === null}
+                onChange={(e) => setCamera({ ...camera, enabled: e.target.checked })}
+              />
+              {t(lang, 'cameraEnabled')}
+            </label>
+            {display.layout === 'fullscreen' && (
+              <label>
+                {t(lang, 'cameraResolution')}
+                <select
+                  value={`${camera.width}x${camera.height}`}
+                  onChange={(e) => {
+                    const [width, height] = e.target.value.split('x').map(Number);
+                    setCamera({ ...camera, width, height });
+                  }}
+                >
+                  {CAMERA_RATIOS.map((ratio) => (
+                    <optgroup key={ratio} label={ratio}>
+                      {CAMERA_SIZES.filter((size) => size.ratio === ratio).map((size) => (
+                        <option key={`${size.width}x${size.height}`} value={`${size.width}x${size.height}`}>
+                          {size.width}×{size.height}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+          <p className="muted">{t(lang, 'cameraLiveHint')}</p>
+          {meeting.startAt === null && <p className="muted">{t(lang, 'cameraNeedsStart')}</p>}
+        </section>
+      )}
 
       <footer className="setup-footer">
         <p>
