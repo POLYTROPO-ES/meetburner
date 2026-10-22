@@ -2,8 +2,10 @@ export type Lang = 'en' | 'es';
 export const LANGS: readonly Lang[] = ['en', 'es'];
 
 const en = {
-  appTitle: 'MeetCost',
-  tagline: 'How much is this meeting costing?',
+  appTitle: 'MeetBurner',
+  tagline: 'Every meeting burns money.',
+  headline: 'See the cost. Feel the burn.',
+  description: "A live meeting-cost overlay that shows the combined cost of everyone's time.",
   currency: 'Currency',
   hoursPerYear: 'Working hours per year',
   startTime: 'Meeting start',
@@ -66,8 +68,10 @@ const en = {
 export type MessageKey = keyof typeof en;
 
 const es: Record<MessageKey, string> = {
-  appTitle: 'MeetCost',
-  tagline: '¿Cuánto está costando esta reunión?',
+  appTitle: 'MeetBurner',
+  tagline: 'Cada reunión quema dinero.',
+  headline: 'Mira el coste. Siente cómo arde.',
+  description: 'Un contador en directo, superpuesto en la reunión, que muestra el coste combinado del tiempo de todos.',
   currency: 'Moneda',
   hoursPerYear: 'Horas de trabajo al año',
   startTime: 'Inicio de la reunión',
