@@ -66,6 +66,7 @@ struct RecordingState {
     running: bool,
     starts: usize,
     stops: usize,
+    sizes: Vec<(u32, u32)>,
 }
 
 impl RecordingSink {
@@ -80,13 +81,19 @@ impl RecordingSink {
     pub fn stops(&self) -> usize {
         self.state.lock().expect("state lock").stops
     }
+
+    /// Sizes passed to `start`, in order: a resolution change adds an entry.
+    pub fn sizes(&self) -> Vec<(u32, u32)> {
+        self.state.lock().expect("state lock").sizes.clone()
+    }
 }
 
 impl VirtualCameraSink for RecordingSink {
-    fn start(&mut self, _width: u32, _height: u32, _fps: u32) -> Result<(), SinkError> {
+    fn start(&mut self, width: u32, height: u32, _fps: u32) -> Result<(), SinkError> {
         let mut state = self.state.lock().expect("state lock");
         state.running = true;
         state.starts += 1;
+        state.sizes.push((width, height));
         Ok(())
     }
 
@@ -133,6 +140,7 @@ mod tests {
         sink.stop();
         assert_eq!(observer.starts(), 1);
         assert_eq!(observer.stops(), 1);
+        assert_eq!(observer.sizes(), vec![(2, 2)]);
         let frames = observer.frames();
         assert_eq!(frames.len(), 2);
         assert_eq!(frames[0].pixel(0, 0), (1, 2, 3));

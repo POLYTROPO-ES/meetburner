@@ -7,7 +7,7 @@ use tiny_skia::{Color, FillRule, Paint, Path, PathBuilder, Pixmap, Transform};
 
 use crate::camera::fonts::Fonts;
 use crate::camera::format::{format_duration, format_money, format_money_compact};
-use crate::camera::frame::{Frame, FRAME_HEIGHT, FRAME_WIDTH};
+use crate::camera::frame::{normalize_size, Frame, FRAME_HEIGHT, FRAME_WIDTH};
 use crate::camera::layout::{counter_layout, fit_cost, Rect};
 use crate::camera::theme::{self, FontChoice, Layout, Overflow, Theme};
 
@@ -53,6 +53,26 @@ pub struct CounterInput {
     pub labels: Labels,
     #[serde(default)]
     pub display: DisplayConfig,
+    /// Output size in pixels. Only `SUPPORTED_SIZES` are produced (ADR-0015).
+    #[serde(default = "default_width")]
+    pub width: u32,
+    #[serde(default = "default_height")]
+    pub height: u32,
+}
+
+impl CounterInput {
+    /// Supported output size; unsupported values fall back to 1280x720.
+    pub fn size(&self) -> (u32, u32) {
+        normalize_size(self.width, self.height)
+    }
+}
+
+fn default_width() -> u32 {
+    FRAME_WIDTH
+}
+
+fn default_height() -> u32 {
+    FRAME_HEIGHT
 }
 
 fn default_currency() -> String {
@@ -172,6 +192,23 @@ pub struct CostText {
     pub scale: f32,
 }
 
+/// Fraction of the available width the cost should occupy by default.
+pub const COST_FILL_RATIO: f32 = 0.9;
+/// Largest em size for the cost, as a fraction of its box height. Money uses digits and
+/// the currency symbol, whose ink is about 0.7 em tall, so 1.0 still fits the box.
+pub const COST_MAX_HEIGHT_RATIO: f32 = 1.0;
+
+/// Font size whose glyphs span `target_width`, capped at `max_px` so the text stays
+/// inside its box. This is what makes the cost fill most of the width (ADR-0015).
+pub fn fit_font_px(text: &str, font: &ab_glyph::FontVec, target_width: f32, max_px: f32) -> f32 {
+    const REFERENCE_PX: f32 = 100.0;
+    let measured = measure(text, font, REFERENCE_PX);
+    if measured <= 0.0 || target_width <= 0.0 {
+        return max_px.clamp(8.0, REFERENCE_PX.max(8.0));
+    }
+    (REFERENCE_PX * target_width / measured).clamp(8.0, max_px.max(8.0))
+}
+
 /// Chooses between the full and the abbreviated cost so it fits in `available_px`.
 pub fn cost_text(
     input: &CounterInput,
@@ -207,15 +244,12 @@ pub fn render(
     background: Option<&Frame>,
 ) -> Frame {
     let theme = theme::theme(&input.display.theme, now_ms);
-    let layout = counter_layout(
-        FRAME_WIDTH as f32,
-        FRAME_HEIGHT as f32,
-        input.display.layout,
-    );
+    let (width, height) = input.size();
+    let layout = counter_layout(width as f32, height as f32, input.display.layout);
     let mut pixmap = match background {
         Some(frame) => pixmap_from_frame(frame),
         None => {
-            let mut pixmap = Pixmap::new(FRAME_WIDTH, FRAME_HEIGHT).expect("frame size");
+            let mut pixmap = Pixmap::new(width, height).expect("frame size");
             pixmap.fill(color(theme.background));
             pixmap
         }
@@ -228,7 +262,15 @@ pub fn render(
     let cost_font = input.display.cost_font.resolve(&theme);
     let time_font = input.display.time_font.resolve(&theme);
 
-    let cost_px = (layout.cost.h * 0.55 * input.display.cost_scale).max(20.0);
+    let cost_font_ref = fonts.get(cost_font);
+    let cost_full = format_money(values.cost, &input.currency, &input.locale);
+    let base_px = fit_font_px(
+        &cost_full,
+        cost_font_ref,
+        layout.cost.w * COST_FILL_RATIO,
+        layout.cost.h * COST_MAX_HEIGHT_RATIO,
+    );
+    let cost_px = (base_px * input.display.cost_scale).max(12.0);
     let cost = cost_text(input, fonts, now_ms, layout.cost.w, cost_px);
     let cost_value = if values.starts_in_ms > 0 {
         format_money(0.0, &input.currency, &input.locale)
@@ -238,7 +280,7 @@ pub fn render(
     draw_centered(
         &mut pixmap,
         &cost_value,
-        fonts.get(cost_font),
+        cost_font_ref,
         cost_px * cost.scale,
         color(theme.text),
         layout.cost,
@@ -516,6 +558,8 @@ mod tests {
             locale: "es".into(),
             labels: Labels::default(),
             display: DisplayConfig::default(),
+            width: FRAME_WIDTH,
+            height: FRAME_HEIGHT,
         }
     }
 
@@ -545,6 +589,21 @@ mod tests {
             }
         }
         count
+    }
+
+    /// Left and right edge of the painted pixels inside `rect`.
+    fn ink_bounds(frame: &Frame, rect: Rect, background: (u8, u8, u8)) -> Option<(u32, u32)> {
+        let mut min = u32::MAX;
+        let mut max = 0;
+        for y in rect.y as u32..(rect.y + rect.h) as u32 {
+            for x in rect.x as u32..(rect.x + rect.w) as u32 {
+                if frame.pixel(x, y) != background {
+                    min = min.min(x);
+                    max = max.max(x);
+                }
+            }
+        }
+        (max > min).then_some((min, max))
     }
 
     #[test]
@@ -656,6 +715,71 @@ mod tests {
     }
 
     #[test]
+    fn the_cost_font_fills_most_of_the_width_by_default() {
+        let fonts = fonts();
+        let font = fonts.get(crate::camera::theme::FontId::System);
+        let px = fit_font_px("1.234,56 €", font, 900.0, 500.0);
+        let width = measure("1.234,56 €", font, px);
+        assert!((width - 900.0).abs() < 9.0, "{width} px wide at {px} px");
+        assert!(px <= 500.0, "never taller than the box");
+        assert_eq!(
+            fit_font_px("0", font, 900.0, 60.0),
+            60.0,
+            "short text hits the height cap"
+        );
+    }
+
+    #[test]
+    fn the_rendered_cost_spans_most_of_the_content_width() {
+        let frame = render(&input(), &fonts(), 1_060_000, None);
+        let background = (0x0f, 0x11, 0x15);
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+        let (min, max) = ink_bounds(&frame, layout.cost, background).expect("the cost is drawn");
+        let ink = (max - min) as f32;
+        assert!(
+            ink >= layout.cost.w * 0.8,
+            "cost ink is {ink} px of {} available",
+            layout.cost.w
+        );
+    }
+
+    #[test]
+    fn renders_the_selected_resolution() {
+        let mut input = input();
+        input.width = 640;
+        input.height = 360;
+        let frame = render(&input, &fonts(), 1_060_000, None);
+        assert_eq!((frame.width(), frame.height()), (640, 360), "640x360 mode");
+        let layout = counter_layout(640.0, 360.0, Layout::Fullscreen);
+        assert!(ink_inside(&frame, layout.cost, (0x0f, 0x11, 0x15)) > 0);
+
+        input.width = 1920;
+        input.height = 1080;
+        let frame = render(&input, &fonts(), 1_060_000, None);
+        assert_eq!((frame.width(), frame.height()), (1920, 1080), "1080p mode");
+    }
+
+    #[test]
+    fn unsupported_resolutions_fall_back_to_1280x720() {
+        let mut input = input();
+        input.width = 800;
+        input.height = 600;
+        assert_eq!(input.size(), (FRAME_WIDTH, FRAME_HEIGHT));
+        let frame = render(&input, &fonts(), 1_060_000, None);
+        assert_eq!((frame.width(), frame.height()), (FRAME_WIDTH, FRAME_HEIGHT));
+    }
+
+    #[test]
+    fn parses_the_output_size_from_the_ui() {
+        let input: CounterInput =
+            serde_json::from_str(r#"{"width":1920,"height":1080}"#).expect("size parses");
+        assert_eq!(input.size(), (1920, 1080));
+
+        let default: CounterInput = serde_json::from_str(r#"{}"#).expect("defaults parse");
+        assert_eq!(default.size(), (FRAME_WIDTH, FRAME_HEIGHT));
+    }
+
+    #[test]
     fn parses_a_partial_config_from_the_ui() {
         let input: CounterInput = serde_json::from_str(
             r#"{"startAt":1000,"ratePerMs":0.5,"currency":"USD","locale":"en-US","labels":{"startsIn":"Starts in 5"}}"#,
@@ -671,6 +795,11 @@ mod tests {
         );
         assert_eq!(input.display, DisplayConfig::default());
         assert_eq!(input.end_at, None);
+        assert_eq!(
+            input.size(),
+            (FRAME_WIDTH, FRAME_HEIGHT),
+            "1280x720 by default"
+        );
     }
 
     #[test]

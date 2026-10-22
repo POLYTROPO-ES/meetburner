@@ -6,7 +6,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::camera::fonts::Fonts;
-use crate::camera::frame::{FPS, FRAME_HEIGHT, FRAME_WIDTH};
+use crate::camera::frame::FPS;
 use crate::camera::renderer::{render, CounterInput};
 use crate::camera::sink::{SinkError, VirtualCameraSink};
 
@@ -14,24 +14,36 @@ use crate::camera::sink::{SinkError, VirtualCameraSink};
 pub struct RenderLoop {
     fonts: Fonts,
     sink: Box<dyn VirtualCameraSink>,
+    size: Option<(u32, u32)>,
 }
 
 impl RenderLoop {
-    pub fn new(
-        fonts: Fonts,
-        mut sink: Box<dyn VirtualCameraSink>,
-    ) -> Result<RenderLoop, SinkError> {
-        sink.start(FRAME_WIDTH, FRAME_HEIGHT, FPS)?;
-        Ok(RenderLoop { fonts, sink })
+    pub fn new(fonts: Fonts, sink: Box<dyn VirtualCameraSink>) -> RenderLoop {
+        RenderLoop {
+            fonts,
+            sink,
+            size: None,
+        }
     }
 
+    /// Applies the latest input for one frame. A resolution change re-creates the sink
+    /// mapping on the next tick; the render thread never stops (ADR-0015).
     pub fn tick(&mut self, input: &CounterInput, now_ms: i64) -> Result<(), SinkError> {
+        let size = input.size();
+        if self.size != Some(size) {
+            if self.size.is_some() {
+                self.sink.stop();
+            }
+            self.sink.start(size.0, size.1, FPS)?;
+            self.size = Some(size);
+        }
         let frame = render(input, &self.fonts, now_ms, None);
         self.sink.send(&frame)
     }
 
     pub fn stop(&mut self) {
         self.sink.stop();
+        self.size = None;
     }
 }
 
@@ -52,19 +64,21 @@ impl CameraEngine {
         let thread = std::thread::Builder::new()
             .name("meetburner-camera".into())
             .spawn(move || {
-                let mut render_loop = match RenderLoop::new(fonts, create_sink()) {
-                    Ok(render_loop) => render_loop,
-                    Err(error) => {
-                        eprintln!("meetburner: cannot start the virtual camera: {error}");
-                        return;
-                    }
-                };
+                let mut render_loop = RenderLoop::new(fonts, create_sink());
                 let period = Duration::from_millis(1000 / FPS as u64);
+                let mut last_error: Option<String> = None;
                 while thread_running.load(Ordering::Relaxed) {
                     let started = Instant::now();
                     let current = thread_input.read().expect("camera input lock").clone();
                     if let Err(error) = render_loop.tick(&current, now_ms()) {
-                        eprintln!("meetburner: camera frame dropped: {error}");
+                        // Only log when the message changes: a broken sink would flood the log.
+                        let message = error.to_string();
+                        if last_error.as_deref() != Some(message.as_str()) {
+                            eprintln!("meetburner: camera frame dropped: {message}");
+                            last_error = Some(message);
+                        }
+                    } else {
+                        last_error = None;
                     }
                     std::thread::sleep(period.saturating_sub(started.elapsed()));
                 }
@@ -116,6 +130,7 @@ fn create_sink() -> Box<dyn VirtualCameraSink> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::camera::frame::{FRAME_HEIGHT, FRAME_WIDTH};
     use crate::camera::renderer::{DisplayConfig, Labels};
     use crate::camera::sink::RecordingSink;
 
@@ -128,6 +143,8 @@ mod tests {
             locale: "es".into(),
             labels: Labels::default(),
             display: DisplayConfig::default(),
+            width: FRAME_WIDTH,
+            height: FRAME_HEIGHT,
         }
     }
 
@@ -135,13 +152,13 @@ mod tests {
     fn every_tick_sends_one_frame_to_the_sink() {
         let sink = RecordingSink::default();
         let observer = sink.clone();
-        let mut render_loop = RenderLoop::new(Fonts::load_system().expect("fonts"), Box::new(sink))
-            .expect("render loop");
+        let mut render_loop = RenderLoop::new(Fonts::load_system().expect("fonts"), Box::new(sink));
         render_loop.tick(&input(), 1_001_000).expect("tick");
         render_loop.tick(&input(), 1_002_000).expect("tick");
         render_loop.stop();
         assert_eq!(observer.starts(), 1);
         assert_eq!(observer.stops(), 1);
+        assert_eq!(observer.sizes(), vec![(FRAME_WIDTH, FRAME_HEIGHT)]);
         assert_eq!(observer.frames().len(), 2);
         assert_eq!(observer.frames()[0].width(), FRAME_WIDTH);
     }
@@ -150,8 +167,7 @@ mod tests {
     fn ticks_use_the_current_input() {
         let sink = RecordingSink::default();
         let observer = sink.clone();
-        let mut render_loop = RenderLoop::new(Fonts::load_system().expect("fonts"), Box::new(sink))
-            .expect("render loop");
+        let mut render_loop = RenderLoop::new(Fonts::load_system().expect("fonts"), Box::new(sink));
         render_loop.tick(&input(), 1_001_000).expect("tick");
         let mut halloween = input();
         halloween.display.theme = "halloween".into();
@@ -159,5 +175,39 @@ mod tests {
         let frames = observer.frames();
         assert_eq!(frames[0].pixel(0, 0), (0x0f, 0x11, 0x15));
         assert_eq!(frames[1].pixel(0, 0), (0x1a, 0x0f, 0x05));
+    }
+
+    #[test]
+    fn a_resolution_change_restarts_the_sink_without_stopping_the_loop() {
+        let sink = RecordingSink::default();
+        let observer = sink.clone();
+        let mut render_loop = RenderLoop::new(Fonts::load_system().expect("fonts"), Box::new(sink));
+        render_loop.tick(&input(), 1_001_000).expect("tick");
+
+        let mut small = input();
+        small.width = 640;
+        small.height = 360;
+        render_loop
+            .tick(&small, 1_002_000)
+            .expect("tick after resize");
+
+        assert_eq!(observer.sizes(), vec![(1280, 720), (640, 360)]);
+        assert_eq!(observer.starts(), 2);
+        let frames = observer.frames();
+        assert_eq!((frames[1].width(), frames[1].height()), (640, 360));
+
+        render_loop.stop();
+        assert_eq!(observer.stops(), 2, "one restart plus the final stop");
+    }
+
+    #[test]
+    fn the_same_resolution_does_not_restart_the_sink() {
+        let sink = RecordingSink::default();
+        let observer = sink.clone();
+        let mut render_loop = RenderLoop::new(Fonts::load_system().expect("fonts"), Box::new(sink));
+        render_loop.tick(&input(), 1_001_000).expect("tick");
+        render_loop.tick(&input(), 1_002_000).expect("tick");
+        assert_eq!(observer.starts(), 1);
+        render_loop.stop();
     }
 }
