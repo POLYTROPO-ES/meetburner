@@ -17,7 +17,7 @@ The counter appears in a browser/desktop window and, on desktop, as a virtual we
   - In the web/desktop window the user can pick either layout (useful when sharing a screen).
 - **User sizing**: separate font choice (`theme` default or one of system, serif, mono, rounded, condensed, handwritten, display) and size scale (50–250 %) for the cost and for the time values.
 - Fonts are system font stacks only. No web fonts are downloaded (privacy, offline, no new dependencies).
-- Display settings are stored on their own (`meetcost.display`) and checked with `normalizeDisplay`, because stored data isn't trusted.
+- Display settings are stored on their own (`meetburner.display`) and checked with `normalizeDisplay`, because stored data isn't trusted.
 
 ## Consequences
 
