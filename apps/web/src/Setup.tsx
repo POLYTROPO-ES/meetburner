@@ -62,10 +62,14 @@ export function Setup() {
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
   const money = (v: number) => formatMoney(v, meeting.currency, locale);
   const updateDisplay = (patch: Partial<DisplaySettings>) => setDisplay({ ...display, ...patch });
-  useCameraSync(cameraInput(meeting, display, lang, camera), camera.enabled);
 
   const [driver, setDriver] = useState<DriverStatus | null>(null);
   const [driverError, setDriverError] = useState<string | null>(null);
+  // The camera is live while the app is open, as soon as the driver is registered.
+  const cameraError = useCameraSync(
+    cameraInput(meeting, display, lang, camera),
+    isTauri() && driver?.registered === true,
+  );
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -377,17 +381,8 @@ export function Setup() {
       {isTauri() && (
         <section>
           <h2>{t(lang, 'camera')}</h2>
-          <div className="grid">
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={camera.enabled}
-                disabled={meeting.startAt === null}
-                onChange={(e) => setCamera({ ...camera, enabled: e.target.checked })}
-              />
-              {t(lang, 'cameraEnabled')}
-            </label>
-            {display.layout === 'fullscreen' && (
+          {display.layout === 'fullscreen' && (
+            <div className="grid">
               <label>
                 {t(lang, 'cameraResolution')}
                 <select
@@ -408,9 +403,10 @@ export function Setup() {
                   ))}
                 </select>
               </label>
-            )}
-          </div>
+            </div>
+          )}
           <p className="muted">{t(lang, 'cameraLiveHint')}</p>
+          {driver?.registered && <p className="muted">{t(lang, 'cameraAlwaysOn')}</p>}
           <div className="row">
             <button
               type="button"
@@ -429,7 +425,7 @@ export function Setup() {
           </div>
           {driverMessage && <p className="muted">{driverMessage}</p>}
           {driverError && <p className="muted">{driverError}</p>}
-          {meeting.startAt === null && <p className="muted">{t(lang, 'cameraNeedsStart')}</p>}
+          {cameraError && <p className="muted">{cameraError}</p>}
         </section>
       )}
 

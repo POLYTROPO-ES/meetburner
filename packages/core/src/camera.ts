@@ -37,12 +37,11 @@ export const CAMERA_SIZES: readonly CameraSize[] = [
 ];
 
 export interface CameraSettings {
-  enabled: boolean;
   width: number;
   height: number;
 }
 
-export const DEFAULT_CAMERA: CameraSettings = { enabled: false, width: 1280, height: 720 };
+export const DEFAULT_CAMERA: CameraSettings = { width: 1280, height: 720 };
 
 const isSupported = (width: unknown, height: unknown): boolean =>
   CAMERA_SIZES.some((size) => size.width === width && size.height === height);
@@ -52,7 +51,6 @@ export function normalizeCamera(raw: unknown): CameraSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const supported = isSupported(r.width, r.height);
   return {
-    enabled: r.enabled === true,
     width: supported ? (r.width as number) : DEFAULT_CAMERA.width,
     height: supported ? (r.height as number) : DEFAULT_CAMERA.height,
   };
@@ -90,18 +88,23 @@ export interface CameraInput {
 
 const MS_PER_HOUR = 3_600_000;
 
-/** Camera payload for the desktop app, or null before the meeting starts. */
+/**
+ * Payload for the desktop camera. It is never null: before the meeting starts the
+ * camera publishes an idle frame (00:00:00 / 0,00) so meeting apps can preview it
+ * as soon as the app is open (ADR-0018).
+ */
 export function cameraInput(
   meeting: Meeting,
   display: DisplaySettings,
   lang: Lang,
   camera: CameraSettings,
-): CameraInput | null {
-  if (meeting.startAt === null) return null;
+  nowMs = Date.now(),
+): CameraInput {
   const size = normalizeCamera(camera);
+  const idle = meeting.startAt === null;
   return {
-    startAt: meeting.startAt,
-    endAt: meeting.endAt,
+    startAt: idle ? nowMs : (meeting.startAt as number),
+    endAt: idle ? nowMs : meeting.endAt,
     ratePerMs: totalHourlyRate(meeting) / MS_PER_HOUR,
     currency: meeting.currency,
     locale: lang === 'es' ? 'es-ES' : 'en-US',

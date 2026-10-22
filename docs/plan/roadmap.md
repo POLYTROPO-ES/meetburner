@@ -40,7 +40,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 ### M3. Desktop shell — `desktop`
 - [~] Tauri 2 app loading `apps/web` (dev URL / dist)
 - [ ] Counter opens as native `WebviewWindow` (always-on-top option)
-- [~] Camera settings page: enable + output resolution (fullscreen) done (ADR-0015); Register/Clean webcam buttons done (ADR-0017); mode, source webcam and overlay layout still pending
+- [~] Camera settings page: output resolution (fullscreen) done (ADR-0015); Register/Clean webcam buttons done (ADR-0017); camera live while the app is open, errors shown without stopping the app (ADR-0018); mode, source webcam and overlay layout still pending
 - [ ] Packaging: Windows NSIS/MSI, Linux `.deb` + AppImage
 - **Done when:** installers build in CI for Windows and Linux.
 
@@ -52,6 +52,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Fullscreen output resolution selector: 16:9, 9:16, 4:3, 3:4 and 1:1 sizes, applied live (ADR-0015)
 - [x] Cost font fills 90 % of the width by default; the size slider multiplies that fit (ADR-0015)
 - [x] Live updates: every parameter change reaches the camera on the next frame; only a resolution change re-creates the mapping
+- [x] Always on: the camera publishes from app start while the driver is registered, with an idle frame before the meeting starts; failures are shown in the setup page (ADR-0018)
 - [~] Snapshot test: structural frame tests (colours, ink per text box, nothing outside the widget card) instead of PNG goldens, because system fonts differ per machine (ADR-0014)
 - [ ] Emoji decorations: needs a face with the glyph (system emoji font), currently skipped
 - **Done when:** renderer produces 30 fps at < 5% CPU on a mid laptop (not measured yet).
