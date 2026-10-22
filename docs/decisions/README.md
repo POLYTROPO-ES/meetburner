@@ -31,3 +31,4 @@ Template:
 | [0013](0013-windows-frame-ipc.md) | Windows camera frame IPC (shared memory + seqlock) | accepted |
 | [0014](0014-renderer-fonts-and-theme-data.md) | Rust renderer: system fonts and generated theme data | accepted |
 | [0015](0015-camera-size-and-live-updates.md) | Camera output size, width-filling cost and live updates | accepted |
+| [0016](0016-dshow-filter-and-per-user-registration.md) | DirectShow filter: hand-rolled COM and per-user registration | accepted |

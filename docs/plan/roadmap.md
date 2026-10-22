@@ -63,9 +63,11 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - **Done when:** "MeetBurner Camera" selectable and live in Meet on Ubuntu 24.04 and Fedora.
 
 ### M6. Windows virtual camera (DirectShow) — `vcam-windows`
-- [x] `WinSharedMemSink` in Rust (producer), ADR-0013 reader (`native/vcam-windows/dshow`)
-- [ ] `WinSharedMemSink` in Rust (producer)
+- [x] C++ DLL source filter + shared memory reader (`native/vcam-windows/dshow`, ADR-0016)
+- [x] `WinSharedMemSink` in Rust (producer), ADR-0013
+- [x] Per-user registration + unregister scripts (`native/vcam-windows/scripts`), ADR-0016
 - [ ] Installer registers/unregisters the DLL (x64)
+- [x] Verified with ffmpeg (DirectShow) at 1280x720 and 720x1280, 30 fps
 - [ ] Verified in Zoom, OBS, Chrome/Edge (Meet), Teams (classic)
 - **Done when:** camera works on Windows 10 and 11.
 
