@@ -10,7 +10,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Local git repo with per-file commits
 - [ ] CI (GitHub Actions): `npm ci && npm test && npm run build:web` on every PR
 - [ ] CI: `cargo fmt --check`, `cargo clippy`, `cargo test` in `apps/desktop/src-tauri`
-- [ ] CD: deploy `main` to Cloudflare Pages (`CLOUDFLARE_API_TOKEN` secret, ADR-0007)
+- [x] CD: deploy `main` to Cloudflare Pages on every push (`.github/workflows/deploy-web.yml`, ADR-0012)
 
 ### M1. Core model — `core` (TDD, ADR-0008)
 - [x] `hourlyRate`, `meetingSnapshot`, formatting helpers
@@ -34,7 +34,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] "Share the cost" link with a meeting summary: total time, total cost, cost/min (ADR-0009)
 - [x] Large amounts that do not fit: abbreviate (K, M, B) or shrink the font, user selectable (ADR-0010)
 - [ ] Polish: responsive, accessibility (labels, contrast), popup-blocked fallback
-- [~] Deploy to Cloudflare Pages (`npm run deploy:web`, `_headers`); needs the Cloudflare project/account
+- [x] Deploy to Cloudflare Pages (`npm run deploy:web`, `_headers`), served at https://meetburner.com
 - **Done when:** a non-technical user can run a meeting counter in < 30 s.
 
 ### M3. Desktop shell — `desktop`
