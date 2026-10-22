@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   applyCountry,
-  COUNTRIES,
+  countriesByName,
   CURRENCIES,
   encodeSummary,
   findPreset,
@@ -120,7 +120,7 @@ export function Setup() {
         <label>
           {t(lang, 'country')}
           <select value={meeting.country} onChange={(e) => setMeeting(applyCountry(meeting, e.target.value as CountryCode))}>
-            {COUNTRIES.map((c) => (
+            {countriesByName(lang).map((c) => (
               <option key={c.code} value={c.code}>
                 {c.name[lang]}
               </option>
