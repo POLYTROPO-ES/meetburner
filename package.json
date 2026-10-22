@@ -13,7 +13,8 @@
     "build:web": "npm run build -w @meetburner/web",
     "deploy:web": "npm run build:web && npx --yes wrangler@4 pages deploy apps/web/dist --project-name meetburner --branch main",
     "dev:desktop": "npm run tauri -w @meetburner/desktop -- dev",
-    "build:desktop": "npm run tauri -w @meetburner/desktop -- build"
+    "build:desktop": "npm run tauri -w @meetburner/desktop -- build",
+    "postbuild:desktop": "node tools/copy-driver.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.0",
