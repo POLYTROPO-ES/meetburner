@@ -624,6 +624,22 @@ mod tests {
     }
 
     #[test]
+    fn an_idle_window_publishes_zero_and_never_counts() {
+        // Before the meeting starts the web sends start == end == now (ADR-0018), so the
+        // preview in the meeting app shows 00:00:00 / 0,00 while the app is open.
+        let idle = CounterInput {
+            start_at: 5_000,
+            end_at: Some(5_000),
+            rate_per_ms: 0.4,
+            ..input()
+        };
+        let values = counter_values(&idle, 5_500_000);
+        assert_eq!(values.elapsed_ms, 0);
+        assert_eq!(values.cost, 0.0);
+        assert_eq!(values.starts_in_ms, 0);
+    }
+
+    #[test]
     fn a_future_start_reports_starts_in_and_zero_cost() {
         let values = counter_values(&input(), 994_000);
         assert_eq!(values.elapsed_ms, 0);
