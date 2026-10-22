@@ -25,3 +25,7 @@ export const COUNTRIES: readonly Country[] = [
 export function findCountry(code: string): Country {
   return COUNTRIES.find((c) => c.code === code) ?? COUNTRIES[0];
 }
+
+export function countriesByName(lang: 'en' | 'es'): Country[] {
+  return [...COUNTRIES].sort((a, b) => a.name[lang].localeCompare(b.name[lang], lang));
+}
