@@ -1,7 +1,7 @@
 export const isTauri = () => '__TAURI_INTERNALS__' in window;
 
 /** Public web URL used for share links from the desktop app (its own origin is not reachable). */
-const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL ?? 'https://meetburner.pages.dev/';
+const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL ?? 'https://meetburner.com/';
 
 /** Builds the absolute `#/share?...` link for an encoded summary. */
 export function shareUrl(query: string): string {
