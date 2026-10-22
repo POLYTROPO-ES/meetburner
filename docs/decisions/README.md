@@ -25,4 +25,5 @@ Template:
 | [0007](0007-cloudflare-hosting.md) | Host web apps on Cloudflare Pages | accepted |
 | [0008](0008-tdd.md) | Test-driven development | accepted |
 | [0009](0009-share-links.md) | Share links carry the summary in the URL | accepted |
-| [0010](0010-large-amounts.md) | Large amounts: abbreviate or shrink | accepted |
+| [0010](0010-large-amounts.md) | Large amounts: abbreviate or shrink | accepted (suffixes amended by 0011) |
+| [0011](0011-short-and-long-scale.md) | Short vs long scale for abbreviated amounts | accepted |
