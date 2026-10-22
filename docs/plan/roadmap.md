@@ -8,8 +8,8 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Monorepo layout, README, ADRs, roadmap, agent files
 - [x] Local toolchain: Node 24, Rust (rustup), MSVC (VS 2022), WebView2, CMake (bundled with VS 2022)
 - [x] Local git repo with per-file commits
-- [ ] CI (GitHub Actions): `npm ci && npm test && npm run build:web` on every PR
-- [ ] CI: `cargo fmt --check`, `cargo clippy`, `cargo test` in `apps/desktop/src-tauri`
+- [x] CI (GitHub Actions): `npm ci && npm test && npm run build:web` on every PR
+- [x] CI: `cargo fmt --check`, `cargo clippy`, `cargo test` in `apps/desktop/src-tauri`
 - [x] CD: deploy `main` to Cloudflare Pages on every push (`.github/workflows/deploy-web.yml`, ADR-0012)
 
 ### M1. Core model — `core` (TDD, ADR-0008)
@@ -45,12 +45,13 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - **Done when:** installers build in CI for Windows and Linux.
 
 ### M4. Frame renderer — `desktop`
-- [ ] Rust module `camera::renderer`: renders counter (same themes, fonts and sizes as web) into a BGRA buffer 1280x720
-- [ ] Layout rule: `fullscreen` without source webcam, `widget` over a source webcam (ADR-0006)
-- [ ] Large amounts: apply `fitCost` / `formatMoneyCompact` with the renderer's text metrics (ADR-0010)
-- [ ] Tauri commands: `camera_start(config)`, `camera_update(meeting)`, `camera_stop()`
-- [ ] Snapshot test (PNG golden file)
-- **Done when:** renderer produces 30 fps at < 5% CPU on a mid laptop.
+- [x] Rust module `camera::renderer`: renders counter (same themes, fonts and sizes as web) into a BGRA buffer 1280x720
+- [x] Layout rule: `fullscreen` without source webcam, `widget` over a source webcam (ADR-0006)
+- [x] Large amounts: apply `fitCost` / `formatMoneyCompact` with the renderer's text metrics (ADR-0010)
+- [x] Tauri commands: `camera_start(config)`, `camera_update(meeting)`, `camera_stop()`
+- [~] Snapshot test: structural frame tests (colours, ink per text box, nothing outside the widget card) instead of PNG goldens, because system fonts differ per machine (ADR-0014)
+- [ ] Emoji decorations: needs a face with the glyph (system emoji font), currently skipped
+- **Done when:** renderer produces 30 fps at < 5% CPU on a mid laptop (not measured yet).
 
 ### M5. Linux virtual camera — `vcam-linux`
 - [ ] Detect `v4l2loopback`; one-click setup via `pkexec modprobe ...`
@@ -59,7 +60,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - **Done when:** "MeetBurner Camera" selectable and live in Meet on Ubuntu 24.04 and Fedora.
 
 ### M6. Windows virtual camera (DirectShow) — `vcam-windows`
-- [ ] C++ DLL source filter + shared memory reader (`native/vcam-windows/dshow`)
+- [x] `WinSharedMemSink` in Rust (producer), ADR-0013 reader (`native/vcam-windows/dshow`)
 - [ ] `WinSharedMemSink` in Rust (producer)
 - [ ] Installer registers/unregisters the DLL (x64)
 - [ ] Verified in Zoom, OBS, Chrome/Edge (Meet), Teams (classic)
