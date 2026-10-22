@@ -81,6 +81,7 @@ camera_start/update/stop (Tauri commands)
 - The pipeline is live while the app is open and the driver is registered: before the meeting starts the payload is a zero-length window, so the meeting app can preview `00:00:00` / `0,00 €` (ADR-0018).
 - The cost font is fitted to 90 % of the available width by default; the user size multiplies that fit, and the compact/shrink rule applies past the box.
 - The output size is part of the camera payload (`640×360`, `1280×720`, `1920×1080`); the setup page offers it in fullscreen mode. Unknown sizes fall back to 720p.
-- `camera_update` pushes every parameter change to the render thread, which applies it on the next frame. A resolution change closes and re-creates the shared mapping inside the render thread; nothing stops (ADR-0015).
+- `camera_update` pushes every parameter change to the render thread, which applies it on the next frame. The shared mapping is created once with room for the largest size, so a resolution change never closes it (ADR-0019).
+- Frames are copied into the DirectShow sample bottom-up (`biHeight > 0`) and scaled to the negotiated media type keeping the aspect ratio: Media Foundation (Chrome, Meet, new Teams) ignores a negative height and would show a top-down buffer upside down (ADR-0019).
 - Overlay mode keeps the webcam frame as the background and draws the themed card (`widget`) in the bottom-right corner; glyphs are clipped to their box so nothing is painted over the webcam.
 - The Windows producer writes a 48-byte header (magic, version, size, fps, state, frame counter, timestamp, seqlock) followed by the BGRA payload into a named shared-memory mapping. Consumers read it with the seqlock retry loop, so they never block the producer and never get a torn frame.
