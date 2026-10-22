@@ -13,6 +13,7 @@ import {
   meetingSnapshot,
   meetingSummary,
   MIN_SCALE,
+  OVERFLOW_MODES,
   participantHourlyRate,
   presetSalary,
   SALARY_PRESETS,
@@ -25,6 +26,7 @@ import {
   type FontChoice,
   type Lang,
   type Layout,
+  type Overflow,
   type Participant,
   type ThemeId,
 } from '@meetburner/core';
@@ -296,6 +298,16 @@ export function Setup() {
                 value={display.timeScale}
                 onChange={(e) => updateDisplay({ timeScale: e.target.valueAsNumber })}
               />
+            </label>
+            <label>
+              {t(lang, 'overflow')}
+              <select value={display.overflow} onChange={(e) => updateDisplay({ overflow: e.target.value as Overflow })}>
+                {OVERFLOW_MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {t(lang, `overflow.${m}`)}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
           <figure className="preview">
