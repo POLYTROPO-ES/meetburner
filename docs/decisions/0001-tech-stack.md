@@ -21,7 +21,7 @@ We need a web app and desktop apps (Windows/Linux first, macOS later) sharing th
 | Linux vcam | `v4l2loopback` + Rust `v4l` crate | De facto standard (used by OBS) |
 | macOS vcam (stage 2) | Swift CoreMediaIO Camera Extension | Only supported modern API |
 | Tests | Vitest (TS), `cargo test` (Rust) | |
-| Web hosting | Any static host (GitHub Pages / Cloudflare Pages) | Web app is fully static |
+| Web hosting | Cloudflare Pages (see ADR-0007) | Web app is fully static |
 
 ## Consequences
 
