@@ -56,6 +56,9 @@ export function resolveTheme(id: ThemeId, date: Date): Theme {
 
 export type Layout = 'fullscreen' | 'widget';
 export type FontChoice = FontId | 'theme';
+/** What to do when the cost is too wide for the counter: abbreviate (K, M, B) or shrink the font. */
+export type Overflow = 'compact' | 'shrink';
+export const OVERFLOW_MODES: readonly Overflow[] = ['compact', 'shrink'];
 
 export interface DisplaySettings {
   theme: ThemeId;
@@ -65,6 +68,7 @@ export interface DisplaySettings {
   timeFont: FontChoice;
   costScale: number;
   timeScale: number;
+  overflow: Overflow;
 }
 
 export const MIN_SCALE = 0.5;
@@ -77,6 +81,7 @@ export const DEFAULT_DISPLAY: DisplaySettings = {
   timeFont: 'theme',
   costScale: 1,
   timeScale: 1,
+  overflow: 'compact',
 };
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
@@ -97,7 +102,21 @@ export function normalizeDisplay(raw: unknown): DisplaySettings {
     timeFont: oneOf(r.timeFont, FONT_CHOICES, 'theme'),
     costScale: scale(r.costScale),
     timeScale: scale(r.timeScale),
+    overflow: oneOf(r.overflow, OVERFLOW_MODES, DEFAULT_DISPLAY.overflow),
   };
+}
+
+/** Decides how to show a cost whose full/abbreviated texts are `fullWidth`/`compactWidth` px in an `availableWidth` px box. */
+export function fitCost(
+  availableWidth: number,
+  fullWidth: number,
+  compactWidth: number,
+  mode: Overflow,
+): { compact: boolean; scale: number } {
+  const shrink = (width: number) => (width <= availableWidth ? 1 : Math.floor((availableWidth / width) * 100) / 100);
+  if (fullWidth <= availableWidth || availableWidth <= 0) return { compact: false, scale: 1 };
+  if (mode === 'compact') return { compact: true, scale: shrink(compactWidth) };
+  return { compact: false, scale: shrink(fullWidth) };
 }
 
 export function resolveFont(choice: FontChoice, theme: Theme): string {
