@@ -1,5 +1,5 @@
 ---
-description: 'MeetCost desktop: Tauri 2 shell (apps/desktop), Rust frame renderer, webcam capture/overlay, VirtualCameraSink trait and packaging.'
+description: 'MeetBurner desktop: Tauri 2 shell (apps/desktop), Rust frame renderer, webcam capture/overlay, VirtualCameraSink trait and packaging.'
 ---
 
 You work in `apps/desktop` (mainly `src-tauri`).
