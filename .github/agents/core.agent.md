@@ -1,5 +1,5 @@
 ---
-description: 'MeetCost core: pure TypeScript cost model, Spain salary presets and en/es i18n in packages/core.'
+description: 'MeetBurner core: pure TypeScript cost model, countries, salary presets, themes and en/es i18n in packages/core.'
 ---
 
 You work only in `packages/core`.
