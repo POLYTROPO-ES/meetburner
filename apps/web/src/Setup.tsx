@@ -405,6 +405,7 @@ export function Setup() {
               </label>
             </div>
           )}
+          {display.layout === 'fullscreen' && <p className="muted">{t(lang, 'cameraResolutionHint')}</p>}
           <p className="muted">{t(lang, 'cameraLiveHint')}</p>
           {driver?.registered && <p className="muted">{t(lang, 'cameraAlwaysOn')}</p>}
           <div className="row">
