@@ -17,16 +17,12 @@ function meeting() {
 describe('camera settings', () => {
   it('only keeps the supported sizes', () => {
     for (const size of CAMERA_SIZES) {
-      expect(normalizeCamera({ enabled: true, width: size.width, height: size.height })).toEqual({
-        enabled: true,
+      expect(normalizeCamera({ width: size.width, height: size.height })).toEqual({
         width: size.width,
         height: size.height,
       });
     }
-    expect(normalizeCamera({ enabled: true, width: 500, height: 500 })).toEqual({
-      ...DEFAULT_CAMERA,
-      enabled: true,
-    });
+    expect(normalizeCamera({ width: 500, height: 500 })).toEqual(DEFAULT_CAMERA);
     expect(normalizeCamera(null)).toEqual(DEFAULT_CAMERA);
     expect(normalizeCamera('nope')).toEqual(DEFAULT_CAMERA);
   });
@@ -61,8 +57,7 @@ describe('camera settings', () => {
 
   it('accepts every offered size, portrait and square included', () => {
     for (const size of CAMERA_SIZES) {
-      expect(normalizeCamera({ enabled: true, width: size.width, height: size.height })).toEqual({
-        enabled: true,
+      expect(normalizeCamera({ width: size.width, height: size.height })).toEqual({
         width: size.width,
         height: size.height,
       });
@@ -71,28 +66,36 @@ describe('camera settings', () => {
 });
 
 describe('camera input', () => {
-  it('is null until the meeting starts', () => {
-    expect(cameraInput({ ...createMeeting(), startAt: null }, DEFAULT_DISPLAY, 'en', DEFAULT_CAMERA)).toBeNull();
+  it('publishes an idle frame before the meeting starts', () => {
+    const idle = cameraInput(
+      { ...createMeeting(), startAt: null },
+      DEFAULT_DISPLAY,
+      'en',
+      DEFAULT_CAMERA,
+      5_000,
+    );
+    expect(idle.startAt).toBe(5_000);
+    expect(idle.endAt).toBe(5_000);
+    expect(idle.ratePerMs).toBe(0);
   });
 
   it('sends the combined rate per millisecond and the meeting window', () => {
     const input = cameraInput(meeting(), DEFAULT_DISPLAY, 'en', DEFAULT_CAMERA);
-    expect(input).not.toBeNull();
-    expect(input!.ratePerMs).toBeCloseTo(totalHourlyRate(meeting()) / 3_600_000, 12);
-    expect(input!.startAt).toBe(1_700_000_000_000);
-    expect(input!.endAt).toBeNull();
-    expect(input!.currency).toBe('EUR');
-    expect(input!.locale).toBe('en-US');
+    expect(input.ratePerMs).toBeCloseTo(totalHourlyRate(meeting()) / 3_600_000, 12);
+    expect(input.startAt).toBe(1_700_000_000_000);
+    expect(input.endAt).toBeNull();
+    expect(input.currency).toBe('EUR');
+    expect(input.locale).toBe('en-US');
   });
 
   it('translates the labels', () => {
-    expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'en', DEFAULT_CAMERA)!.labels).toEqual({
+    expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'en', DEFAULT_CAMERA).labels).toEqual({
       totalCost: 'Total cost',
       elapsed: 'Elapsed',
       costPerMinute: 'Cost per minute',
       startsIn: 'Starts in',
     });
-    expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'es', DEFAULT_CAMERA)!.labels.totalCost).toBe('Coste total');
+    expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'es', DEFAULT_CAMERA).labels.totalCost).toBe('Coste total');
   });
 
   it('passes the display settings through', () => {
@@ -106,7 +109,7 @@ describe('camera input', () => {
       timeScale: 0.8,
       overflow: 'shrink' as const,
     };
-    expect(cameraInput(meeting(), display, 'en', DEFAULT_CAMERA)!.display).toEqual({
+    expect(cameraInput(meeting(), display, 'en', DEFAULT_CAMERA).display).toEqual({
       theme: 'halloween',
       layout: 'widget',
       costFont: 'mono',
@@ -119,10 +122,9 @@ describe('camera input', () => {
 
   it('sends the selected output size', () => {
     const input = cameraInput(meeting(), DEFAULT_DISPLAY, 'en', {
-      enabled: true,
       width: 1920,
       height: 1080,
     });
-    expect({ width: input!.width, height: input!.height }).toEqual({ width: 1920, height: 1080 });
+    expect({ width: input.width, height: input.height }).toEqual({ width: 1920, height: 1080 });
   });
 });
