@@ -1,4 +1,4 @@
-# MeetCost – repository instructions
+# MeetBurner – repository instructions
 
 - Read [mvp.md](../mvp.md), [docs/architecture.md](../docs/architecture.md) and [docs/plan/roadmap.md](../docs/plan/roadmap.md) before starting work.
 - Code, comments and docs in English. User-facing strings in English and Spanish via `packages/core/src/i18n.ts`.
