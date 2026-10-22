@@ -18,5 +18,9 @@ Template:
 |-----|-------|--------|
 | [0001](0001-tech-stack.md) | Tech stack | accepted |
 | [0002](0002-virtual-camera.md) | Virtual camera per OS | accepted |
-| [0003](0003-cost-model-and-salaries.md) | Cost model and salary presets | accepted |
+| [0003](0003-cost-model-and-salaries.md) | Cost model and salary presets | superseded by 0005 |
 | [0004](0004-i18n.md) | Languages | accepted |
+| [0005](0005-countries-and-total-cost.md) | Countries and total (employer) cost | accepted |
+| [0006](0006-counter-styles-and-layouts.md) | Counter styles, layouts and user sizing | accepted |
+| [0007](0007-cloudflare-hosting.md) | Host web apps on Cloudflare Pages | accepted |
+| [0008](0008-tdd.md) | Test-driven development | accepted |
