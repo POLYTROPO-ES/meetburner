@@ -1,14 +1,13 @@
 # vcam-windows
 
-Owner: `vcam-windows` agent. See [ADR-0002](../../docs/decisions/0002-virtual-camera.md) and [ADR-0013](../../docs/decisions/0013-windows-frame-ipc.md).
-
-Planned layout:
+Owner: `vcam-windows` agent. See [ADR-0002](../../docs/decisions/0002-virtual-camera.md), [ADR-0013](../../docs/decisions/0013-windows-frame-ipc.md) and [ADR-0016](../../docs/decisions/0016-dshow-filter-and-per-user-registration.md).
 
 ```
-common/   shared-memory IPC header (C), mirrored in Rust with #[repr(C)]
-dshow/    DirectShow source filter DLL – stage 1 (M6)
-mf/       Media Foundation virtual camera – Windows 11 (M8)
 CMakeLists.txt
+common/meetburner_camera.h   frame contract + seqlock reader (DLL and tests)
+dshow/                       DirectShow source filter ("MeetBurner Camera")
+scripts/                     register.ps1 / unregister.ps1 (HKCU, no UAC)
+tests/                       reader_test (CTest), dshow_probe, graph_test
 ```
 
 ## What already exists (Rust producer)
@@ -28,7 +27,7 @@ The DLLs only have to read. The contract below is frozen by ADR-0013.
 | File mapping | `Local\MeetBurnerCamera` |
 | Frame-ready event (auto-reset) | `Local\MeetBurnerCameraFrame` |
 
-Mapping size: `48 + width * height * 4` bytes. Frames are 1280×720 BGRA, top-down, no row padding.
+Mapping size: `48 + width * height * 4` bytes. Frames are BGRA (top-down, no row padding) at the size the producer publishes.
 
 ```c
 #pragma pack(push, 1)
@@ -66,10 +65,49 @@ When that happens it closes the mapping and creates a new one with the new lengt
 still holds the old view will stop seeing fresh timestamps: re-open the mapping after the ~1 s stale
 timeout and use the new `width`/`height` from the header.
 
+## Build, register and test
+
+```powershell
+# x64 Release (MSVC); CMake from the VS 2022 install is fine
+cmake -S native/vcam-windows -B native/vcam-windows/build -A x64
+cmake --build native/vcam-windows/build --config Release
+ctest --test-dir native/vcam-windows/build -C Release --output-on-failure
+```
+
+Register for the current user (no UAC) and remove every key again:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File native/vcam-windows/scripts/register.ps1
+powershell -ExecutionPolicy Bypass -File native/vcam-windows/scripts/unregister.ps1
+```
+
+Test without opening the app: `produce_frames` publishes real rendered frames to the mapping.
+
+```powershell
+# terminal 1: 120 s of 1280x720 frames (or 720 1280 for portrait)
+cd apps/desktop/src-tauri
+cargo run --example produce_frames -- 120 1280 720
+
+# terminal 2: the device shows up and delivers frames
+ffmpeg -list_devices true -f dshow -i dummy
+ffmpeg -f dshow -i video="MeetBurner Camera" -frames:v 1 -update 1 -y frame.png
+```
+
+Diagnostics, if a consumer does not list or connect the camera:
+
+- `dshow_probe.exe` prints the pin direction, its capture category and the media types.
+- `graph_test.exe` builds a graph with the Null Renderer and prints every HRESULT.
+
+## Registration details
+
+- Per-user (`HKCU\Software\Classes`), so meeting apps running as the same user see the device and no admin prompt is needed.
+- Keys: our CLSID (+ `InprocServer32`, `Instance`) and an instance under the video input device category `{860BB310-5D01-11D0-BD3B-00A0C911CE86}`.
+- `regsvr32 /u` (`scripts/unregister.ps1`) deletes both trees; run it before moving or removing the DLL.
+- The DLL uses the static CRT, so consumers do not need the Visual C++ redistributable.
+
 ## Next steps
 
-1. `common/meetburner_camera.h` with the struct above + the reader loop.
-2. `dshow/` source filter registering as "MeetBurner Camera" (x64, `regsvr32`), plus registration/unregistration in the NSIS/MSI installer.
-3. `mf/` media source for Windows 11 (`MFCreateVirtualCamera`).
-4. Manual test matrix: Zoom, OBS, Chrome/Edge (Meet), Teams classic, new Teams, Windows Camera.
+1. Bundle the DLL and run the register/unregister exports from the NSIS/MSI installer (M9).
+2. Manual test matrix: Zoom, OBS, Chrome/Edge (Meet), Teams classic, new Teams, Windows Camera.
+3. `mf/` media source for Windows 11 (`MFCreateVirtualCamera`, M8).
 
