@@ -1,29 +1,49 @@
 import { useState } from 'react';
 import {
+  applyCountry,
+  COUNTRIES,
   CURRENCIES,
   findPreset,
+  FONT_IDS,
   formatMoney,
   fromLocalInputValue,
-  hourlyRate,
   LANGS,
-  SALARY_PRESETS_ES,
+  MAX_SCALE,
+  meetingSnapshot,
+  MIN_SCALE,
+  participantHourlyRate,
+  presetSalary,
+  SALARY_PRESETS,
   t,
+  THEME_IDS,
   toLocalInputValue,
   totalHourlyRate,
+  type CountryCode,
+  type DisplaySettings,
+  type FontChoice,
   type Lang,
+  type Layout,
   type Participant,
+  type ThemeId,
 } from '@meetcost/core';
+import { CounterView } from './CounterView';
 import { openCounterWindow } from './platform';
-import { useLang, useMeeting } from './storage';
+import { useDisplay, useLang, useMeeting } from './storage';
+import { useNow } from './useNow';
 
 const DEFAULT_PRESET = 'dev-mid';
+const FONT_CHOICES: FontChoice[] = ['theme', ...FONT_IDS];
 
 export function Setup() {
   const [meeting, setMeeting] = useMeeting();
   const [lang, setLang] = useLang();
+  const [display, setDisplay] = useDisplay();
   const [popupBlocked, setPopupBlocked] = useState(false);
+  const running = meeting.startAt !== null && meeting.endAt === null;
+  const now = useNow(running);
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
   const money = (v: number) => formatMoney(v, meeting.currency, locale);
+  const updateDisplay = (patch: Partial<DisplaySettings>) => setDisplay({ ...display, ...patch });
 
   const updateParticipant = (id: string, patch: Partial<Participant>) =>
     setMeeting({
@@ -40,19 +60,17 @@ export function Setup() {
           id: crypto.randomUUID(),
           name: '',
           presetId: DEFAULT_PRESET,
-          annualSalary: findPreset(DEFAULT_PRESET)!.annual,
+          annualSalary: presetSalary(DEFAULT_PRESET, meeting.country) ?? 0,
         },
       ],
     });
 
   const start = async () => {
-    const now = Date.now();
-    const startAt = meeting.startAt === null || meeting.endAt !== null ? now : meeting.startAt;
+    const startAt = meeting.startAt === null || meeting.endAt !== null ? Date.now() : meeting.startAt;
     setMeeting({ ...meeting, startAt, endAt: null });
     setPopupBlocked(!(await openCounterWindow(t(lang, 'appTitle'))));
   };
 
-  const running = meeting.startAt !== null && meeting.endAt === null;
   const rate = totalHourlyRate(meeting);
 
   return (
@@ -75,6 +93,16 @@ export function Setup() {
       </header>
 
       <section className="grid">
+        <label>
+          {t(lang, 'country')}
+          <select value={meeting.country} onChange={(e) => setMeeting(applyCountry(meeting, e.target.value as CountryCode))}>
+            {COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name[lang]}
+              </option>
+            ))}
+          </select>
+        </label>
         <label>
           {t(lang, 'currency')}
           <select value={meeting.currency} onChange={(e) => setMeeting({ ...meeting, currency: e.target.value })}>
@@ -105,10 +133,31 @@ export function Setup() {
             </button>
           </span>
         </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={meeting.includeEmployerCost}
+            onChange={(e) => setMeeting({ ...meeting, includeEmployerCost: e.target.checked })}
+          />
+          {t(lang, 'includeEmployerCost')}
+        </label>
+        <label>
+          {t(lang, 'employerCostRate')}
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={0.5}
+            disabled={!meeting.includeEmployerCost}
+            value={Math.round(meeting.employerCostRate * 1000) / 10}
+            onChange={(e) => setMeeting({ ...meeting, employerCostRate: (e.target.valueAsNumber || 0) / 100 })}
+          />
+        </label>
       </section>
 
       <section>
         <h2>{t(lang, 'participants')}</h2>
+        <p className="muted">{t(lang, 'salariesAreEstimates')}</p>
         <ul className="participants">
           {meeting.participants.map((p) => (
             <li key={p.id} className="participant">
@@ -123,13 +172,16 @@ export function Setup() {
                 value={p.presetId ?? ''}
                 onChange={(e) => {
                   const preset = findPreset(e.target.value || null);
-                  updateParticipant(p.id, { presetId: preset?.id ?? null, annualSalary: preset?.annual ?? p.annualSalary });
+                  updateParticipant(p.id, {
+                    presetId: preset?.id ?? null,
+                    annualSalary: preset?.annual[meeting.country] ?? p.annualSalary,
+                  });
                 }}
               >
                 <option value="">{t(lang, 'customRole')}</option>
-                {SALARY_PRESETS_ES.map((s) => (
+                {SALARY_PRESETS.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.label[lang]} — {formatMoney(s.annual, 'EUR', locale)}
+                    {s.label[lang]} — {money(s.annual[meeting.country])}
                   </option>
                 ))}
               </select>
@@ -142,7 +194,7 @@ export function Setup() {
                 onChange={(e) => updateParticipant(p.id, { presetId: null, annualSalary: e.target.valueAsNumber || 0 })}
               />
               <span className="rate">
-                {money(hourlyRate(p.annualSalary, meeting.hoursPerYear))}
+                {money(participantHourlyRate(p, meeting))}
                 {t(lang, 'perHour')}
               </span>
               <button
@@ -158,6 +210,84 @@ export function Setup() {
         <button type="button" onClick={addParticipant}>
           + {t(lang, 'addParticipant')}
         </button>
+      </section>
+
+      <section>
+        <h2>{t(lang, 'display')}</h2>
+        <div className="display-settings">
+          <div className="grid">
+            <label>
+              {t(lang, 'style')}
+              <select value={display.theme} onChange={(e) => updateDisplay({ theme: e.target.value as ThemeId })}>
+                {THEME_IDS.map((id) => (
+                  <option key={id} value={id}>
+                    {t(lang, `theme.${id}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t(lang, 'layout')}
+              <select value={display.layout} onChange={(e) => updateDisplay({ layout: e.target.value as Layout })}>
+                <option value="fullscreen">{t(lang, 'layout.fullscreen')}</option>
+                <option value="widget">{t(lang, 'layout.widget')}</option>
+              </select>
+            </label>
+            <label>
+              {t(lang, 'costFont')}
+              <select value={display.costFont} onChange={(e) => updateDisplay({ costFont: e.target.value as FontChoice })}>
+                {FONT_CHOICES.map((f) => (
+                  <option key={f} value={f}>
+                    {t(lang, `font.${f}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t(lang, 'timeFont')}
+              <select value={display.timeFont} onChange={(e) => updateDisplay({ timeFont: e.target.value as FontChoice })}>
+                {FONT_CHOICES.map((f) => (
+                  <option key={f} value={f}>
+                    {t(lang, `font.${f}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t(lang, 'costSize')} ({Math.round(display.costScale * 100)}%)
+              <input
+                type="range"
+                min={MIN_SCALE}
+                max={MAX_SCALE}
+                step={0.05}
+                value={display.costScale}
+                onChange={(e) => updateDisplay({ costScale: e.target.valueAsNumber })}
+              />
+            </label>
+            <label>
+              {t(lang, 'timeSize')} ({Math.round(display.timeScale * 100)}%)
+              <input
+                type="range"
+                min={MIN_SCALE}
+                max={MAX_SCALE}
+                step={0.05}
+                value={display.timeScale}
+                onChange={(e) => updateDisplay({ timeScale: e.target.valueAsNumber })}
+              />
+            </label>
+          </div>
+          <figure className="preview">
+            <figcaption className="muted">{t(lang, 'preview')}</figcaption>
+            <CounterView
+              meeting={meeting}
+              snapshot={meetingSnapshot(meeting, now)}
+              display={display}
+              lang={lang}
+              now={now}
+              embedded
+            />
+          </figure>
+        </div>
       </section>
 
       <footer className="setup-footer">
