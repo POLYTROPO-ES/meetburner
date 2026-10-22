@@ -24,3 +24,4 @@ Template:
 | [0006](0006-counter-styles-and-layouts.md) | Counter styles, layouts and user sizing | accepted |
 | [0007](0007-cloudflare-hosting.md) | Host web apps on Cloudflare Pages | accepted |
 | [0008](0008-tdd.md) | Test-driven development | accepted |
+| [0009](0009-share-links.md) | Share links carry the summary in the URL | accepted |
