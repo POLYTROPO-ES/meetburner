@@ -129,7 +129,7 @@ const es: Record<MessageKey, string> = {
   costSize: 'Tamaño del coste',
   timeSize: 'Tamaño del tiempo',
   overflow: 'Importes grandes',
-  'overflow.compact': 'Abreviar (K, M, B)',
+  'overflow.compact': 'Abreviar (K, M, mil M)',
   'overflow.shrink': 'Reducir la letra',
   preview: 'Vista previa',
   'theme.classic': 'Clásico',
