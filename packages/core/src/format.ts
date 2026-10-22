@@ -23,17 +23,20 @@ export function formatMoney(value: number, currency: string, locale: string): st
   }
 }
 
-const COMPACT_SUFFIXES = ['', 'K', 'M', 'B', 'T'];
+const SHORT_SCALE = ['', 'K', 'M', 'B', 'T'];
+// Long scale (Spain, most of Europe): 10^9 is "mil millones" and a billion (billón) is 10^12.
+const LONG_SCALE = ['', 'K', 'M', ' mil M', 'B'];
 
-/** Money abbreviated with K/M/B/T for amounts too wide to show in full ($1.23M, 1,23M €). */
+/** Money abbreviated by thousands ($1.23M, 2,50 mil M €), using the short or long scale of the locale. */
 export function formatMoneyCompact(value: number, currency: string, locale: string): string {
+  const suffixes = locale.startsWith('en') ? SHORT_SCALE : LONG_SCALE;
   let scaled = value;
   let unit = 0;
-  while (unit < COMPACT_SUFFIXES.length - 1 && Math.round(Math.abs(scaled) * 100) / 100 >= 1000) {
+  while (unit < suffixes.length - 1 && Math.round(Math.abs(scaled) * 100) / 100 >= 1000) {
     scaled /= 1000;
     unit++;
   }
-  return formatMoney(scaled, currency, locale).replace(/(\d)(?!.*\d)/, `$1${COMPACT_SUFFIXES[unit]}`);
+  return formatMoney(scaled, currency, locale).replace(/(\d)(?!.*\d)/, `$1${suffixes[unit]}`);
 }
 
 export function formatDuration(ms: number): string {
