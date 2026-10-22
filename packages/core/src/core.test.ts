@@ -90,6 +90,14 @@ describe('i18n', () => {
   it('has the same keys in every language', () => {
     expect(Object.keys(MESSAGES.es).sort()).toEqual(Object.keys(MESSAGES.en).sort());
   });
+  it('brands the app as MeetBurner with its slogan in every language', () => {
+    expect(MESSAGES.en.appTitle).toBe('MeetBurner');
+    expect(MESSAGES.es.appTitle).toBe('MeetBurner');
+    expect(MESSAGES.en.tagline).toBe('Every meeting burns money.');
+    expect(MESSAGES.en.headline).toBe('See the cost. Feel the burn.');
+    expect(MESSAGES.en.description).toBe("A live meeting-cost overlay that shows the combined cost of everyone's time.");
+    for (const key of ['tagline', 'headline', 'description'] as const) expect(MESSAGES.es[key]).not.toBe(MESSAGES.en[key]);
+  });
   it('detects Spanish locales', () => {
     expect(detectLang('es-ES')).toBe('es');
     expect(detectLang('en-GB')).toBe('en');
