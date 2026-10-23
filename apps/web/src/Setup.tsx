@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import {
   applyCountry,
+  BACKGROUND_MODES,
   CAMERA_RATIOS,
   CAMERA_SIZES,
   cameraInput,
   countriesByName,
+  COUNTER_ELEMENTS,
   CURRENCIES,
   defaultOverlayRect,
   encodeSummary,
@@ -12,26 +14,38 @@ import {
   FONT_IDS,
   formatMoney,
   fromLocalInputValue,
+  GRADIENT_DIRECTIONS,
   LANGS,
-  MAX_SCALE,
+  MAX_OPACITY,
+  MAX_RADIUS,
   meetingSnapshot,
   meetingSummary,
-  MIN_SCALE,
+  MIN_OPACITY,
+  MIN_RADIUS,
   OVERFLOW_MODES,
   participantHourlyRate,
   presetSalary,
+  resetStyle,
+  resolveTheme,
   SALARY_PRESETS,
+  styleFor,
   t,
   THEME_IDS,
   toLocalInputValue,
   totalHourlyRate,
+  type BackgroundMode,
+  type BackgroundStyle,
   type CountryCode,
+  type CounterElement,
   type DisplaySettings,
+  type ElementStyle,
   type FontChoice,
+  type GradientDirection,
   type Lang,
   type Layout,
   type Overflow,
   type Participant,
+  type StyleOverride,
   type ThemeId,
 } from '@meetburner/core';
 import { CounterView } from './CounterView';
@@ -54,6 +68,10 @@ import { useNow } from './useNow';
 
 const DEFAULT_PRESET = 'dev-mid';
 const FONT_CHOICES: FontChoice[] = ['theme', ...FONT_IDS];
+/** `ElementStyle.scale` is a percentage (ADR-0029): 100 = the size the style ships with. */
+const ELEMENT_SCALE_MIN = 50;
+const ELEMENT_SCALE_MAX = 250;
+const ELEMENT_SCALE_STEP = 5;
 const REPO_URL = 'https://github.com/POLYTROPO-ES/meetburner';
 const RELEASES_URL = 'https://github.com/POLYTROPO-ES/meetburner/releases';
 const SIGNING_POLICY_URL = 'https://github.com/POLYTROPO-ES/meetburner/blob/main/docs/code-signing-policy.md';
@@ -72,6 +90,17 @@ export function Setup() {
   const updateDisplay = (patch: Partial<DisplaySettings>) => setDisplay({ ...display, ...patch });
   const updateMirror = (patch: Partial<DisplaySettings['mirror']>) =>
     updateDisplay({ mirror: { ...display.mirror, ...patch } });
+
+  // Customisation is stored per style id (ADR-0029). The controls always show what is in force,
+  // and every edit stores a complete override so a touched style keeps all of its values.
+  const theme = resolveTheme(display.theme, new Date(now));
+  const style = styleFor(display, theme);
+  const saveStyle = (next: StyleOverride) =>
+    setDisplay({ ...display, styles: { ...display.styles, [display.theme]: next } });
+  const updateElement = (element: CounterElement, patch: Partial<ElementStyle>) =>
+    saveStyle({ ...style, elements: { ...style.elements, [element]: { ...style.elements[element], ...patch } } });
+  const updateBackground = (patch: Partial<BackgroundStyle>) =>
+    saveStyle({ ...style, background: { ...style.background, ...patch } });
 
   const [driver, setDriver] = useState<DriverStatus | null>(null);
   const [driverError, setDriverError] = useState<string | null>(null);
@@ -335,48 +364,6 @@ export function Setup() {
               </select>
             </label>
             <label>
-              {t(lang, 'costFont')}
-              <select value={display.costFont} onChange={(e) => updateDisplay({ costFont: e.target.value as FontChoice })}>
-                {FONT_CHOICES.map((f) => (
-                  <option key={f} value={f}>
-                    {t(lang, `font.${f}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t(lang, 'timeFont')}
-              <select value={display.timeFont} onChange={(e) => updateDisplay({ timeFont: e.target.value as FontChoice })}>
-                {FONT_CHOICES.map((f) => (
-                  <option key={f} value={f}>
-                    {t(lang, `font.${f}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t(lang, 'costSize')} ({Math.round(display.costScale * 100)}%)
-              <input
-                type="range"
-                min={MIN_SCALE}
-                max={MAX_SCALE}
-                step={0.05}
-                value={display.costScale}
-                onChange={(e) => updateDisplay({ costScale: e.target.valueAsNumber })}
-              />
-            </label>
-            <label>
-              {t(lang, 'timeSize')} ({Math.round(display.timeScale * 100)}%)
-              <input
-                type="range"
-                min={MIN_SCALE}
-                max={MAX_SCALE}
-                step={0.05}
-                value={display.timeScale}
-                onChange={(e) => updateDisplay({ timeScale: e.target.valueAsNumber })}
-              />
-            </label>
-            <label>
               {t(lang, 'overflow')}
               <select value={display.overflow} onChange={(e) => updateDisplay({ overflow: e.target.value as Overflow })}>
                 {OVERFLOW_MODES.map((m) => (
@@ -398,6 +385,148 @@ export function Setup() {
               embedded
             />
           </figure>
+        </div>
+        <div className="style-groups">
+          <div>
+            <h3>{t(lang, 'styleElements')}</h3>
+            <div className="style-elements">
+              {COUNTER_ELEMENTS.map((element) => {
+                const elementStyle = style.elements[element];
+                // The colour input cannot be empty: show the preset colour until one is picked.
+                const presetColor = element === 'cost' ? theme.accent : theme.muted;
+                return (
+                  <div key={element} className="style-element">
+                    <span className="style-element-name">{t(lang, `element.${element}`)}</span>
+                    <label>
+                      {t(lang, 'styleFont')}
+                      <select
+                        value={elementStyle.font}
+                        onChange={(e) => updateElement(element, { font: e.target.value as FontChoice })}
+                      >
+                        {FONT_CHOICES.map((f) => (
+                          <option key={f} value={f}>
+                            {t(lang, `font.${f}`)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      {t(lang, 'styleSize')} ({elementStyle.scale}%)
+                      <input
+                        type="range"
+                        min={ELEMENT_SCALE_MIN}
+                        max={ELEMENT_SCALE_MAX}
+                        step={ELEMENT_SCALE_STEP}
+                        value={elementStyle.scale}
+                        onChange={(e) => updateElement(element, { scale: e.target.valueAsNumber })}
+                      />
+                    </label>
+                    <span className="style-color">
+                      <label className="checkbox">
+                        {t(lang, 'styleColor')}
+                        <input
+                          type="color"
+                          value={elementStyle.color ?? presetColor}
+                          onChange={(e) => updateElement(element, { color: e.target.value })}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="ghost"
+                        aria-label={`${t(lang, 'styleReset')}: ${t(lang, `element.${element}`)}`}
+                        title={`${t(lang, 'styleReset')}: ${t(lang, `element.${element}`)}`}
+                        disabled={elementStyle.color === null}
+                        onClick={() => updateElement(element, { color: null })}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <h3>{t(lang, 'styleBackground')}</h3>
+            <div className="grid">
+              <select
+                className="style-mode"
+                aria-label={t(lang, 'styleBackground')}
+                value={style.background.mode}
+                onChange={(e) => updateBackground({ mode: e.target.value as BackgroundMode })}
+              >
+                {BACKGROUND_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {t(lang, `bg.mode.${mode}`)}
+                  </option>
+                ))}
+              </select>
+              <label>
+                {t(lang, 'bg.color')}
+                <input
+                  type="color"
+                  value={style.background.color}
+                  onChange={(e) => updateBackground({ color: e.target.value })}
+                />
+              </label>
+              {style.background.mode === 'gradient' && (
+                <>
+                  <label>
+                    {t(lang, 'bg.colorAlt')}
+                    <input
+                      type="color"
+                      value={style.background.colorAlt}
+                      onChange={(e) => updateBackground({ colorAlt: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    {t(lang, 'bg.direction')}
+                    <select
+                      value={style.background.direction}
+                      onChange={(e) => updateBackground({ direction: e.target.value as GradientDirection })}
+                    >
+                      {GRADIENT_DIRECTIONS.map((direction) => (
+                        <option key={direction} value={direction}>
+                          {t(lang, `bg.${direction}`)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
+              <label>
+                {t(lang, 'bg.opacity')} ({style.background.opacity}%)
+                <input
+                  type="range"
+                  min={MIN_OPACITY}
+                  max={MAX_OPACITY}
+                  step={5}
+                  value={style.background.opacity}
+                  onChange={(e) => updateBackground({ opacity: e.target.valueAsNumber })}
+                />
+              </label>
+              <label>
+                {t(lang, 'bg.radius')} ({style.background.radius}px)
+                <input
+                  type="range"
+                  min={MIN_RADIUS}
+                  max={MAX_RADIUS}
+                  step={1}
+                  value={style.background.radius}
+                  onChange={(e) => updateBackground({ radius: e.target.valueAsNumber })}
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+        <div className="row">
+          <button
+            type="button"
+            onClick={() => setDisplay(resetStyle(display))}
+            disabled={display.styles[display.theme] === undefined}
+          >
+            {t(lang, 'styleReset')}
+          </button>
         </div>
       </section>
 
