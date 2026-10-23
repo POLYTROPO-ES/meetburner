@@ -298,16 +298,16 @@ impl ElementStyle {
     }
 }
 
-/// The four lines of the counter, each with its own style (ADR-0029).
+/// The four lines the camera draws, each with its own style (ADR-0029).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Elements {
     /// `totalCost` above the amount in `fullscreen`; the widget hides it, like the web.
     pub label: ElementStyle,
     pub cost: ElementStyle,
     /// The elapsed time (or `starts in`) line.
-    pub time: ElementStyle,
+    pub elapsed: ElementStyle,
     /// The cost-per-minute line under the time.
-    pub status: ElementStyle,
+    pub cost_per_minute: ElementStyle,
 }
 
 impl Elements {
@@ -315,8 +315,8 @@ impl Elements {
         Elements {
             label: ElementStyle::resolve(&wire.label),
             cost: ElementStyle::resolve(&wire.cost),
-            time: ElementStyle::resolve(&wire.time),
-            status: ElementStyle::resolve(&wire.status),
+            elapsed: ElementStyle::resolve(&wire.elapsed),
+            cost_per_minute: ElementStyle::resolve(&wire.cost_per_minute),
         }
     }
 }
@@ -337,8 +337,16 @@ pub struct ElementWire {
 pub struct ElementsWire {
     pub label: ElementWire,
     pub cost: ElementWire,
-    pub time: ElementWire,
+    /// The web customises the status line it shows; the camera draws no status line (the
+    /// counter card has no room), so this is accepted and ignored on purpose.
     pub status: ElementWire,
+    /// Older web builds sent `time`: the alias keeps those payloads landing here.
+    #[serde(alias = "time")]
+    pub elapsed: ElementWire,
+    /// The web customises the person-time stats grid it shows; the camera draws no stats
+    /// grid (the counter card has no room), so this is accepted and ignored on purpose.
+    pub person_time: ElementWire,
+    pub cost_per_minute: ElementWire,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -623,8 +631,8 @@ pub fn render(
         layout.cost,
     );
 
-    let time_style = elements.time;
-    let time_px = (layout.time.h * 0.55).max(14.0) * time_style.scale;
+    let elapsed_style = elements.elapsed;
+    let time_px = (layout.time.h * 0.55).max(14.0) * elapsed_style.scale;
     let time_value = if values.starts_in_ms > 0 {
         format!(
             "{} {}",
@@ -637,14 +645,14 @@ pub fn render(
     draw_centered(
         &mut overlay,
         &time_value,
-        fonts.get(time_style.font.resolve(&theme)),
+        fonts.get(elapsed_style.font.resolve(&theme)),
         time_px,
-        element_color(time_style.color, theme.muted),
+        element_color(elapsed_style.color, theme.muted),
         layout.time,
     );
 
-    let status_style = elements.status;
-    let footer_px = (layout.footer.h * 0.5).clamp(12.0, 30.0) * status_style.scale;
+    let footer_style = elements.cost_per_minute;
+    let footer_px = (layout.footer.h * 0.5).clamp(12.0, 30.0) * footer_style.scale;
     let footer = format!(
         "{} {}",
         input.labels.cost_per_minute,
@@ -653,9 +661,9 @@ pub fn render(
     draw_centered(
         &mut overlay,
         &footer,
-        fonts.get(status_style.font.resolve(&theme)),
+        fonts.get(footer_style.font.resolve(&theme)),
         footer_px,
-        element_color(status_style.color, theme.muted),
+        element_color(footer_style.color, theme.muted),
         layout.footer,
     );
 
@@ -1432,7 +1440,7 @@ mod tests {
     #[test]
     fn normalises_untrusted_display_settings() {
         let input: CounterInput = serde_json::from_str(
-            r##"{"display":{"theme":"nope","layout":"widget","overflow":"shrink","elements":{"cost":{"font":"mono","scale":900,"color":"#FF0000"},"time":{"scale":10,"color":"not-a-colour"}},"background":{"mode":"solid","color":"#fff","opacity":900,"radius":-5}}}"##,
+            r##"{"display":{"theme":"nope","layout":"widget","overflow":"shrink","elements":{"cost":{"font":"mono","scale":900,"color":"#FF0000"},"elapsed":{"scale":10,"color":"not-a-colour"}},"background":{"mode":"solid","color":"#fff","opacity":900,"radius":-5}}}"##,
         )
         .expect("display parses");
         assert_eq!(
@@ -1447,9 +1455,9 @@ mod tests {
         );
         assert_eq!(input.display.elements.cost.scale, 2.5, "clamped to 250%");
         assert_eq!(input.display.elements.cost.color, Some((255, 0, 0)));
-        assert_eq!(input.display.elements.time.scale, 0.5, "clamped to 50%");
+        assert_eq!(input.display.elements.elapsed.scale, 0.5, "clamped to 50%");
         assert_eq!(
-            input.display.elements.time.color, None,
+            input.display.elements.elapsed.color, None,
             "an invalid colour keeps the preset"
         );
         assert_eq!(
@@ -1740,8 +1748,8 @@ mod tests {
 
         let mut overridden = input();
         overridden.display.elements.cost.color = Some((255, 0, 0));
-        overridden.display.elements.time.color = Some((0, 255, 0));
-        overridden.display.elements.status.color = Some((0, 0, 255));
+        overridden.display.elements.elapsed.color = Some((0, 255, 0));
+        overridden.display.elements.cost_per_minute.color = Some((0, 0, 255));
         let frame = render(&overridden, &fonts(), 1_060_000, None);
         assert!(
             has_colour(&frame, layout.cost, (255, 0, 0)),
@@ -1749,11 +1757,11 @@ mod tests {
         );
         assert!(
             has_colour(&frame, layout.time, (0, 255, 0)),
-            "time override"
+            "elapsed override"
         );
         assert!(
             has_colour(&frame, layout.footer, (0, 0, 255)),
-            "status override"
+            "cost-per-minute override"
         );
         assert!(!has_colour(&frame, layout.time, classic.muted));
 
@@ -1779,20 +1787,23 @@ mod tests {
     #[test]
     fn per_element_fonts_fall_back_to_the_preset_or_use_the_explicit_font() {
         let input: CounterInput = serde_json::from_str(
-            r#"{"display":{"elements":{"cost":{"font":"mono"},"time":{"font":"theme"},"label":{"font":"nope"}}}}"#,
+            r#"{"display":{"elements":{"cost":{"font":"mono"},"elapsed":{"font":"theme"},"label":{"font":"nope"}}}}"#,
         )
         .expect("display parses");
         assert_eq!(
             input.display.elements.cost.font,
             FontChoice::Font(theme::FontId::Mono)
         );
-        assert_eq!(input.display.elements.time.font, FontChoice::Theme);
+        assert_eq!(input.display.elements.elapsed.font, FontChoice::Theme);
         assert_eq!(
             input.display.elements.label.font,
             FontChoice::Theme,
             "unknown font ids keep the preset"
         );
-        assert_eq!(input.display.elements.status, ElementStyle::default());
+        assert_eq!(
+            input.display.elements.cost_per_minute,
+            ElementStyle::default()
+        );
 
         // The explicit face really reaches the drawing.
         let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
@@ -1818,7 +1829,7 @@ mod tests {
             .map(|(min, max)| max - min)
             .unwrap_or(0);
 
-        input.display.elements.time.scale = 2.0;
+        input.display.elements.elapsed.scale = 2.0;
         let doubled = render(&input, &fonts(), 1_060_000, None);
         let doubled_height = ink_height(&doubled, layout.time, background);
         let doubled_width = ink_bounds(&doubled, layout.time, background)
@@ -1831,6 +1842,106 @@ mod tests {
         assert!(
             doubled_width > preset_width,
             "{doubled_width} px wide at 200% vs {preset_width} px at 100%"
+        );
+    }
+
+    #[test]
+    fn elapsed_styles_the_time_line() {
+        let input: CounterInput = serde_json::from_str(
+            r##"{"startAt":1000000,"ratePerMs":0.01,"display":{"elements":{"elapsed":{"font":"mono","scale":200,"color":"#00FF00"}}}}"##,
+        )
+        .expect("payload parses");
+        assert_eq!(
+            input.display.elements.elapsed.font,
+            FontChoice::Font(theme::FontId::Mono)
+        );
+        assert_eq!(input.display.elements.elapsed.scale, 2.0);
+        assert_eq!(input.display.elements.elapsed.color, Some((0, 255, 0)));
+
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+        let frame = render(&input, &fonts(), 1_060_000, None);
+        assert!(
+            has_colour(&frame, layout.time, (0, 255, 0)),
+            "`elapsed` paints the elapsed-time line"
+        );
+        assert!(
+            !has_colour(&frame, layout.footer, (0, 255, 0)),
+            "`elapsed` does not leak into the cost-per-minute footer"
+        );
+    }
+
+    #[test]
+    fn an_old_payload_styles_the_time_line_through_the_time_alias() {
+        let input: CounterInput = serde_json::from_str(
+            r##"{"display":{"elements":{"time":{"font":"mono","scale":200,"color":"#FF0000"}}}}"##,
+        )
+        .expect("older payloads still parse");
+        assert_eq!(
+            input.display.elements.elapsed.font,
+            FontChoice::Font(theme::FontId::Mono)
+        );
+        assert_eq!(input.display.elements.elapsed.scale, 2.0);
+        assert_eq!(input.display.elements.elapsed.color, Some((255, 0, 0)));
+
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+        let frame = render(&input, &fonts(), 1_060_000, None);
+        assert!(
+            has_colour(&frame, layout.time, (255, 0, 0)),
+            "`time` still lands on the elapsed-time line"
+        );
+    }
+
+    #[test]
+    fn cost_per_minute_styles_the_footer() {
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+        let background = (0x0f, 0x11, 0x15);
+        let preset = render(&input(), &fonts(), 1_060_000, None);
+        let preset_height = ink_height(&preset, layout.footer, background);
+
+        let styled: CounterInput = serde_json::from_str(
+            r##"{"startAt":1000000,"ratePerMs":0.01,"display":{"elements":{"costPerMinute":{"font":"mono","scale":200,"color":"#0000FF"}}}}"##,
+        )
+        .expect("payload parses");
+        assert_eq!(
+            styled.display.elements.cost_per_minute.font,
+            FontChoice::Font(theme::FontId::Mono)
+        );
+        assert_eq!(styled.display.elements.cost_per_minute.scale, 2.0);
+        assert_eq!(
+            styled.display.elements.cost_per_minute.color,
+            Some((0, 0, 255))
+        );
+
+        let frame = render(&styled, &fonts(), 1_060_000, None);
+        assert!(
+            has_colour(&frame, layout.footer, (0, 0, 255)),
+            "`costPerMinute` paints the footer"
+        );
+        assert!(
+            !has_colour(&frame, layout.time, (0, 0, 255)),
+            "`costPerMinute` does not leak into the elapsed line"
+        );
+        assert!(
+            ink_height(&frame, layout.footer, background) > preset_height,
+            "200 % grows the footer glyphs"
+        );
+    }
+
+    #[test]
+    fn status_and_person_time_styles_are_accepted_but_never_drawn() {
+        // The web customises a status line and the person-time stats grid; the camera draws
+        // neither (no room in the counter card), so a loud style on them changes no pixel.
+        let ignored: CounterInput = serde_json::from_str(
+            r##"{"startAt":1000000,"ratePerMs":0.01,"display":{"elements":{"status":{"font":"mono","scale":250,"color":"#FF0000"},"personTime":{"font":"mono","scale":250,"color":"#00FF00"}}}}"##,
+        )
+        .expect("the camera accepts the styles the web sends");
+
+        let fonts = fonts();
+        let frame = render(&ignored, &fonts, 1_060_000, None);
+        let preset = render(&input(), &fonts, 1_060_000, None);
+        assert_eq!(
+            frame, preset,
+            "the camera draws neither a status line nor the person-time stats grid"
         );
     }
 
