@@ -66,6 +66,10 @@ const en = {
   mirrorOverlay: 'Counter card',
   mirrorHorizontal: 'Mirror horizontally',
   mirrorVertical: 'Mirror vertically',
+  overlayPosition: 'Counter position',
+  overlayHint:
+    'Drag the card to move it, drag its corner to resize. The counter font follows the card size.',
+  overlayReset: 'Reset position',
   cameraResolution: 'Camera resolution',
   cameraResolutionHint:
     'Meeting apps keep the size they negotiated when they opened the camera; the counter is always scaled to fit. Reselect the camera only if you want a different frame shape.',
@@ -161,6 +165,10 @@ const es: Record<MessageKey, string> = {
   mirrorOverlay: 'Tarjeta del contador',
   mirrorHorizontal: 'Espejo horizontal',
   mirrorVertical: 'Espejo vertical',
+  overlayPosition: 'Posición del contador',
+  overlayHint:
+    'Arrastra la tarjeta para moverla y su esquina para cambiar el tamaño. La fuente del contador se adapta al tamaño.',
+  overlayReset: 'Restablecer posición',
   cameraResolution: 'Resolución de la cámara',
   cameraResolutionHint:
     'Las apps de reuniones mantienen el tamaño que negociaron al abrir la cámara; el contador siempre se ajusta para caber. Vuelve a elegir la cámara solo si quieres otra forma de vídeo.',

@@ -1,6 +1,6 @@
 import { totalHourlyRate, type Meeting } from './cost';
 import { t, type Lang } from './i18n';
-import type { DisplaySettings, MirrorSettings } from './themes';
+import type { DisplaySettings, MirrorSettings, OverlayRect } from './themes';
 
 /** Aspect ratios offered by the desktop virtual camera (ADR-0015). */
 export const CAMERA_RATIOS = ['16:9', '9:16', '4:3', '3:4', '1:1'] as const;
@@ -75,6 +75,7 @@ export interface CameraDisplay {
   timeScale: number;
   overflow: string;
   mirror: MirrorSettings;
+  overlay: OverlayRect | null;
 }
 
 /** Payload of the Rust `camera_start` / `camera_update` commands. */
@@ -129,6 +130,7 @@ export function cameraInput(
       timeScale: display.timeScale,
       overflow: display.overflow,
       mirror: display.mirror,
+      overlay: display.overlay,
     },
     width: size.width,
     height: size.height,

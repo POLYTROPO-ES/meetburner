@@ -126,6 +126,7 @@ describe('camera input', () => {
       timeScale: 0.8,
       overflow: 'shrink',
       mirror: { sourceH: false, sourceV: false, overlayH: false, overlayV: false },
+      overlay: null,
     });
   });
 

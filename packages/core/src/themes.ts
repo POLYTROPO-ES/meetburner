@@ -70,6 +70,54 @@ export interface DisplaySettings {
   timeScale: number;
   overflow: Overflow;
   mirror: MirrorSettings;
+  /** Where the widget card sits on the camera frame; null keeps the built-in corner (ADR-0023). */
+  overlay: OverlayRect | null;
+}
+
+/** Widget card rectangle, as fractions of the camera frame (0..1). */
+export interface OverlayRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Smallest card the editor allows, as a fraction of the frame. */
+export const OVERLAY_MIN = 0.15;
+
+/** Same widget geometry as the Rust renderer, for the sizes it does not know yet. */
+export function defaultOverlayRect(width: number, height: number): OverlayRect {
+  const margin = 32;
+  const w = 0.42;
+  const h = 0.3;
+  return { x: 1 - margin / width - w, y: 1 - margin / height - h, w, h };
+}
+
+const within = (value: number, max: number): number => Math.min(max, Math.max(0, value));
+
+/** Validates a stored rectangle: fractions, minimum size, inside the frame. */
+export function clampOverlay(rect: OverlayRect): OverlayRect {
+  const w = Math.min(1, Math.max(OVERLAY_MIN, rect.w));
+  const h = Math.min(1, Math.max(OVERLAY_MIN, rect.h));
+  return { x: within(rect.x, 1 - w), y: within(rect.y, 1 - h), w, h };
+}
+
+/** Moves the card, stopping at the frame edge without shrinking it. */
+export function moveOverlay(rect: OverlayRect, dx: number, dy: number): OverlayRect {
+  return {
+    ...rect,
+    x: within(rect.x + dx, 1 - rect.w),
+    y: within(rect.y + dy, 1 - rect.h),
+  };
+}
+
+/** Grows or shrinks the card from its bottom-right corner. */
+export function resizeOverlay(rect: OverlayRect, dw: number, dh: number): OverlayRect {
+  return {
+    ...rect,
+    w: Math.min(1 - rect.x, Math.max(OVERLAY_MIN, rect.w + dw)),
+    h: Math.min(1 - rect.y, Math.max(OVERLAY_MIN, rect.h + dh)),
+  };
 }
 
 /**
@@ -102,6 +150,7 @@ export const DEFAULT_DISPLAY: DisplaySettings = {
   timeScale: 1,
   overflow: 'compact',
   mirror: NO_MIRROR,
+  overlay: null,
 };
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
@@ -131,7 +180,16 @@ export function normalizeDisplay(raw: unknown): DisplaySettings {
       overlayH: flag(mirror.overlayH),
       overlayV: flag(mirror.overlayV),
     },
+    overlay: normalizeOverlay(r.overlay),
   };
+}
+
+function normalizeOverlay(raw: unknown): OverlayRect | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const numbers = [r.x, r.y, r.w, r.h];
+  if (!numbers.every((value) => typeof value === 'number' && Number.isFinite(value))) return null;
+  return clampOverlay({ x: r.x as number, y: r.y as number, w: r.w as number, h: r.h as number });
 }
 
 /** Decides how to show a cost whose full/abbreviated texts are `fullWidth`/`compactWidth` px in an `availableWidth` px box. */

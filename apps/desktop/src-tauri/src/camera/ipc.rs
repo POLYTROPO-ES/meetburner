@@ -65,6 +65,15 @@ fn write_header(buf: &mut [u8], header: &FrameHeader) {
     unsafe { std::ptr::write_unaligned(buf.as_mut_ptr() as *mut FrameHeader, *header) }
 }
 
+/// Reads the header when it is ours, without retrying the seqlock.
+pub fn peek_header(buf: &[u8]) -> Option<FrameHeader> {
+    if buf.len() < HEADER_SIZE {
+        return None;
+    }
+    let header = read_header(buf);
+    (header.magic == MAGIC && header.version == VERSION).then_some(header)
+}
+
 /// Writes one frame into the mapping. Returns an error when the mapping is too small.
 pub fn write_frame(
     buf: &mut [u8],

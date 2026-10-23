@@ -8,7 +8,10 @@ use tiny_skia::{Color, FillRule, Paint, Path, PathBuilder, Pixmap, PixmapPaint, 
 use crate::camera::fonts::Fonts;
 use crate::camera::format::{format_duration, format_money, format_money_compact};
 use crate::camera::frame::{normalize_size, Frame, FRAME_HEIGHT, FRAME_WIDTH};
-use crate::camera::layout::{counter_layout, fit_cost, Rect};
+#[cfg(test)]
+use crate::camera::layout::counter_layout;
+use crate::camera::layout::{counter_layout_in, fit_cost, Rect};
+
 use crate::camera::theme::{self, FontChoice, Layout, Overflow, Theme};
 
 /// Translated strings supplied by the web UI (`packages/core/src/i18n.ts`).
@@ -99,6 +102,46 @@ pub struct DisplayConfig {
     pub overflow: Overflow,
     /// Per-layer mirroring; the webcam and the counter are independent (ADR-0022).
     pub mirror: Mirror,
+    /// Where the widget card goes, as fractions of the frame (ADR-0023).
+    #[serde(default)]
+    pub overlay: Option<Overlay>,
+}
+
+/// Custom widget card rectangle from the UI, as fractions of the frame.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Overlay {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+}
+
+impl Default for Overlay {
+    fn default() -> Self {
+        Overlay {
+            x: 0.0,
+            y: 0.0,
+            w: 0.42,
+            h: 0.3,
+        }
+    }
+}
+
+impl Overlay {
+    /// `None` for anything unusable, so a corrupt payload keeps the built-in corner.
+    pub fn sanitized(self) -> Option<Overlay> {
+        let values = [self.x, self.y, self.w, self.h];
+        if values.iter().any(|value| !value.is_finite()) {
+            return None;
+        }
+        Some(Overlay {
+            x: self.x.clamp(0.0, 1.0),
+            y: self.y.clamp(0.0, 1.0),
+            w: self.w.clamp(0.05, 1.0),
+            h: self.h.clamp(0.05, 1.0),
+        })
+    }
 }
 
 /// Flips applied to the captured webcam and to the counter layer, independently.
@@ -123,6 +166,7 @@ pub struct DisplayConfigWire {
     pub time_scale: f32,
     pub overflow: String,
     pub mirror: Mirror,
+    pub overlay: Option<Overlay>,
 }
 
 impl Default for DisplayConfigWire {
@@ -137,6 +181,7 @@ impl Default for DisplayConfigWire {
             time_scale: display.time_scale,
             overflow: "compact".into(),
             mirror: Mirror::default(),
+            overlay: None,
         }
     }
 }
@@ -156,6 +201,7 @@ impl From<DisplayConfigWire> for DisplayConfig {
             time_scale: clamp_scale(wire.time_scale),
             overflow: theme::parse_overflow(&wire.overflow),
             mirror: wire.mirror,
+            overlay: wire.overlay.and_then(Overlay::sanitized),
         }
     }
 }
@@ -179,6 +225,7 @@ impl Default for DisplayConfig {
             time_scale: 1.0,
             overflow: Overflow::Compact,
             mirror: Mirror::default(),
+            overlay: None,
         }
     }
 }
@@ -269,7 +316,18 @@ pub fn render(
     let theme = theme::theme(&input.display.theme, now_ms);
     let mirror = input.display.mirror;
     let (width, height) = input.size();
-    let layout = counter_layout(width as f32, height as f32, input.display.layout);
+    let overlay_rect = input.display.overlay.map(|overlay| Rect {
+        x: overlay.x,
+        y: overlay.y,
+        w: overlay.w,
+        h: overlay.h,
+    });
+    let layout = counter_layout_in(
+        width as f32,
+        height as f32,
+        input.display.layout,
+        overlay_rect,
+    );
     let mut pixmap = match background {
         Some(frame) => {
             let frame = frame
@@ -1008,5 +1066,61 @@ mod tests {
         assert_eq!(input.display.cost_scale, 2.5);
         assert_eq!(input.display.time_scale, 0.5);
         assert_eq!(input.display.overflow, Overflow::Shrink);
+        assert_eq!(input.display.overlay, None, "no overlay by default");
+    }
+
+    #[test]
+    fn a_custom_overlay_rect_places_the_card() {
+        let mut input = input();
+        input.display.layout = Layout::Widget;
+        input.display.overlay = Some(Overlay {
+            x: 0.05,
+            y: 0.1,
+            w: 0.4,
+            h: 0.3,
+        });
+        let webcam = (0x22, 0x44, 0x66);
+        let background = Frame::filled(FRAME_WIDTH, FRAME_HEIGHT, webcam);
+        let frame = render(&input, &fonts(), 1_060_000, Some(&background));
+        // Inside the card, between its top edge (72) and the padded content (100).
+        assert_eq!(frame.pixel(320, 80), (0x0f, 0x11, 0x15));
+        assert_eq!(
+            frame.pixel(FRAME_WIDTH - 2, FRAME_HEIGHT - 2),
+            webcam,
+            "the old bottom-right corner is webcam again"
+        );
+    }
+
+    #[test]
+    fn a_corrupt_overlay_falls_back_to_the_corner() {
+        let broken = Overlay {
+            x: f32::NAN,
+            y: 0.1,
+            w: 0.4,
+            h: 0.3,
+        };
+        assert!(broken.sanitized().is_none());
+        let ok = Overlay {
+            x: 0.5,
+            y: 0.5,
+            w: 0.01,
+            h: 2.0,
+        }
+        .sanitized()
+        .expect("finite values are usable");
+        assert_eq!((ok.w, ok.h), (0.05, 1.0), "clamped to a usable card");
+    }
+
+    #[test]
+    fn parses_the_overlay_rect_from_the_ui() {
+        let input: CounterInput = serde_json::from_str(
+            r#"{"display":{"layout":"widget","overlay":{"x":0.1,"y":0.2,"w":0.3,"h":0.4}}}"#,
+        )
+        .expect("overlay parses");
+        let overlay = input.display.overlay.expect("overlay");
+        assert_eq!(
+            (overlay.x, overlay.y, overlay.w, overlay.h),
+            (0.1, 0.2, 0.3, 0.4)
+        );
     }
 }

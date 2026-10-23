@@ -8,7 +8,8 @@ use windows_sys::Win32::Foundation::{
     CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE, INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::System::Memory::{
-    CreateFileMappingW, MapViewOfFile, UnmapViewOfFile, FILE_MAP_ALL_ACCESS, PAGE_READWRITE,
+    CreateFileMappingW, MapViewOfFile, OpenFileMappingW, UnmapViewOfFile, FILE_MAP_ALL_ACCESS,
+    PAGE_READWRITE,
 };
 use windows_sys::Win32::System::Threading::{CreateEventW, SetEvent};
 
@@ -22,6 +23,10 @@ use crate::camera::sink::{SinkError, VirtualCameraSink};
 /// Names must match `native/vcam-windows/common/meetburner_camera.h`.
 pub const MAPPING_NAME: &str = "Local\\MeetBurnerCamera";
 pub const EVENT_NAME: &str = "Local\\MeetBurnerCameraFrame";
+
+/// A mapping whose producer has not written a frame for this long is considered abandoned:
+/// the app crashed or was killed while a meeting app kept the section open.
+const ABANDONED_AFTER_MS: i64 = 5_000;
 
 /// The app is the only producer; meeting apps read the mapping through the DLL.
 /// The mapping is created once with room for the largest supported size (ADR-0019).
@@ -58,6 +63,51 @@ impl WinSharedMemSink {
 
     pub fn is_running(&self) -> bool {
         !self.view.is_null()
+    }
+
+    /// Opens an existing mapping when its producer has stopped publishing: no frame for
+    /// `ABANDONED_AFTER_MS`. Works because readers keep the section alive, not its producer.
+    fn adopt_abandoned(&mut self) -> bool {
+        let mapping_name = wide(&self.mapping_name);
+        let mapping = unsafe { OpenFileMappingW(FILE_MAP_ALL_ACCESS, 0, mapping_name.as_ptr()) };
+        if mapping.is_null() {
+            return false;
+        }
+        let len = CAPACITY_LEN;
+        let view = unsafe { MapViewOfFile(mapping, FILE_MAP_ALL_ACCESS, 0, 0, len) };
+        if view.Value.is_null() {
+            unsafe { CloseHandle(mapping) };
+            return false;
+        }
+        // SAFETY: the view is mapped for `len` bytes and the producer always starts with the
+        // header, so reading it is safe whatever the payload looks like.
+        let buf = unsafe { slice::from_raw_parts(view.Value as *const u8, len) };
+        let abandoned = match ipc::peek_header(buf) {
+            Some(header) => now_ms() - header.timestamp_ms as i64 > ABANDONED_AFTER_MS,
+            None => true, // never initialised: nothing to lose
+        };
+        if !abandoned {
+            unsafe {
+                UnmapViewOfFile(view);
+                CloseHandle(mapping);
+            }
+            return false;
+        }
+        let event_name = wide(&self.event_name);
+        let event = unsafe { CreateEventW(std::ptr::null(), 0, 0, event_name.as_ptr()) };
+        if event.is_null() {
+            unsafe {
+                UnmapViewOfFile(view);
+                CloseHandle(mapping);
+            }
+            return false;
+        }
+        self.mapping = mapping;
+        self.view = view.Value as *mut u8;
+        self.event = event;
+        self.len = len;
+        eprintln!("meetburner: taking over the abandoned camera mapping");
+        true
     }
 
     fn write_idle(&self) {
@@ -100,9 +150,18 @@ impl VirtualCameraSink for WinSharedMemSink {
         }
         if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
             unsafe { CloseHandle(mapping) };
-            return Err(SinkError::Io(
-                "another MeetBurner camera is already running".into(),
-            ));
+            // The section outlives a producer while a meeting app keeps it mapped. When the
+            // header is stale nobody is publishing, so take the mapping over instead of
+            // failing until the user closes the meeting app (ADR-0023).
+            if !self.adopt_abandoned() {
+                return Err(SinkError::Io(
+                    "another MeetBurner camera is already running".into(),
+                ));
+            }
+            self.fps = fps;
+            self.write_idle();
+            unsafe { SetEvent(self.event) };
+            return Ok(());
         }
         let view = unsafe { MapViewOfFile(mapping, FILE_MAP_ALL_ACCESS, 0, 0, len) };
         if view.Value.is_null() {
@@ -250,11 +309,55 @@ mod tests {
         let (mapping, event) = unique_names("exclusive");
         let mut first = WinSharedMemSink::with_names(&mapping, &event);
         first.start(2, 2, 30).expect("first producer");
+        first.send(&Frame::filled(2, 2, (1, 1, 1))).expect("frame");
         let mut second = WinSharedMemSink::with_names(&mapping, &event);
-        assert!(second.start(2, 2, 30).is_err());
+        assert!(
+            second.start(2, 2, 30).is_err(),
+            "a live producer keeps the mapping"
+        );
         first.stop();
         second.start(2, 2, 30).expect("the name is free again");
         second.stop();
+    }
+
+    #[test]
+    fn adopts_a_mapping_left_behind_by_a_crashed_producer() {
+        let (mapping, event) = unique_names("adopt");
+        let mut first = WinSharedMemSink::with_names(&mapping, &event);
+        first.start(2, 2, 30).expect("start");
+        first.send(&Frame::filled(2, 2, (1, 2, 3))).expect("send");
+        // A meeting app keeps the section mapped after the producer goes away.
+        let reader = TestReader::open(&mapping, CAPACITY_LEN);
+        first.stop();
+        // Pretend the last frame is a while old: the producer is gone.
+        rewrite_timestamp(&mapping, CAPACITY_LEN, now_ms() - 60_000);
+
+        let mut second = WinSharedMemSink::with_names(&mapping, &event);
+        second
+            .start(2, 2, 30)
+            .expect("the abandoned mapping is reused");
+        second
+            .send(&Frame::filled(4, 4, (9, 9, 9)))
+            .expect("publishing again");
+        let resumed = reader.read().expect("a frame is available again");
+        assert_eq!((resumed.header.width, resumed.header.height), (4, 4));
+        second.stop();
+    }
+
+    /// Overwrites the header timestamp of an existing mapping (test helper).
+    fn rewrite_timestamp(name: &str, len: usize, timestamp_ms: i64) {
+        let name = wide(name);
+        let mapping = unsafe { OpenFileMappingW(FILE_MAP_ALL_ACCESS, 0, name.as_ptr()) };
+        assert!(!mapping.is_null(), "the mapping is open");
+        let view = unsafe { MapViewOfFile(mapping, FILE_MAP_ALL_ACCESS, 0, 0, len) };
+        assert!(!view.Value.is_null());
+        let buf = unsafe { slice::from_raw_parts_mut(view.Value as *mut u8, ipc::HEADER_SIZE) };
+        // `FrameHeader::timestamp_ms` sits at offset 32 (ADR-0013).
+        buf[32..40].copy_from_slice(&(timestamp_ms.max(0) as u64).to_le_bytes());
+        unsafe {
+            UnmapViewOfFile(view);
+            CloseHandle(mapping);
+        }
     }
 
     #[test]

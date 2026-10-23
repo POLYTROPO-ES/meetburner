@@ -80,7 +80,8 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Compositing: `widget` card over the webcam frame, scaled to the output size (ADR-0021)
 - [x] Fallback to counter-only if source camera is busy/unplugged
 - [x] Mirror the camera image and the counter independently, H and V (ADR-0022)
-- [ ] Position, scale and opacity of the card
+- [x] Move and resize the card by dragging it on a preview, with a corner handle (ADR-0023)
+- [x] Recover the camera when the app was killed while a meeting app kept the mapping open (ADR-0024)
 - **Done when:** overlay works on both Linux and Windows sinks.
 
 ### M8. Windows virtual camera (Media Foundation) — `vcam-windows`
