@@ -51,4 +51,12 @@ npm run dev:web     # web app on http://localhost:5173
 npm run build:web
 npm run deploy:web  # Cloudflare Pages (needs `npx wrangler login` or CLOUDFLARE_API_TOKEN)
 npm run dev:desktop # requires Rust
+npm run build:desktop # NSIS/MSI installers + portable exe (Windows)
 ```
+
+## Desktop builds
+
+- **Installer** (recommended): `MeetBurner_<version>_x64-setup.exe` or `.msi`, from `apps/desktop/src-tauri/target/release/bundle`.
+- **Portable**: `meetburner.exe` plus `resources\MeetBurnerCamera.dll`, no installation; register the webcam from the app once per Windows account.
+
+Step-by-step, including what each file is for: [apps/desktop/README.md](apps/desktop/README.md#install-vs-portable).
