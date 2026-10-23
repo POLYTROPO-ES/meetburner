@@ -52,6 +52,8 @@ flowchart LR
 
 Web app: static build on Cloudflare Pages with security headers from `apps/web/public/_headers` ([ADR-0007](decisions/0007-cloudflare-hosting.md)).
 
+Desktop app: GitHub Releases built from `v*` tags by `.github/workflows/release.yml` — Windows NSIS/MSI plus two portable shapes, Linux `.deb`/AppImage, `SHA256SUMS.txt`, draft first ([ADR-0025](decisions/0025-github-releases.md), [ADR-0026](decisions/0026-portable-single-file.md)). The one-file portable embeds the DirectShow driver and writes it next to itself on the first registration, because `InprocServer32` needs a path.
+
 ## Virtual camera (desktop only)
 
 - The counter frame for the camera is rendered **in Rust**, not captured from the webview: no window needed, constant 30 fps, low CPU.

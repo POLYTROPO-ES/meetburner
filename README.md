@@ -56,7 +56,15 @@ npm run build:desktop # NSIS/MSI installers + portable exe (Windows)
 
 ## Desktop builds
 
-- **Installer** (recommended): `MeetBurner_<version>_x64-setup.exe` or `.msi`, from `apps/desktop/src-tauri/target/release/bundle`.
-- **Portable**: `meetburner.exe` plus `resources\MeetBurnerCamera.dll`, no installation; register the webcam from the app once per Windows account.
+A release is cut from a tag: `git tag vX.Y.Z && git push origin vX.Y.Z` builds Windows and Linux on GitHub Actions and publishes a draft-first release with checksums ([ADR-0025](docs/decisions/0025-github-releases.md)). `workflow_dispatch` on `.github/workflows/release.yml` is the dry run.
 
-Step-by-step, including what each file is for: [apps/desktop/README.md](apps/desktop/README.md#install-vs-portable).
+| Download | What it is |
+|---|---|
+| `MeetBurner_<version>_x64-setup.exe`, `..._en-US.msi` | installer, recommended |
+| `MeetBurner_<version>_x64.exe` | portable, one file: the camera driver is inside and is written next to the exe on the first registration ([ADR-0026](docs/decisions/0026-portable-single-file.md)) |
+| `MeetBurner_<version>_portable_x64.zip` | portable, the same exe plus `resources\MeetBurnerCamera.dll`; use it when antivirus or SmartScreen flags the one-file build |
+| `..._amd64.deb`, `..._amd64.AppImage` | Linux |
+
+Until the repository is public, release assets are only visible to collaborators; the download button on meetburner.com waits for that flip.
+
+Locally, `npm run build:desktop` writes the NSIS/MSI installers to `apps/desktop/src-tauri/target/release/bundle` and the exe to `target/release`. Step-by-step, including what each file is for: [apps/desktop/README.md](apps/desktop/README.md#install-vs-portable).

@@ -139,7 +139,7 @@ Diagnostics, if a consumer does not list or connect the camera:
 
 ## Next steps
 
-1. Bundle the DLL and run the register/unregister exports from the NSIS/MSI installer (M9).
+1. The app registers and cleans the driver on demand (ADR-0017); it ships as a bundle resource and, in the one-file portable, embedded in the exe (ADR-0026). The installer does not register it.
 2. Manual test matrix: Zoom, OBS, Chrome/Edge (Meet), Teams classic, new Teams, Windows Camera.
 3. `mf/` media source for Windows 11 (`MFCreateVirtualCamera`, M8).
 
