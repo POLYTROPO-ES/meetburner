@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clampOverlay,
   DEFAULT_DISPLAY,
+  defaultOverlayRect,
   FONTS,
   MAX_SCALE,
   MIN_SCALE,
   MESSAGES,
+  moveOverlay,
   NO_MIRROR,
   normalizeDisplay,
+  OVERLAY_MIN,
+  resizeOverlay,
   resolveFont,
   resolveTheme,
   seasonOf,
@@ -64,7 +69,22 @@ describe('display settings', () => {
       timeScale: 1,
       overflow: 'compact',
       mirror: { sourceH: false, sourceV: false, overlayH: false, overlayV: false },
+      overlay: null,
     });
+  });
+
+  it('keeps a custom overlay card and rejects broken ones', () => {
+    const d = normalizeDisplay({ overlay: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 } });
+    expect(d.overlay).toEqual({ x: 0.1, y: 0.2, w: 0.3, h: 0.4 });
+    expect(normalizeDisplay({ overlay: { x: 0.9, y: 0.9, w: 0.5, h: 0.5 } }).overlay).toEqual({
+      x: 0.5,
+      y: 0.5,
+      w: 0.5,
+      h: 0.5,
+    });
+    expect(normalizeDisplay({ overlay: { x: 'a' } }).overlay).toBeNull();
+    expect(normalizeDisplay({ overlay: { x: 0.1, y: 0.1, w: Number.NaN, h: 0.2 } }).overlay).toBeNull();
+    expect(normalizeDisplay({}).overlay).toBeNull();
   });
 
   it('keeps the mirror flags per layer and rejects non-booleans', () => {
@@ -87,5 +107,61 @@ describe('display settings', () => {
   it('resolve "theme" font to the theme font stack', () => {
     expect(resolveFont('theme', THEMES.formal)).toBe(FONTS[THEMES.formal.font].stack);
     expect(resolveFont('mono', THEMES.formal)).toBe(FONTS.mono.stack);
+  });
+});
+
+describe('overlay card geometry', () => {
+  it('starts where the renderer puts the widget by default', () => {
+    const rect = defaultOverlayRect(1280, 720);
+    expect(rect.w).toBeCloseTo(0.42);
+    expect(rect.h).toBeCloseTo(0.3);
+    expect(rect.x + rect.w).toBeCloseTo(1 - 32 / 1280);
+    expect(rect.y + rect.h).toBeCloseTo(1 - 32 / 720);
+  });
+
+  it('keeps the card inside the frame and above the minimum size', () => {
+    expect(clampOverlay({ x: -1, y: -1, w: 0.01, h: 2 })).toEqual({
+      x: 0,
+      y: 0,
+      w: OVERLAY_MIN,
+      h: 1,
+    });
+    const pushed = clampOverlay({ x: 0.9, y: 0.9, w: 0.5, h: 0.5 });
+    expect(pushed.x + pushed.w).toBeLessThanOrEqual(1.0001);
+    expect(pushed.y + pushed.h).toBeLessThanOrEqual(1.0001);
+  });
+
+  it('drags the card to the edge without shrinking it', () => {
+    const rect = { x: 0.3, y: 0.3, w: 0.4, h: 0.3 };
+    const dragged = moveOverlay(rect, 0.1, -0.1);
+    expect(dragged.x).toBeCloseTo(0.4);
+    expect(dragged.y).toBeCloseTo(0.2);
+    expect(dragged.w).toBeCloseTo(0.4);
+    expect(dragged.h).toBeCloseTo(0.3);
+
+    const right = moveOverlay(rect, 9, 9);
+    expect(right.x).toBeCloseTo(0.6, 6);
+    expect(right.y).toBeCloseTo(0.7, 6);
+    expect(right.w).toBeCloseTo(0.4, 6);
+
+    const left = moveOverlay(rect, -9, -9);
+    expect(left.x).toBe(0);
+    expect(left.y).toBe(0);
+  });
+
+  it('resizes from the corner and stops at the frame edge', () => {
+    const rect = { x: 0.5, y: 0.5, w: 0.2, h: 0.2 };
+    const bigger = resizeOverlay(rect, 0.1, 0.1);
+    expect(bigger.w).toBeCloseTo(0.3);
+    expect(bigger.h).toBeCloseTo(0.3);
+
+    const pinned = resizeOverlay(rect, 0.9, 0.9);
+    expect(pinned.w).toBeCloseTo(0.5);
+    expect(pinned.h).toBeCloseTo(0.5);
+    expect(pinned.x + pinned.w).toBeLessThanOrEqual(1.0001);
+
+    const tiny = resizeOverlay(rect, -0.9, -0.9);
+    expect(tiny.w).toBe(OVERLAY_MIN);
+    expect(tiny.h).toBe(OVERLAY_MIN);
   });
 });
