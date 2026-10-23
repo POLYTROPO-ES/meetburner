@@ -10,7 +10,7 @@ Zoom or any other app that reads a camera.
 | Platform | Scope |
 |---|---|
 | **Windows** desktop | Everything: setup page, counter window, webcam overlay and the *MeetBurner Camera* virtual camera |
-| **Linux** desktop | Setup page, counter window and share links; no virtual camera yet |
+| **Linux** desktop | Setup page, counter window, share links and the *MeetBurner Camera* virtual camera when `v4l2loopback` is loaded ([setup](../native/vcam-linux/README.md)) |
 | **macOS** desktop | Setup page, counter window and share links; no virtual camera yet, and the app is not notarized |
 | **Web** | Everything a browser can do: setup, counter window, share links. A browser cannot publish a virtual camera |
 
@@ -89,6 +89,26 @@ Notes:
   card can be mirrored independently.
 - The camera can be overlaid on a real webcam or stand alone. If the webcam is busy or
   unplugged, the counter keeps running on its own.
+
+## Virtual camera (Linux)
+
+MeetBurner writes frames into an existing `v4l2loopback` device; it never loads kernel modules
+on its own. Load one once per boot, with the label and the capture flag Chrome needs:
+
+```bash
+sudo modprobe v4l2loopback exclusive_caps=1 card_label="MeetBurner Camera"
+```
+
+- Without `exclusive_caps=1`, Chrome and Meet list the device but do not offer it as a camera.
+- To keep it across reboots, add `v4l2loopback` to `/etc/modules-load.d/meetburner.conf` and
+  `options v4l2loopback exclusive_caps=1 card_label="MeetBurner Camera"` to
+  `/etc/modprobe.d/meetburner.conf`.
+- Many distributions with Secure Boot enabled refuse unsigned third-party modules: sign the
+  module or turn Secure Boot off.
+- The setup page shows the device it found, and `MEETBURNER_V4L2_DEVICE=/dev/videoN` overrides
+  the detection.
+- Then choose *MeetBurner Camera* in your meeting app. Details:
+  [native/vcam-linux](../native/vcam-linux/README.md).
 
 ## Language
 

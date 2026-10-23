@@ -60,8 +60,9 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - **Done when:** renderer produces 30 fps at < 5% CPU on a mid laptop (not measured yet).
 
 ### M5. Linux virtual camera — `vcam-linux`
-- [ ] Detect `v4l2loopback`; one-click setup via `pkexec modprobe ...`
-- [ ] `V4l2Sink` implements `VirtualCameraSink` (YUYV)
+- [x] Detect an existing `v4l2loopback` device (MeetBurner label, then v4l2loopback's default, then `MEETBURNER_V4L2_DEVICE`); the app reports the `modprobe` command instead of loading kernel modules (ADR-0002, ADR-0030)
+- [x] `V4l2Sink` implements `VirtualCameraSink` (YUYV to `/dev/videoN`)
+- [x] `camera_v4l2_status` reports whether a device is available
 - [ ] Verified in Chrome (Meet), Zoom, OBS, Firefox
 - **Done when:** "MeetBurner Camera" selectable and live in Meet on Ubuntu 24.04 and Fedora.
 

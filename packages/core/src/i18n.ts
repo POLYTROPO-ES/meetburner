@@ -81,6 +81,11 @@ const en = {
   cameraDriverNotRegistered: 'Not registered yet. Register it once on this Windows account.',
   cameraDriverMissing: 'The camera driver is missing next to the app.',
   cameraDriverUpdated: 'The camera driver was updated to the version bundled with this app.',
+  cameraLinuxSetup:
+    'MeetBurner writes the counter into a v4l2loopback device. Load it once per boot, then choose MeetBurner Camera in your meeting app.',
+  cameraLinuxMissing:
+    'No v4l2loopback device found. Run this once per boot, then reopen MeetBurner:',
+  cameraLinuxReady: 'Loopback device ready:',
   'theme.classic': 'Classic',
   'theme.modern': 'Modern',
   'theme.formal': 'Formal',
@@ -206,6 +211,11 @@ const es: Record<MessageKey, string> = {
   cameraDriverNotRegistered: 'Sin registrar. Regístrala una vez en esta cuenta de Windows.',
   cameraDriverMissing: 'Falta el archivo del controlador junto a la app.',
   cameraDriverUpdated: 'El controlador de la cámara se ha actualizado a la versión incluida en esta app.',
+  cameraLinuxSetup:
+    'MeetBurner escribe el contador en un dispositivo v4l2loopback. Cárgalo una vez por arranque y elige MeetBurner Camera en tu aplicación de reuniones.',
+  cameraLinuxMissing:
+    'No se ha encontrado ningún dispositivo v4l2loopback. Ejecuta esto una vez por arranque y vuelve a abrir MeetBurner:',
+  cameraLinuxReady: 'Dispositivo loopback listo:',
   'theme.classic': 'Clásico',
   'theme.modern': 'Moderno',
   'theme.formal': 'Formal',

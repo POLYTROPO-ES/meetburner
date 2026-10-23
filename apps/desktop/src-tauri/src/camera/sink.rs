@@ -1,4 +1,5 @@
-//! Virtual camera sinks (ADR-0002). The Windows implementation lives in `sink/windows.rs`.
+//! Virtual camera sinks (ADR-0002). The Windows implementation lives in `sink/windows.rs`
+//! and the Linux one in `sink/linux.rs`.
 
 use std::fmt;
 use std::sync::{Arc, Mutex};
@@ -29,7 +30,8 @@ pub trait VirtualCameraSink: Send {
     fn stop(&mut self);
 }
 
-/// Discards frames. Used on platforms without a sink yet (Linux: M5).
+/// Discards frames. Used when the platform has no sink, or on Linux before a v4l2loopback
+/// device is loaded. The rest of the app keeps working.
 #[derive(Debug, Default)]
 pub struct NullSink {
     running: bool,
@@ -52,6 +54,28 @@ impl VirtualCameraSink for NullSink {
     fn stop(&mut self) {
         self.running = false;
     }
+}
+
+/// Payload of the `camera_v4l2_status` command: whether a v4l2loopback device is available.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct V4l2Status {
+    pub available: bool,
+    /// Devnode the sink writes to (`/dev/videoN`); `None` when unavailable.
+    pub device: Option<String>,
+}
+
+/// Whether frames can be published on Linux. Always unavailable on other platforms, which
+/// use their own sink and never load kernel modules.
+pub fn v4l2_status() -> V4l2Status {
+    #[cfg(target_os = "linux")]
+    let status = linux::device().map_or_else(V4l2Status::default, |device| V4l2Status {
+        available: true,
+        device: Some(device.path.display().to_string()),
+    });
+    #[cfg(not(target_os = "linux"))]
+    let status = V4l2Status::default();
+    status
 }
 
 /// Keeps the frames in memory so tests can inspect what the renderer produced.
@@ -115,6 +139,11 @@ impl VirtualCameraSink for RecordingSink {
 #[cfg(windows)]
 pub mod windows;
 
+// Compiled off Linux too (under `cfg(test)`) so the BGRA -> YUYV converter and the sysfs
+// detection stay unit-testable on any host; the device I/O inside is Linux-only.
+#[cfg(any(target_os = "linux", test))]
+pub mod linux;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,6 +157,16 @@ mod tests {
         assert_eq!(sink.send(&frame), Ok(()));
         sink.stop();
         assert_eq!(sink.send(&frame), Err(SinkError::NotStarted));
+    }
+
+    #[test]
+    fn v4l2_status_is_unavailable_off_linux() {
+        #[cfg(not(target_os = "linux"))]
+        {
+            let status = v4l2_status();
+            assert!(!status.available);
+            assert_eq!(status.device, None);
+        }
     }
 
     #[test]
