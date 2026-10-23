@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "test": "npm test -w @meetburner/core",
+    "typecheck": "npm run typecheck -w @meetburner/core",
     "gen:themes": "node tools/gen-themes.mts",
     "dev:web": "npm run dev -w @meetburner/web",
     "build:web": "npm run build -w @meetburner/web",
@@ -17,6 +18,7 @@
     "postbuild:desktop": "node tools/copy-driver.mjs"
   },
   "devDependencies": {
+    "@types/node": "^22.10.0",
     "typescript": "^5.9.0",
     "vitest": "^5.0.5"
   }
