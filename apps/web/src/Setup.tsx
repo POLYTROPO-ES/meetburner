@@ -41,6 +41,7 @@ import {
   cameraListSources,
   cameraRegisterDriver,
   cameraUnregisterDriver,
+  hasVirtualCamera,
   isTauri,
   openCounterWindow,
   shareUrl,
@@ -79,11 +80,11 @@ export function Setup() {
   // The camera is live while the app is open, as soon as the driver is registered.
   const cameraError = useCameraSync(
     cameraInput(meeting, display, lang, camera),
-    isTauri() && driver?.registered === true,
+    hasVirtualCamera() && driver?.registered === true,
   );
 
   useEffect(() => {
-    if (!isTauri()) return;
+    if (!hasVirtualCamera()) return;
     // On start, replace a driver older than the one bundled with this build (ADR-0020).
     void cameraDriverEnsure()
       .then((result) => {
@@ -400,7 +401,7 @@ export function Setup() {
         </div>
       </section>
 
-      {isTauri() && (
+      {hasVirtualCamera() && (
         <section>
           <h2>{t(lang, 'camera')}</h2>
           <div className="grid">

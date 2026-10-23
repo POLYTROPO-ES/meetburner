@@ -2,6 +2,12 @@ import type { CameraInput } from '@meetburner/core';
 
 export const isTauri = () => '__TAURI_INTERNALS__' in window;
 
+/**
+ * Whether this build can publish a virtual camera. Only the Windows desktop build has a
+ * sink so far (ADR-0028); the web app and the macOS/Linux builds show no camera section.
+ */
+export const hasVirtualCamera = () => isTauri() && /windows/i.test(navigator.userAgent);
+
 /** Starts the Rust virtual camera (desktop only). */
 export async function cameraStart(input: CameraInput): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
