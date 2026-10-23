@@ -1,6 +1,7 @@
 # Desktop (Tauri 2)
 
 Wraps `apps/web`. Camera pipeline is planned in [roadmap](../../docs/plan/roadmap.md) M4–M8.
+End-user instructions live in the [user guide](../../docs/user-guide.md).
 
 ## First run
 

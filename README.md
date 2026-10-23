@@ -12,6 +12,7 @@ A live meeting-cost overlay that shows the combined cost of everyone's time. Ava
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - Decisions (ADRs): [docs/decisions/](docs/decisions/)
 - Roadmap / step-by-step plan: [docs/plan/roadmap.md](docs/plan/roadmap.md)
+- User guide: [docs/user-guide.md](docs/user-guide.md)
 - Code signing policy: [docs/code-signing-policy.md](docs/code-signing-policy.md)
 - License: [MIT](LICENSE)
 - Agents: [.github/agents/](.github/agents/)

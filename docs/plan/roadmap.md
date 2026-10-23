@@ -96,7 +96,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] MIT license and the [code signing policy](../code-signing-policy.md) the SignPath review asks for (ADR-0027)
 - [ ] Code signing (Windows): SignPath Foundation application pending (ADR-0027); until it is approved, releases ship unsigned and the workflow has no certificate to import
 - [x] Flip the repository to public so `releases/latest/download/…` works for end users, then add the download button on meetburner.com
-- [ ] User docs: install, Linux module setup, troubleshooting
+- [x] User docs: install, Linux module setup, troubleshooting — [user guide](../user-guide.md)
 
 ## Stage 2 — macOS
 
