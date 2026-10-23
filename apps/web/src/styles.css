@@ -44,6 +44,7 @@ label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.9rem; c
 .participant { display: grid; grid-template-columns: 1fr 2fr 9rem 7rem auto; gap: 0.5rem; align-items: center; }
 .participant .rate { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
 .setup-footer { border-top: 1px solid var(--border); padding-top: 1rem; }
+.setup-footer a { color: var(--muted); }
 .share-link { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .share-link input { flex: 1; min-width: 16rem; }
 
