@@ -122,8 +122,10 @@ describe('camera input', () => {
       elements: {
         label: { font: 'theme', scale: 100, color: null },
         cost: { font: 'theme', scale: 100, color: null },
-        time: { font: 'theme', scale: 100, color: null },
         status: { font: 'theme', scale: 100, color: null },
+        elapsed: { font: 'theme', scale: 100, color: null },
+        personTime: { font: 'theme', scale: 100, color: null },
+        costPerMinute: { font: 'theme', scale: 100, color: null },
       },
       background: {
         mode: 'gradient',

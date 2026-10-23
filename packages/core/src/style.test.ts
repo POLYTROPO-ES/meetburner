@@ -29,8 +29,10 @@ const INHERIT: ElementStyle = { font: 'theme', scale: 100, color: null };
 const inheritElements = () => ({
   label: { ...INHERIT },
   cost: { ...INHERIT },
-  time: { ...INHERIT },
   status: { ...INHERIT },
+  elapsed: { ...INHERIT },
+  personTime: { ...INHERIT },
+  costPerMinute: { ...INHERIT },
 });
 
 function meeting() {
@@ -46,7 +48,7 @@ function meeting() {
 
 describe('custom counter style', () => {
   it('exposes the elements it can tweak and the limits it accepts', () => {
-    expect(COUNTER_ELEMENTS).toEqual(['label', 'cost', 'time', 'status']);
+    expect(COUNTER_ELEMENTS).toEqual(['label', 'cost', 'status', 'elapsed', 'personTime', 'costPerMinute']);
     expect(BACKGROUND_MODES).toEqual(['solid', 'gradient']);
     expect(GRADIENT_DIRECTIONS).toEqual(['horizontal', 'vertical']);
     expect({ MIN_RADIUS, MAX_RADIUS, MIN_OPACITY, MAX_OPACITY }).toEqual({
@@ -62,8 +64,10 @@ describe('custom counter style', () => {
       ['styleElements', 'Text elements', 'Textos'],
       ['element.label', 'Title', 'Título'],
       ['element.cost', 'Cost', 'Coste'],
-      ['element.time', 'Time', 'Tiempo'],
       ['element.status', 'Status', 'Estado'],
+      ['element.elapsed', 'Elapsed', 'Tiempo transcurrido'],
+      ['element.personTime', 'Person-time', 'Tiempo-persona'],
+      ['element.costPerMinute', 'Cost per minute', 'Coste por minuto'],
       ['styleFont', 'Font', 'Fuente'],
       ['styleSize', 'Size', 'Tamaño'],
       ['styleColor', 'Colour', 'Color'],
@@ -87,6 +91,11 @@ describe('custom counter style', () => {
     expect(MESSAGES.es['font.theme']).toBe('La del estilo');
   });
 
+  it('no longer translates the old, ambiguous "time" element', () => {
+    expect('element.time' in MESSAGES.en).toBe(false);
+    expect('element.time' in MESSAGES.es).toBe(false);
+  });
+
   it('keeps the decoration only where it reads as one (ADR-0029)', () => {
     expect(THEMES.halloween.decoration).toBe('🎃🦇');
     for (const id of ['christmas', 'spring', 'summer', 'autumn', 'winter'] as const) {
@@ -100,6 +109,9 @@ describe('styleDefaults', () => {
     for (const theme of Object.values(THEMES)) {
       const style = styleDefaults(theme);
       expect(style.elements).toEqual(inheritElements());
+      for (const element of COUNTER_ELEMENTS) {
+        expect(style.elements[element]).toEqual(INHERIT);
+      }
       expect(style.background).toEqual({
         mode: 'gradient',
         color: theme.background,
@@ -144,7 +156,9 @@ describe('styleFor', () => {
     const style = styleFor(display, THEMES.modern);
     expect(style.elements.cost).toEqual({ font: 'mono', scale: 150, color: null });
     expect(style.elements.label).toEqual(INHERIT);
-    expect(style.elements.time).toEqual(INHERIT);
+    expect(style.elements.elapsed).toEqual(INHERIT);
+    expect(style.elements.personTime).toEqual(INHERIT);
+    expect(style.elements.costPerMinute).toEqual(INHERIT);
     expect(style.elements.status).toEqual(INHERIT);
     expect(style.background).toEqual({
       mode: 'solid',
@@ -165,8 +179,10 @@ describe('styleFor', () => {
           elements: {
             label: { ...INHERIT },
             cost: { font: 'mono', scale: 900, color: '#abc' },
-            time: { font: 'theme', scale: 0.01, color: 'not-a-colour' },
             status: { ...INHERIT },
+            elapsed: { font: 'theme', scale: 0.01, color: 'not-a-colour' },
+            personTime: { ...INHERIT },
+            costPerMinute: { ...INHERIT },
           },
           background: {
             mode: 'solid',
@@ -181,7 +197,7 @@ describe('styleFor', () => {
     };
     const style = styleFor(display, THEMES.classic);
     expect(style.elements.cost).toEqual({ font: 'mono', scale: MAX_SCALE * 100, color: '#abc' });
-    expect(style.elements.time).toEqual({ font: 'theme', scale: MIN_SCALE * 100, color: null });
+    expect(style.elements.elapsed).toEqual({ font: 'theme', scale: MIN_SCALE * 100, color: null });
     expect(style.background).toEqual({
       mode: 'solid',
       color: '#123456',
@@ -294,6 +310,26 @@ describe('normalizeDisplay styles', () => {
     expect(normalizeDisplay({ styles: { halloween: null } }).styles).toEqual({});
   });
 
+  it('keeps a tweak for every one of the six elements', () => {
+    const stored: Record<string, unknown> = {};
+    for (const element of COUNTER_ELEMENTS) stored[element] = { scale: 120 };
+    const d = normalizeDisplay({ styles: { classic: { elements: stored } } });
+    expect(d.styles.classic?.elements).toEqual(
+      Object.fromEntries(COUNTER_ELEMENTS.map((element) => [element, { scale: 120 }])),
+    );
+  });
+
+  it('drops a stored "time" element, keeping the recognised ones', () => {
+    expect(normalizeDisplay({ styles: { classic: { elements: { time: { font: 'mono', scale: 150 } } } } }).styles).toEqual(
+      {},
+    );
+    expect(
+      normalizeDisplay({
+        styles: { classic: { elements: { time: { font: 'mono' }, elapsed: { font: 'mono' } } } },
+      }).styles,
+    ).toEqual({ classic: { elements: { elapsed: { font: 'mono' } } } });
+  });
+
   it('drops an override that stores nothing but the preset values', () => {
     const d = normalizeDisplay({
       styles: {
@@ -301,7 +337,7 @@ describe('normalizeDisplay styles', () => {
           elements: {
             label: { font: 'theme', scale: 100, color: null },
             cost: {},
-            time: 5,
+            elapsed: 5,
             status: null,
           },
           background: { mode: 'gradient', direction: 'vertical', opacity: 100 },
@@ -359,7 +395,9 @@ describe('camera payload', () => {
     });
     const input = cameraInput(meeting(), display, 'en', DEFAULT_CAMERA);
     expect(input.display.elements.cost).toEqual({ font: 'mono', scale: 150, color: null });
-    expect(input.display.elements.time).toEqual(INHERIT);
+    expect(input.display.elements.elapsed).toEqual(INHERIT);
+    expect(input.display.elements.personTime).toEqual(INHERIT);
+    expect(input.display.elements.costPerMinute).toEqual(INHERIT);
     expect(input.display.background).toEqual({
       mode: 'solid',
       color: '#101010',

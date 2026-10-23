@@ -60,8 +60,15 @@ export type FontChoice = FontId | 'theme';
 export type Overflow = 'compact' | 'shrink';
 export const OVERFLOW_MODES: readonly Overflow[] = ['compact', 'shrink'];
 
-export type CounterElement = 'label' | 'cost' | 'time' | 'status';
-export const COUNTER_ELEMENTS: readonly CounterElement[] = ['label', 'cost', 'time', 'status'];
+export type CounterElement = 'label' | 'cost' | 'status' | 'elapsed' | 'personTime' | 'costPerMinute';
+export const COUNTER_ELEMENTS: readonly CounterElement[] = [
+  'label',
+  'cost',
+  'status',
+  'elapsed',
+  'personTime',
+  'costPerMinute',
+];
 
 /** Per-element tweaks. `null` / 'theme' keep whatever the preset defines. */
 export interface ElementStyle {
@@ -287,9 +294,10 @@ function normalizeBackground(raw: unknown): Partial<BackgroundStyle> | null {
 
 /** The preset values, used when a style has no stored tweaks. */
 export function styleDefaults(theme: Theme): StyleOverride {
-  const element = (): ElementStyle => ({ font: 'theme', scale: 100, color: null });
+  const elements = {} as Record<CounterElement, ElementStyle>;
+  for (const element of COUNTER_ELEMENTS) elements[element] = { font: 'theme', scale: 100, color: null };
   return {
-    elements: { label: element(), cost: element(), time: element(), status: element() },
+    elements,
     background: {
       mode: 'gradient',
       color: theme.background,
