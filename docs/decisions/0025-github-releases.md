@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-10-23
-- Related: [0012](0012-deploy-on-push.md) (the web app deploys on push), [0017](0017-app-registers-the-driver.md) (the installer bundles the driver), [0020](0020-driver-version-and-self-update.md) (the app updates the driver on start)
+- Related: [0012](0012-deploy-on-push.md) (the web app deploys on push), [0017](0017-app-registers-the-driver.md) (the installer bundles the driver), [0020](0020-driver-version-and-self-update.md) (the app updates the driver on start), [0026](0026-portable-single-file.md) (the two portable shapes)
 
 ## Context
 
@@ -33,12 +33,13 @@ What the pipeline has to respect:
 |---|---|
 | `MeetBurner_<version>_x64-setup.exe` | NSIS bundle (`--bundles nsis`) |
 | `MeetBurner_<version>_x64_en-US.msi` | WiX bundle (`--bundles msi`) |
-| `MeetBurner_<version>_portable_x64.zip` | `meetburner.exe` + `resources/MeetBurnerCamera.dll`, zipped by the workflow |
+| `MeetBurner_<version>_x64.exe` | the app binary, driver embedded ([0026](0026-portable-single-file.md)) |
+| `MeetBurner_<version>_portable_x64.zip` | the same binary + `resources/MeetBurnerCamera.dll` ([0026](0026-portable-single-file.md)) |
 | `MeetBurner_<version>_amd64.deb` | Debian bundle on `ubuntu-22.04` |
 | `MeetBurner_<version>_amd64.AppImage` | AppImage bundle on `ubuntu-22.04` |
 | `SHA256SUMS.txt` | `sha256sum` over the files above |
 
-- The Windows job builds the DLL first, signs it, and only then runs `tauri build`, so the installer and the portable zip both carry the same signed driver. The DLL is a bundle *resource*: Tauri does not sign resources, so it needs its own signtool call.
+- The Windows job builds the DLL first, signs it, and only then runs `tauri build`, so the installer, the bytes embedded in the portable exe and the file in the portable zip all carry the same signed driver. The DLL is a bundle *resource*: Tauri does not sign resources, so it needs its own signtool call.
 - Bundle targets are passed explicitly with `--bundles` instead of relying on `bundle.targets` being filtered per platform; a Linux runner never tries to build an MSI.
 - Linux builds on `ubuntu-22.04` (not `ubuntu-latest`) because the glibc it links against sets the oldest distribution the `.deb`/AppImage runs on.
 - x64 only for now, matching the driver build; ARM64 is a separate decision.
