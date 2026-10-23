@@ -15,24 +15,43 @@ use crate::camera::renderer::CounterInput;
 #[derive(Default)]
 struct CameraState(Mutex<Option<CameraEngine>>);
 
-fn driver_candidates(app: &tauri::AppHandle) -> Vec<PathBuf> {
-    let exe_dir = std::env::current_exe()
-        .ok()
-        .and_then(|path| path.parent().map(Path::to_path_buf));
-    let resource_dir = app.path().resource_dir().ok();
-    driver::candidates(resource_dir.as_deref(), exe_dir.as_deref())
+/// Folder that holds `MeetBurner.exe`; the embedded driver is extracted there (ADR-0026).
+fn exe_dir() -> Result<PathBuf, String> {
+    std::env::current_exe()
+        .map_err(|error| format!("cannot locate MeetBurner.exe: {error}"))?
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| "cannot locate the folder that holds MeetBurner.exe".to_string())
 }
 
-fn driver_status(app: &tauri::AppHandle) -> DriverStatus {
-    let found = driver::find(&driver_candidates(app));
+fn driver_candidates(app: &tauri::AppHandle, exe_dir: &Path) -> Vec<PathBuf> {
+    let resource_dir = app.path().resource_dir().ok();
+    driver::candidates(resource_dir.as_deref(), Some(exe_dir))
+}
+
+/// Status for the setup page. Read-only: the embedded driver is written on the first
+/// registration, so `path` can name the file that will be extracted (ADR-0026).
+fn driver_status(app: &tauri::AppHandle) -> Result<DriverStatus, String> {
+    let exe = exe_dir()?;
+    let found = driver::find(&driver_candidates(app, &exe));
     let registered = driver::registered_path();
-    DriverStatus {
+    let embedded_target = || {
+        driver::EMBEDDED_DRIVER.map(|_| {
+            driver::extract_target(&exe, driver::EMBEDDED_DRIVER_VERSION)
+                .display()
+                .to_string()
+        })
+    };
+    Ok(DriverStatus {
         registered: registered.is_some(),
-        available: found.is_some(),
-        path: registered.or_else(|| found.as_deref().map(|path| path.display().to_string())),
+        available: found.is_some() || driver::EMBEDDED_DRIVER.is_some(),
+        path: registered
+            .clone()
+            .or_else(|| found.as_deref().map(|path| path.display().to_string()))
+            .or_else(embedded_target),
         installed_version: driver::registered_version(),
-        expected_version: found.as_deref().and_then(driver::dll_version),
-    }
+        expected_version: driver::expected_version(found.as_deref()),
+    })
 }
 
 /// Result of checking the registration on start: the status, plus whether it was refreshed.
@@ -88,20 +107,17 @@ fn camera_list_sources() -> Vec<camera::CameraSource> {
 /// Whether "MeetBurner Camera" is registered for the current Windows account.
 #[tauri::command]
 fn camera_driver_status(app: tauri::AppHandle) -> Result<DriverStatus, String> {
-    Ok(driver_status(&app))
+    driver_status(&app)
 }
 
 /// Called on start: re-registers the bundled driver when the installed one is older
 /// (ADR-0020). Never registers on its own: that stays an explicit user action (ADR-0017).
 #[tauri::command]
 fn camera_driver_ensure(app: tauri::AppHandle) -> Result<DriverUpdate, String> {
-    let found = driver::find(&driver_candidates(&app));
-    let updated = match found.as_deref() {
-        Some(dll) => driver::ensure(dll)?,
-        None => false,
-    };
+    let exe = exe_dir()?;
+    let updated = driver::ensure_installed(&driver_candidates(&app, &exe), &exe)?;
     Ok(DriverUpdate {
-        status: driver_status(&app),
+        status: driver_status(&app)?,
         updated,
     })
 }
@@ -109,21 +125,22 @@ fn camera_driver_ensure(app: tauri::AppHandle) -> Result<DriverUpdate, String> {
 /// Registers the driver bundled with the app; no admin prompt, no scripts.
 #[tauri::command]
 fn camera_register_driver(app: tauri::AppHandle) -> Result<DriverStatus, String> {
-    let dll = driver::find(&driver_candidates(&app)).ok_or_else(|| {
+    let exe = exe_dir()?;
+    let dll = driver::locate(&driver_candidates(&app, &exe), &exe)?.ok_or_else(|| {
         format!(
             "{} was not found next to the app; rebuild the desktop bundle",
             driver::DRIVER_FILE
         )
     })?;
     driver::register(&dll)?;
-    Ok(driver_status(&app))
+    driver_status(&app)
 }
 
 /// Removes the driver registration (the "clean" button).
 #[tauri::command]
 fn camera_unregister_driver(app: tauri::AppHandle) -> Result<DriverStatus, String> {
     driver::remove_registration()?;
-    Ok(driver_status(&app))
+    driver_status(&app)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

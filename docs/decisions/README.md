@@ -40,3 +40,7 @@ Template:
 | [0022](0022-mirroring.md) | Mirroring: the webcam and the counter are flipped independently | accepted |
 | [0023](0023-overlay-card-geometry.md) | The counter card can be moved and resized on the camera frame | accepted |
 | [0024](0024-adopt-abandoned-mapping.md) | Adopt a camera mapping whose producer is gone | accepted |
+| [0025](0025-github-releases.md) | Binaries ship as GitHub Releases built from tags | accepted |
+| [0026](0026-portable-single-file.md) | The portable build ships as one file and as a folder | accepted |
+| [0023](0023-overlay-card-geometry.md) | The counter card can be moved and resized on the camera frame | accepted |
+| [0024](0024-adopt-abandoned-mapping.md) | Adopt a camera mapping whose producer is gone | accepted |
