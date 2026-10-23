@@ -17,7 +17,7 @@ fn main() {
     use meetburner_lib::camera::engine::{now_ms, RenderLoop};
     use meetburner_lib::camera::fonts::Fonts;
     use meetburner_lib::camera::frame::{FRAME_HEIGHT, FRAME_WIDTH};
-    use meetburner_lib::camera::renderer::{CounterInput, DisplayConfig, Labels, Mirror};
+    use meetburner_lib::camera::renderer::{CounterInput, DisplayConfig, Labels, Mirror, Overlay};
     use meetburner_lib::camera::sink::windows::WinSharedMemSink;
     use meetburner_lib::camera::theme::Layout;
 
@@ -58,6 +58,22 @@ fn main() {
             }
         }
         display.mirror = mirror;
+    }
+
+    // `MEETBURNER_OVERLAY=x,y,w,h` (fractions) moves and resizes the card (ADR-0023).
+    if let Ok(value) = std::env::var("MEETBURNER_OVERLAY") {
+        let numbers: Vec<f32> = value
+            .split(',')
+            .filter_map(|part| part.trim().parse().ok())
+            .collect();
+        if let [x, y, w, h] = numbers.as_slice() {
+            display.overlay = Some(Overlay {
+                x: *x,
+                y: *y,
+                w: *w,
+                h: *h,
+            });
+        }
     }
 
     let input = CounterInput {
