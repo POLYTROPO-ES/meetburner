@@ -53,6 +53,9 @@ import { useNow } from './useNow';
 
 const DEFAULT_PRESET = 'dev-mid';
 const FONT_CHOICES: FontChoice[] = ['theme', ...FONT_IDS];
+const REPO_URL = 'https://github.com/POLYTROPO-ES/meetburner';
+const RELEASES_URL = 'https://github.com/POLYTROPO-ES/meetburner/releases';
+const SIGNING_POLICY_URL = 'https://github.com/POLYTROPO-ES/meetburner/blob/main/docs/code-signing-policy.md';
 
 export function Setup() {
   const [meeting, setMeeting] = useMeeting();
@@ -559,6 +562,24 @@ export function Setup() {
           <p className="muted">
             {t(lang, 'popupBlocked')} <a href="#/counter">{t(lang, 'openCounter')}</a>
           </p>
+        )}
+        {!isTauri() && (
+          <>
+            <p className="muted">
+              <a href={REPO_URL} target="_blank" rel="noreferrer">
+                {t(lang, 'sourceCode')}
+              </a>
+              {' · '}
+              <a href={RELEASES_URL} target="_blank" rel="noreferrer">
+                {t(lang, 'downloads')}
+              </a>
+              {' · '}
+              <a href={SIGNING_POLICY_URL} target="_blank" rel="noreferrer">
+                {t(lang, 'codeSigningPolicy')}
+              </a>
+            </p>
+            <p className="muted">{t(lang, 'codeSigningPolicyNote')}</p>
+          </>
         )}
       </footer>
     </main>

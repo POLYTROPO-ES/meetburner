@@ -12,6 +12,8 @@ A live meeting-cost overlay that shows the combined cost of everyone's time. Ava
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - Decisions (ADRs): [docs/decisions/](docs/decisions/)
 - Roadmap / step-by-step plan: [docs/plan/roadmap.md](docs/plan/roadmap.md)
+- Code signing policy: [docs/code-signing-policy.md](docs/code-signing-policy.md)
+- License: [MIT](LICENSE)
 - Agents: [.github/agents/](.github/agents/)
 
 ## Layout
@@ -68,3 +70,9 @@ A release is cut from a tag: `git tag vX.Y.Z && git push origin vX.Y.Z` builds W
 Until the repository is public, release assets are only visible to collaborators; the download button on meetburner.com waits for that flip.
 
 Locally, `npm run build:desktop` writes the NSIS/MSI installers to `apps/desktop/src-tauri/target/release/bundle` and the exe to `target/release`. Step-by-step, including what each file is for: [apps/desktop/README.md](apps/desktop/README.md#install-vs-portable).
+
+## License
+
+MIT — see [LICENSE](LICENSE). Binaries are code signed through SignPath Foundation once the
+application is approved; until then releases are unsigned, as stated in the
+[code signing policy](docs/code-signing-policy.md) ([ADR-0027](docs/decisions/0027-public-source-and-signing.md)).

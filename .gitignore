@@ -5,7 +5,20 @@ target/
 apps/desktop/src-tauri/gen/
 apps/desktop/src-tauri/resources/MeetBurnerCamera.dll
 native/vcam-windows/build/
+apps/desktop/src-tauri/target*/
 *.log
 .DS_Store
 .vscode/*
 !.vscode/extensions.json
+
+# Secrets and signing material — never commit
+.env
+.env.*
+.dev.vars
+.wrangler/
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt

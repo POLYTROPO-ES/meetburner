@@ -96,6 +96,11 @@ const en = {
   'font.condensed': 'Condensed',
   'font.handwritten': 'Handwritten',
   'font.display': 'Display',
+  sourceCode: 'Source code',
+  downloads: 'Downloads',
+  codeSigningPolicy: 'Code signing policy',
+  codeSigningPolicyNote:
+    'Free code signing provided by SignPath.io, certificate by SignPath Foundation. Application pending: current builds are unsigned.',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -195,6 +200,11 @@ const es: Record<MessageKey, string> = {
   'font.condensed': 'Condensada',
   'font.handwritten': 'Manuscrita',
   'font.display': 'Display',
+  sourceCode: 'Código fuente',
+  downloads: 'Descargas',
+  codeSigningPolicy: 'Firma de código',
+  codeSigningPolicyNote:
+    'Firma de código gratuita a cargo de SignPath.io, certificado de SignPath Foundation. Solicitud en trámite: las versiones actuales no están firmadas.',
 };
 
 export const MESSAGES: Record<Lang, Record<MessageKey, string>> = { en, es };
