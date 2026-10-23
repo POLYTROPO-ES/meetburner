@@ -47,6 +47,8 @@ label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.9rem; c
 .setup-footer a { color: var(--muted); }
 .share-link { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .share-link input { flex: 1; min-width: 16rem; }
+/* Linux camera setup: the modprobe line must wrap inside the panel (ADR-0030) */
+.camera-command { display: block; padding: 0.5rem 0.6rem; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; font-family: 'Cascadia Mono', Consolas, monospace; font-size: 0.85rem; overflow-wrap: anywhere; }
 
 /* Share */
 .share { max-width: 640px; }

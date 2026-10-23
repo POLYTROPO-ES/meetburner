@@ -2,11 +2,18 @@ import type { CameraInput } from '@meetburner/core';
 
 export const isTauri = () => '__TAURI_INTERNALS__' in window;
 
+/** Windows publishes through a DirectShow source filter (ADR-0016). */
+export const isWindows = () => /windows/i.test(navigator.userAgent);
+
+/** Linux publishes into a v4l2loopback device (ADR-0030). */
+export const isLinux = () => /linux/i.test(navigator.userAgent);
+
 /**
- * Whether this build can publish a virtual camera. Only the Windows desktop build has a
- * sink so far (ADR-0028); the web app and the macOS/Linux builds show no camera section.
+ * Whether this build can publish a virtual camera: Windows has a DirectShow filter and
+ * Linux writes into v4l2loopback (ADR-0030). The web app and the macOS build show no
+ * camera section.
  */
-export const hasVirtualCamera = () => isTauri() && /windows/i.test(navigator.userAgent);
+export const hasVirtualCamera = () => isTauri() && (isWindows() || isLinux());
 
 /** Starts the Rust virtual camera (desktop only). */
 export async function cameraStart(input: CameraInput): Promise<void> {
@@ -49,6 +56,20 @@ export interface CameraSource {
 export async function cameraListSources(): Promise<CameraSource[]> {
   const { invoke } = await import('@tauri-apps/api/core');
   return invoke<CameraSource[]>('camera_list_sources');
+}
+
+export interface V4l2Status {
+  available: boolean;
+  device: string | null;
+}
+
+/**
+ * Whether a v4l2loopback device is loaded. Implemented on every platform but always
+ * unavailable outside Linux, so callers only use it there (ADR-0030).
+ */
+export async function cameraV4l2Status(): Promise<V4l2Status> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<V4l2Status>('camera_v4l2_status');
 }
 
 /** Re-registers the bundled driver when the installed one is older (ADR-0020). */

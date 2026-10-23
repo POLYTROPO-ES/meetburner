@@ -55,12 +55,16 @@ import {
   cameraListSources,
   cameraRegisterDriver,
   cameraUnregisterDriver,
+  cameraV4l2Status,
   hasVirtualCamera,
+  isLinux,
   isTauri,
+  isWindows,
   openCounterWindow,
   shareUrl,
   type CameraSource,
   type DriverStatus,
+  type V4l2Status,
 } from './platform';
 import { useCamera, useDisplay, useLang, useMeeting } from './storage';
 import { useCameraSync } from './useCameraSync';
@@ -105,25 +109,34 @@ export function Setup() {
   const [driver, setDriver] = useState<DriverStatus | null>(null);
   const [driverError, setDriverError] = useState<string | null>(null);
   const [driverUpdated, setDriverUpdated] = useState(false);
+  const [v4l2, setV4l2] = useState<V4l2Status | null>(null);
   const [sources, setSources] = useState<CameraSource[]>([]);
-  // The camera is live while the app is open, as soon as the driver is registered.
-  const cameraError = useCameraSync(
-    cameraInput(meeting, display, lang, camera),
-    hasVirtualCamera() && driver?.registered === true,
-  );
+  // Windows is live once the driver is registered; Linux once the loopback device exists.
+  const cameraReady = isWindows() ? driver?.registered === true : v4l2?.available === true;
+  // The camera is live while the app is open, as soon as the backend can publish.
+  const cameraError = useCameraSync(cameraInput(meeting, display, lang, camera), hasVirtualCamera() && cameraReady);
 
   useEffect(() => {
     if (!hasVirtualCamera()) return;
-    // On start, replace a driver older than the one bundled with this build (ADR-0020).
-    void cameraDriverEnsure()
-      .then((result) => {
-        setDriver(result.status);
-        setDriverUpdated(result.updated);
-      })
-      .catch((error) => setDriverError(String(error)));
+    if (isWindows()) {
+      // On start, replace a driver older than the one bundled with this build (ADR-0020).
+      void cameraDriverEnsure()
+        .then((result) => {
+          setDriver(result.status);
+          setDriverUpdated(result.updated);
+        })
+        .catch((error) => setDriverError(String(error)));
+    }
+    // Physical cameras to overlay are listed by both backends (M7).
     void cameraListSources()
       .then(setSources)
       .catch(() => setSources([]));
+    // Linux writes into a v4l2loopback device; without one there is nothing to publish to.
+    if (isLinux()) {
+      void cameraV4l2Status()
+        .then(setV4l2)
+        .catch(() => setV4l2({ available: false, device: null }));
+    }
   }, []);
 
   const registerDriver = async () => {
@@ -633,26 +646,49 @@ export function Setup() {
             </>
           )}
           <p className="muted">{t(lang, 'cameraLiveHint')}</p>
-          {driver?.registered && <p className="muted">{t(lang, 'cameraAlwaysOn')}</p>}
-          <div className="row">
-            <button
-              type="button"
-              onClick={registerDriver}
-              disabled={driver === null || driver.registered || !driver.available}
-            >
-              {t(lang, 'cameraRegister')}
-            </button>
-            <button
-              type="button"
-              onClick={unregisterDriver}
-              disabled={driver === null || !driver.registered}
-            >
-              {t(lang, 'cameraUnregister')}
-            </button>
-          </div>
-          {driverMessage && <p className="muted">{driverMessage}</p>}
-          {driverUpdated && <p className="muted">{t(lang, 'cameraDriverUpdated')}</p>}
-          {driverError && <p className="muted">{driverError}</p>}
+          {isWindows() && (
+            <>
+              {driver?.registered && <p className="muted">{t(lang, 'cameraAlwaysOn')}</p>}
+              <div className="row">
+                <button
+                  type="button"
+                  onClick={registerDriver}
+                  disabled={driver === null || driver.registered || !driver.available}
+                >
+                  {t(lang, 'cameraRegister')}
+                </button>
+                <button
+                  type="button"
+                  onClick={unregisterDriver}
+                  disabled={driver === null || !driver.registered}
+                >
+                  {t(lang, 'cameraUnregister')}
+                </button>
+              </div>
+              {driverMessage && <p className="muted">{driverMessage}</p>}
+              {driverUpdated && <p className="muted">{t(lang, 'cameraDriverUpdated')}</p>}
+              {driverError && <p className="muted">{driverError}</p>}
+            </>
+          )}
+          {isLinux() && (
+            <>
+              {v4l2 !== null && !v4l2.available && (
+                <>
+                  <p>{t(lang, 'cameraLinuxMissing')}</p>
+                  <code className="camera-command">
+                    sudo modprobe v4l2loopback exclusive_caps=1 card_label="MeetBurner Camera"
+                  </code>
+                </>
+              )}
+              {v4l2?.available && (
+                <>
+                  <p>{t(lang, 'cameraLinuxReady')}</p>
+                  <code className="camera-command">{v4l2.device}</code>
+                </>
+              )}
+              <p className="muted">{t(lang, 'cameraLinuxSetup')}</p>
+            </>
+          )}
           {cameraError && <p className="muted">{cameraError}</p>}
         </section>
       )}
