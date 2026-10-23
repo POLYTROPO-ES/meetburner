@@ -67,6 +67,47 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
   .display-settings { grid-template-columns: 1fr; }
 }
 
+/* Overlay editor: drag the card to move it, its corner to resize (ADR-0023) */
+.overlay-editor { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; }
+.overlay-stage {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  background: repeating-conic-gradient(#1a1d24 0% 25%, #14171d 0% 50%) 50% / 24px 24px;
+  border: 1px solid #2b2f38;
+  border-radius: 8px;
+  overflow: hidden;
+  touch-action: none;
+}
+.overlay-card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2%;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  container-type: size;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.overlay-card:active { cursor: grabbing; }
+.overlay-cost { font-size: 34cqh; line-height: 1; font-weight: 700; white-space: nowrap; }
+.overlay-time { font-size: 14cqh; line-height: 1; opacity: 0.75; }
+.overlay-handle {
+  position: absolute;
+  right: 3%;
+  bottom: 3%;
+  width: 16px;
+  height: 16px;
+  border-right: 3px solid currentColor;
+  border-bottom: 3px solid currentColor;
+  opacity: 0.65;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
 /* Counter (themed through CSS variables set by CounterView) */
 .counter-page { height: 100vh; position: relative; }
 .counter-stop { position: absolute; right: 0.75rem; bottom: 0.75rem; opacity: 0.6; }

@@ -6,6 +6,7 @@ import {
   cameraInput,
   countriesByName,
   CURRENCIES,
+  defaultOverlayRect,
   encodeSummary,
   findPreset,
   FONT_IDS,
@@ -34,6 +35,7 @@ import {
   type ThemeId,
 } from '@meetburner/core';
 import { CounterView } from './CounterView';
+import { OverlayEditor } from './OverlayEditor';
 import {
   cameraDriverEnsure,
   cameraListSources,
@@ -479,6 +481,22 @@ export function Setup() {
             </label>
           </div>
           <p className="muted">{t(lang, 'cameraResolutionHint')}</p>
+          {display.layout === 'widget' && (
+            <>
+              <p className="muted">{t(lang, 'overlayHint')}</p>
+              <OverlayEditor
+                rect={display.overlay ?? defaultOverlayRect(camera.width, camera.height)}
+                width={camera.width}
+                height={camera.height}
+                meeting={meeting}
+                snapshot={meetingSnapshot(meeting, now)}
+                theme={display.theme}
+                lang={lang}
+                onChange={(rect) => updateDisplay({ overlay: rect })}
+                onReset={() => updateDisplay({ overlay: null })}
+              />
+            </>
+          )}
           <p className="muted">{t(lang, 'cameraLiveHint')}</p>
           {driver?.registered && <p className="muted">{t(lang, 'cameraAlwaysOn')}</p>}
           <div className="row">
