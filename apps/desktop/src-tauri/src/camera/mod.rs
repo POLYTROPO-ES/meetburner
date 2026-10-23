@@ -17,9 +17,13 @@ pub mod themes_data;
 pub use driver::{DriverStatus, DRIVER_FILE};
 pub use format::{format_duration, format_money, format_money_compact};
 pub use frame::{normalize_size, Frame, FPS, FRAME_HEIGHT, FRAME_WIDTH, SUPPORTED_SIZES};
-pub use layout::{counter_layout, counter_layout_in, fit_cost, CounterLayout, FitCost, Rect};
+pub use layout::{
+    counter_layout, counter_layout_in, counter_layout_with_label, fit_cost, label_font_px,
+    CounterLayout, FitCost, Rect, LABEL_HEIGHT_RATIO, LABEL_LINE_HEIGHT,
+};
 pub use renderer::{
-    fit_font_px, render, CounterInput, CounterValues, DisplayConfig, Labels, Mirror,
+    fit_font_px, render, BackgroundMode, BackgroundStyle, CounterInput, CounterValues,
+    DisplayConfig, ElementStyle, Elements, GradientDirection, Labels, Mirror,
 };
 pub use source::{list_sources, CameraSource, FrameSource, WebcamSource};
 pub use theme::{theme, FontChoice, FontId, Layout, Overflow, Theme};
