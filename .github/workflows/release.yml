@@ -1,0 +1,215 @@
+name: Release
+
+# ADR-0025: the tag is the release. Nothing is published from an untagged commit.
+# `workflow_dispatch` is the dry run: it builds (and signs, if the secrets exist) without publishing.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Tests + version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:web
+      - name: Tag must match the app version
+        id: version
+        run: |
+          set -euo pipefail
+          tauri=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+          desktop=$(node -p "require('./apps/desktop/package.json').version")
+          cargo=$(sed -n 's/^version = "\(.*\)"/\1/p' apps/desktop/src-tauri/Cargo.toml | head -n1)
+          echo "tauri.conf.json=$tauri package.json=$desktop Cargo.toml=$cargo"
+          if [ "$tauri" != "$desktop" ] || [ "$tauri" != "$cargo" ]; then
+            echo "::error::The app version must be the same in tauri.conf.json, package.json and Cargo.toml"
+            exit 1
+          fi
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$tauri" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the app version $tauri"
+            exit 1
+          fi
+          echo "version=$tauri" >> "$GITHUB_OUTPUT"
+
+  windows:
+    name: Windows (NSIS, MSI, portable)
+    needs: check
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+    outputs:
+      signed: ${{ steps.signing.outputs.signed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - run: npm ci
+
+      - name: Build the DirectShow driver
+        run: |
+          cmake -S native/vcam-windows -B native/vcam-windows/build -A x64
+          if ($LASTEXITCODE -ne 0) { throw 'cmake configure failed' }
+          cmake --build native/vcam-windows/build --config Release
+          if ($LASTEXITCODE -ne 0) { throw 'cmake build failed' }
+
+      - name: Import the code signing certificate
+        id: signing
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE) {
+            Write-Host 'WINDOWS_CERTIFICATE is not set: building unsigned'
+            "signed=false" >> $env:GITHUB_OUTPUT
+          } else {
+            $pfx = Join-Path $env:RUNNER_TEMP 'meetburner.pfx'
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+            $secure = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+            $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $secure
+            "MEETBURNER_PFX=$pfx" >> $env:GITHUB_ENV
+            "MEETBURNER_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+            "signed=true" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Sign the driver
+        if: steps.signing.outputs.signed == 'true'
+        run: |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe not found in the Windows SDK' }
+          & $signtool.FullName sign /fd sha256 /td sha256 /tr http://timestamp.digicert.com `
+            /f $env:MEETBURNER_PFX /p $env:WINDOWS_CERTIFICATE_PASSWORD `
+            native/vcam-windows/build/Release/MeetBurnerCamera.dll
+          if ($LASTEXITCODE -ne 0) { throw 'signtool failed' }
+
+      - name: Build the app and the installers
+        run: |
+          if ($env:MEETBURNER_THUMBPRINT) {
+            $config = Join-Path $env:RUNNER_TEMP 'sign.json'
+            @{
+              bundle = @{
+                windows = @{
+                  certificateThumbprint = $env:MEETBURNER_THUMBPRINT
+                  digestAlgorithm = 'sha256'
+                  timestampUrl = 'http://timestamp.digicert.com'
+                }
+              }
+            } | ConvertTo-Json -Depth 5 | Set-Content $config -Encoding utf8
+            npm run build:desktop -- --bundles nsis,msi --config $config
+          } else {
+            npm run build:desktop -- --bundles nsis,msi
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'tauri build failed' }
+
+      - name: Assemble the portable build
+        run: |
+          $version = '${{ needs.check.outputs.version }}'
+          $stage = Join-Path $env:RUNNER_TEMP "MeetBurner_${version}_portable_x64"
+          New-Item -ItemType Directory -Force -Path (Join-Path $stage 'resources') | Out-Null
+          Copy-Item 'apps/desktop/src-tauri/target/release/meetburner.exe' $stage
+          Copy-Item 'apps/desktop/src-tauri/target/release/resources/MeetBurnerCamera.dll' (Join-Path $stage 'resources')
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath "MeetBurner_${version}_portable_x64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          if-no-files-found: error
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+            apps/desktop/src-tauri/target/release/bundle/msi/*.msi
+            MeetBurner_*_portable_x64.zip
+
+  linux:
+    name: Linux (deb, AppImage)
+    needs: check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: System dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
+            libv4l-dev libudev-dev clang libclang-dev libfuse2
+      - run: npm ci
+      - name: Build the bundles
+        run: npm run build:desktop -- --bundles deb,appimage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          if-no-files-found: error
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+            apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+
+  publish:
+    name: Publish the release
+    needs: [check, windows, linux]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum ./* > SHA256SUMS.txt
+
+      - name: Create the draft release and upload the assets
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --draft --verify-tag --generate-notes \
+            --title "MeetBurner ${{ needs.check.outputs.version }}"
+          gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+
+      - name: Note an unsigned build
+        if: needs.windows.outputs.signed != 'true'
+        run: |
+          gh release view "$GITHUB_REF_NAME" --json body -q .body > notes.md
+          printf '\n> This build is not code signed. Windows SmartScreen warns the first time; choose *More info*, then *Run anyway*.\n' >> notes.md
+          gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
+
+      - name: Publish
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest
