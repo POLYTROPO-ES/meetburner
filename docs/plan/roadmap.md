@@ -95,13 +95,14 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Release notes: GitHub's generated notes from the merged PRs
 - [x] MIT license and the [code signing policy](../code-signing-policy.md) the SignPath review asks for (ADR-0027)
 - [ ] Code signing (Windows): SignPath Foundation application pending (ADR-0027); until it is approved, releases ship unsigned and the workflow has no certificate to import
-- [ ] Flip the repository to public so `releases/latest/download/…` works for end users, then add the download button on meetburner.com
+- [x] Flip the repository to public so `releases/latest/download/…` works for end users, then add the download button on meetburner.com
 - [ ] User docs: install, Linux module setup, troubleshooting
 
 ## Stage 2 — macOS
 
 ### M10. macOS app — `desktop`
-- [ ] Universal build (arm64 + x64), Developer ID signing, notarization in CI
+- [x] Universal (arm64 + x64) `.dmg` built in CI and attached to the release, without the virtual camera (ADR-0028)
+- [ ] Developer ID signing and notarization in CI (needs the Apple Developer Program)
 
 ### M11. macOS virtual camera — `vcam-macos`
 - [ ] Swift CoreMediaIO Camera Extension embedded in the bundle

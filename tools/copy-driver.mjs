@@ -11,6 +11,11 @@ const bundle = resolve(root, 'apps/desktop/src-tauri/resources/MeetBurnerCamera.
 // Next to the portable exe, for target/release/meetburner.exe.
 const portable = resolve(root, 'apps/desktop/src-tauri/target/release/resources/MeetBurnerCamera.dll');
 
+// The DirectShow driver only exists on Windows; the macOS and Linux bundles carry none.
+if (process.platform !== 'win32') {
+  process.exit(0);
+}
+
 if (!existsSync(source)) {
   console.warn('[copy-driver] driver not found, run the CMake build in native/vcam-windows first');
   console.warn(`[copy-driver] expected: ${source}`);

@@ -43,3 +43,4 @@ Template:
 | [0025](0025-github-releases.md) | Binaries ship as GitHub Releases built from tags | accepted (code signing amended by 0027) |
 | [0026](0026-portable-single-file.md) | The portable build ships as one file and as a folder | accepted |
 | [0027](0027-public-source-and-signing.md) | Public source under MIT, binaries signed by SignPath Foundation | accepted (application pending) |
+| [0028](0028-macos-without-virtual-camera.md) | macOS ships without the virtual camera until the Apple account exists | accepted |
