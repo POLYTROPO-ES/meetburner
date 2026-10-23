@@ -41,7 +41,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [~] Tauri 2 app loading `apps/web` (dev URL / dist)
 - [ ] Counter opens as native `WebviewWindow` (always-on-top option)
 - [~] Camera settings page: output resolution (fullscreen) done (ADR-0015); Register/Clean webcam buttons done (ADR-0017); camera live while the app is open, errors shown without stopping the app (ADR-0018); mode, source webcam and overlay layout still pending
-- [ ] Packaging: Windows NSIS/MSI, Linux `.deb` + AppImage
+- [~] Packaging in CI: Windows NSIS + MSI + portable zip, Linux `.deb` + AppImage (`.github/workflows/release.yml`, ADR-0025); pending the first green dry run
 - **Done when:** installers build in CI for Windows and Linux.
 
 ### M4. Frame renderer — `desktop`
@@ -91,7 +91,10 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - **Done when:** MF camera visible on Windows 11 without breaking DirectShow one.
 
 ### M9. Stage 1 release — `architect` + `desktop`
-- [ ] Code signing (Windows): certificate pending (owner is getting one); release workflow, changelog
+- [~] Release workflow: tag `vX.Y.Z` builds Windows (NSIS, MSI, portable zip) and Linux (`.deb`, AppImage) and publishes a draft-first GitHub Release with `SHA256SUMS.txt` (ADR-0025); pending the first tagged release
+- [x] Release notes: GitHub's generated notes from the merged PRs
+- [ ] Code signing (Windows): certificate pending (owner is getting one); the workflow signs the driver and the installers as soon as `WINDOWS_CERTIFICATE` and `WINDOWS_CERTIFICATE_PASSWORD` exist (ADR-0025)
+- [ ] Flip the repository to public so `releases/latest/download/…` works for end users, then add the download button on meetburner.com
 - [ ] User docs: install, Linux module setup, troubleshooting
 
 ## Stage 2 — macOS
