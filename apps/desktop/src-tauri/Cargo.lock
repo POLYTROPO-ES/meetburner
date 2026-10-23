@@ -2037,6 +2037,7 @@ name = "meetburner"
 version = "0.2.0"
 dependencies = [
  "ab_glyph",
+ "libc",
  "nokhwa",
  "serde",
  "serde_json",

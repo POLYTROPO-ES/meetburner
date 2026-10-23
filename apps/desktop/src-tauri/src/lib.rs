@@ -104,6 +104,13 @@ fn camera_list_sources() -> Vec<camera::CameraSource> {
     camera::list_sources()
 }
 
+/// Whether the Linux sink can publish: `available` is false without a v4l2loopback device
+/// (and always false off Linux).
+#[tauri::command]
+fn camera_v4l2_status() -> camera::sink::V4l2Status {
+    camera::sink::v4l2_status()
+}
+
 /// Whether "MeetBurner Camera" is registered for the current Windows account.
 #[tauri::command]
 fn camera_driver_status(app: tauri::AppHandle) -> Result<DriverStatus, String> {
@@ -155,7 +162,8 @@ pub fn run() {
             camera_driver_ensure,
             camera_register_driver,
             camera_unregister_driver,
-            camera_list_sources
+            camera_list_sources,
+            camera_v4l2_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running MeetBurner");

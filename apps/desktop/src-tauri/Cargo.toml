@@ -22,3 +22,8 @@ nokhwa = { version = "0.10.11", default-features = false, features = ["input-nat
 
 [target."cfg(windows)".dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Registry", "Win32_System_Threading"] }
+
+# Raw `open`/`ioctl`/`write` for the v4l2loopback producer (M5). The V4L2 structs live in
+# `camera/sink/linux.rs`: libc has no videodev2 bindings.
+[target."cfg(target_os = \"linux\")".dependencies]
+libc = "0.2"

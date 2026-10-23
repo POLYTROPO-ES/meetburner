@@ -165,7 +165,27 @@ fn create_sink() -> Box<dyn VirtualCameraSink> {
     Box::new(crate::camera::sink::windows::WinSharedMemSink::new())
 }
 
-#[cfg(not(windows))]
+/// Linux publishes to an existing v4l2loopback device. The app never loads kernel modules:
+/// without a device the frames are discarded and the setup page explains how to load it.
+#[cfg(target_os = "linux")]
+fn create_sink() -> Box<dyn VirtualCameraSink> {
+    use crate::camera::sink::linux;
+
+    let device = linux::device();
+    match &device {
+        Some(device) => eprintln!(
+            "meetburner: publishing the camera to {}",
+            device.path.display()
+        ),
+        None => eprintln!(
+            "meetburner: no v4l2loopback device; load it with: \
+             sudo modprobe v4l2loopback exclusive_caps=1 card_label=\"MeetBurner Camera\""
+        ),
+    }
+    linux::sink_for(device)
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 fn create_sink() -> Box<dyn VirtualCameraSink> {
     Box::new(crate::camera::sink::NullSink::default())
 }
