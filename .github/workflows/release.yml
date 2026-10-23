@@ -223,15 +223,21 @@ jobs:
           merge-multiple: true
 
       - name: Checksums
-        working-directory: dist
-        run: sha256sum ./* > SHA256SUMS.txt
+        run: |
+          # Each artifact keeps its own folder layout (linux: deb/ + appimage/, windows: apps/…),
+          # so collect the files into one flat folder: sha256sum and the release upload both
+          # need plain file names, and SHA256SUMS.txt must list the asset names users download.
+          mkdir -p out
+          find dist -type f -exec cp -t out {} +
+          (cd out && sha256sum ./*) > SHA256SUMS.txt
+          mv SHA256SUMS.txt out/
 
       - name: Create the draft release and upload the assets
         run: |
           gh release create "$GITHUB_REF_NAME" \
             --draft --verify-tag --generate-notes \
             --title "MeetBurner ${{ needs.check.outputs.version }}"
-          gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          gh release upload "$GITHUB_REF_NAME" out/* --clobber
 
       - name: Note an unsigned build
         env:
@@ -250,6 +256,7 @@ jobs:
           if [ "$SIGNED" != "true" ]; then
             printf '\n> This build is not code signed. Windows SmartScreen warns the first time; choose *More info*, then *Run anyway*.\n' >> notes.md
           fi
+          printf '\n> The macOS build is not signed or notarized yet: Gatekeeper blocks it on first launch. Right-click the app, choose *Open*, then confirm. The virtual camera is not part of the macOS build (ADR-0028).\n' >> notes.md
           gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
 
       - name: Publish
