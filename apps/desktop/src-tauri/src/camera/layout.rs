@@ -48,6 +48,17 @@ pub struct CounterLayout {
 }
 
 pub fn counter_layout(width: f32, height: f32, layout: Layout) -> CounterLayout {
+    counter_layout_in(width, height, layout, None)
+}
+
+/// Same as [`counter_layout`], but the widget card can be placed anywhere in the frame
+/// (`overlay`, as fractions of the frame). `None` keeps the built-in bottom-right corner.
+pub fn counter_layout_in(
+    width: f32,
+    height: f32,
+    layout: Layout,
+    overlay: Option<Rect>,
+) -> CounterLayout {
     let (card, content) = match layout {
         Layout::Fullscreen => (
             None,
@@ -60,15 +71,22 @@ pub fn counter_layout(width: f32, height: f32, layout: Layout) -> CounterLayout 
             .inset(FULLSCREEN_INSET),
         ),
         Layout::Widget => {
-            let w = (width * WIDGET_WIDTH_RATIO).round();
-            let h = (height * WIDGET_HEIGHT_RATIO).round();
-            let card = Rect {
-                x: (width - w - WIDGET_MARGIN).round(),
-                y: (height - h - WIDGET_MARGIN).round(),
-                w,
-                h,
+            let card = match overlay {
+                Some(custom) => custom_snapped(custom, width, height),
+                None => {
+                    let w = (width * WIDGET_WIDTH_RATIO).round();
+                    let h = (height * WIDGET_HEIGHT_RATIO).round();
+                    Rect {
+                        x: (width - w - WIDGET_MARGIN).round(),
+                        y: (height - h - WIDGET_MARGIN).round(),
+                        w,
+                        h,
+                    }
+                }
             };
-            (Some(card), card.inset(WIDGET_PADDING))
+            // A card dragged small still needs room for the numbers.
+            let padding = WIDGET_PADDING.min(card.w * 0.2).min(card.h * 0.2);
+            (Some(card), card.inset(padding))
         }
     };
     let cost_h = content.h * 0.62;
@@ -94,6 +112,21 @@ pub fn counter_layout(width: f32, height: f32, layout: Layout) -> CounterLayout 
             w: content.w,
             h: content.h - cost_h - time_h,
         },
+    }
+}
+
+/// Clamps a fractional card to the frame and snaps it to whole pixels, so the card edges
+/// stay crisp over the webcam (ADR-0006).
+fn custom_snapped(custom: Rect, width: f32, height: f32) -> Rect {
+    let w = (custom.w * width).round().clamp(1.0, width.max(1.0));
+    let h = (custom.h * height).round().clamp(1.0, height.max(1.0));
+    Rect {
+        x: (custom.x * width).round().clamp(0.0, (width - w).max(0.0)),
+        y: (custom.y * height)
+            .round()
+            .clamp(0.0, (height - h).max(0.0)),
+        w,
+        h,
     }
 }
 
@@ -163,6 +196,50 @@ mod tests {
             card.inset(WIDGET_PADDING),
             "the content is the card minus its padding"
         );
+    }
+
+    #[test]
+    fn a_custom_rectangle_places_the_widget_card_anywhere() {
+        let overlay = Rect {
+            x: 0.1,
+            y: 0.2,
+            w: 0.5,
+            h: 0.25,
+        };
+        let layout = counter_layout_in(1280.0, 720.0, Layout::Widget, Some(overlay));
+        let card = layout.card.expect("card");
+        assert_eq!(card.x, 128.0);
+        assert_eq!(card.y, 144.0);
+        assert_eq!(card.w, 640.0);
+        assert_eq!(card.h, 180.0);
+        assert!(card.contains(layout.content.x + 1.0, layout.content.y + 1.0));
+    }
+
+    #[test]
+    fn a_card_dragged_past_the_edge_is_kept_inside() {
+        let overlay = Rect {
+            x: 0.9,
+            y: 0.9,
+            w: 0.5,
+            h: 0.5,
+        };
+        let layout = counter_layout_in(1280.0, 720.0, Layout::Widget, Some(overlay));
+        let card = layout.card.expect("card");
+        assert!(card.x + card.w <= 1280.0 + 0.01);
+        assert!(card.y + card.h <= 720.0 + 0.01);
+        assert!(layout.content.w > 0.0 && layout.content.h > 0.0);
+    }
+
+    #[test]
+    fn fullscreen_ignores_a_custom_rectangle() {
+        let overlay = Rect {
+            x: 0.5,
+            y: 0.5,
+            w: 0.2,
+            h: 0.2,
+        };
+        let layout = counter_layout_in(1280.0, 720.0, Layout::Fullscreen, Some(overlay));
+        assert_eq!(layout.card, None);
     }
 
     #[test]
