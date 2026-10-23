@@ -17,7 +17,7 @@ pub static THEMES: &[(&str, Theme)] = &[
             font: FontId::Serif,
             weight: 700.0,
             radius: 16.0,
-            decoration: "🍂",
+            decoration: "",
         },
     ),
     (
@@ -31,7 +31,7 @@ pub static THEMES: &[(&str, Theme)] = &[
             font: FontId::Serif,
             weight: 700.0,
             radius: 16.0,
-            decoration: "🎄❄️",
+            decoration: "",
         },
     ),
     (
@@ -115,7 +115,7 @@ pub static THEMES: &[(&str, Theme)] = &[
             font: FontId::Rounded,
             weight: 700.0,
             radius: 20.0,
-            decoration: "🌸",
+            decoration: "",
         },
     ),
     (
@@ -129,7 +129,7 @@ pub static THEMES: &[(&str, Theme)] = &[
             font: FontId::Rounded,
             weight: 800.0,
             radius: 20.0,
-            decoration: "☀️",
+            decoration: "",
         },
     ),
     (
@@ -143,7 +143,7 @@ pub static THEMES: &[(&str, Theme)] = &[
             font: FontId::System,
             weight: 700.0,
             radius: 16.0,
-            decoration: "❄️",
+            decoration: "",
         },
     ),
 ];

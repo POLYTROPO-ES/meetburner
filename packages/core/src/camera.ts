@@ -1,6 +1,14 @@
 import { totalHourlyRate, type Meeting } from './cost';
 import { t, type Lang } from './i18n';
-import type { DisplaySettings, MirrorSettings, OverlayRect } from './themes';
+import {
+  resolveTheme,
+  styleFor,
+  type BackgroundStyle,
+  type CounterElement,
+  type DisplaySettings,
+  type MirrorSettings,
+  type OverlayRect,
+} from './themes';
 
 /** Aspect ratios offered by the desktop virtual camera (ADR-0015). */
 export const CAMERA_RATIOS = ['16:9', '9:16', '4:3', '3:4', '1:1'] as const;
@@ -69,13 +77,12 @@ export interface CameraLabels {
 export interface CameraDisplay {
   theme: string;
   layout: string;
-  costFont: string;
-  timeFont: string;
-  costScale: number;
-  timeScale: number;
   overflow: string;
   mirror: MirrorSettings;
   overlay: OverlayRect | null;
+  /** Complete per-element style: 'theme' keeps the preset font, which the Rust renderer resolves. */
+  elements: Record<CounterElement, { font: string; scale: number; color: string | null }>;
+  background: BackgroundStyle;
 }
 
 /** Payload of the Rust `camera_start` / `camera_update` commands. */
@@ -109,6 +116,7 @@ export function cameraInput(
 ): CameraInput {
   const size = normalizeCamera(camera);
   const idle = meeting.startAt === null;
+  const style = styleFor(display, resolveTheme(display.theme, new Date(nowMs)));
   return {
     startAt: idle ? nowMs : (meeting.startAt as number),
     endAt: idle ? nowMs : meeting.endAt,
@@ -124,13 +132,11 @@ export function cameraInput(
     display: {
       theme: display.theme,
       layout: display.layout,
-      costFont: display.costFont,
-      timeFont: display.timeFont,
-      costScale: display.costScale,
-      timeScale: display.timeScale,
       overflow: display.overflow,
       mirror: display.mirror,
       overlay: display.overlay,
+      elements: style.elements,
+      background: style.background,
     },
     width: size.width,
     height: size.height,

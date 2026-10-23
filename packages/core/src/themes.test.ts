@@ -4,8 +4,6 @@ import {
   DEFAULT_DISPLAY,
   defaultOverlayRect,
   FONTS,
-  MAX_SCALE,
-  MIN_SCALE,
   MESSAGES,
   moveOverlay,
   NO_MIRROR,
@@ -59,17 +57,14 @@ describe('seasons', () => {
 });
 
 describe('display settings', () => {
-  it('default to classic, fullscreen, theme fonts and 100% size', () => {
+  it('default to classic, fullscreen and no stored styles', () => {
     expect(DEFAULT_DISPLAY).toEqual({
       theme: 'classic',
       layout: 'fullscreen',
-      costFont: 'theme',
-      timeFont: 'theme',
-      costScale: 1,
-      timeScale: 1,
       overflow: 'compact',
       mirror: { sourceH: false, sourceV: false, overlayH: false, overlayV: false },
       overlay: null,
+      styles: {},
     });
   });
 
@@ -96,12 +91,13 @@ describe('display settings', () => {
   it('normalize unknown or corrupt input to defaults', () => {
     expect(normalizeDisplay(null)).toEqual(DEFAULT_DISPLAY);
     expect(normalizeDisplay('x')).toEqual(DEFAULT_DISPLAY);
-    expect(normalizeDisplay({ theme: 'nope', layout: 'tiny', costFont: 'comic' })).toEqual(DEFAULT_DISPLAY);
+    expect(normalizeDisplay({ theme: 'nope', layout: 'tiny', overflow: 'explode' })).toEqual(DEFAULT_DISPLAY);
   });
 
-  it('keep valid values and clamp sizes', () => {
-    const d = normalizeDisplay({ theme: 'halloween', layout: 'widget', costFont: 'mono', costScale: 9, timeScale: 0.1 });
-    expect(d).toMatchObject({ theme: 'halloween', layout: 'widget', costFont: 'mono', costScale: MAX_SCALE, timeScale: MIN_SCALE });
+  it('keep valid values and reject unknown ones', () => {
+    const d = normalizeDisplay({ theme: 'halloween', layout: 'widget', overflow: 'shrink' });
+    expect(d).toMatchObject({ theme: 'halloween', layout: 'widget', overflow: 'shrink' });
+    expect(normalizeDisplay({ overflow: 'explode' }).overflow).toBe('compact');
   });
 
   it('resolve "theme" font to the theme font stack', () => {
