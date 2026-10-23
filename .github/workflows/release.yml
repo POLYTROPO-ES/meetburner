@@ -180,9 +180,35 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/deb/*.deb
             apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
 
+  macos:
+    name: macOS (universal DMG, unsigned)
+    needs: check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: macos
+      - run: npm ci
+      - name: Build the universal DMG
+        run: npm run build:desktop -- --target universal-apple-darwin --bundles dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          if-no-files-found: error
+          path: apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+
   publish:
     name: Publish the release
-    needs: [check, windows, linux]
+    needs: [check, windows, linux, macos]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:
