@@ -38,3 +38,5 @@ Template:
 | [0020](0020-driver-version-and-self-update.md) | The app updates an outdated driver on start | accepted |
 | [0021](0021-webcam-overlay.md) | Webcam overlay: composite the counter over a real camera | accepted |
 | [0022](0022-mirroring.md) | Mirroring: the webcam and the counter are flipped independently | accepted |
+| [0023](0023-overlay-card-geometry.md) | The counter card can be moved and resized on the camera frame | accepted |
+| [0024](0024-adopt-abandoned-mapping.md) | Adopt a camera mapping whose producer is gone | accepted |
