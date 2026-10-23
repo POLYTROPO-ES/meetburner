@@ -311,6 +311,15 @@ mod tests {
             .tick(&widget, 1_001_000)
             .expect("the counter still renders");
         let frame = observer.frames().last().cloned().expect("a frame");
-        assert_eq!(frame.pixel(0, 0), (0x0f, 0x11, 0x15));
+        assert_eq!(
+            frame.pixel(0, 0),
+            (0, 0, 0),
+            "no webcam frame: the black canvas shows"
+        );
+        assert_eq!(
+            frame.pixel(750, 480),
+            (0x0f, 0x11, 0x15),
+            "the card is still painted"
+        );
     }
 }

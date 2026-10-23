@@ -33,12 +33,12 @@ export const THEMES: Record<Exclude<ThemeId, 'seasons'> | Season, Theme> = {
   modern: { background: '#0b1020', backgroundAlt: '#1d2b64', text: '#f5f7ff', muted: '#9aa6d1', accent: '#4ade80', font: 'rounded', weight: 800, radius: 20, decoration: '' },
   formal: { background: '#f7f5f0', backgroundAlt: '#e9e4d8', text: '#1c1c1c', muted: '#6b6457', accent: '#1f3a5f', font: 'serif', weight: 600, radius: 4, decoration: '' },
   halloween: { background: '#1a0f05', backgroundAlt: '#3d1d00', text: '#ffedd5', muted: '#c2a383', accent: '#ff7518', font: 'display', weight: 700, radius: 16, decoration: '🎃🦇' },
-  christmas: { background: '#0b3d20', backgroundAlt: '#7a0f1a', text: '#fffaf0', muted: '#c9dcc8', accent: '#ffd34e', font: 'serif', weight: 700, radius: 16, decoration: '🎄❄️' },
+  christmas: { background: '#0b3d20', backgroundAlt: '#7a0f1a', text: '#fffaf0', muted: '#c9dcc8', accent: '#ffd34e', font: 'serif', weight: 700, radius: 16, decoration: '' },
   minimalist: { background: '#ffffff', backgroundAlt: '#ffffff', text: '#111111', muted: '#8a8a8a', accent: '#111111', font: 'system', weight: 300, radius: 0, decoration: '' },
-  spring: { background: '#f0fdf4', backgroundAlt: '#fce7f3', text: '#14532d', muted: '#6b8f71', accent: '#db2777', font: 'rounded', weight: 700, radius: 20, decoration: '🌸' },
-  summer: { background: '#fff7d6', backgroundAlt: '#7dd3fc', text: '#0c4a6e', muted: '#5b7f95', accent: '#f97316', font: 'rounded', weight: 800, radius: 20, decoration: '☀️' },
-  autumn: { background: '#2b1a0e', backgroundAlt: '#7c2d12', text: '#fef3c7', muted: '#d6b98c', accent: '#f59e0b', font: 'serif', weight: 700, radius: 16, decoration: '🍂' },
-  winter: { background: '#e0f2fe', backgroundAlt: '#f8fafc', text: '#0f172a', muted: '#64748b', accent: '#0284c7', font: 'system', weight: 700, radius: 16, decoration: '❄️' },
+  spring: { background: '#f0fdf4', backgroundAlt: '#fce7f3', text: '#14532d', muted: '#6b8f71', accent: '#db2777', font: 'rounded', weight: 700, radius: 20, decoration: '' },
+  summer: { background: '#fff7d6', backgroundAlt: '#7dd3fc', text: '#0c4a6e', muted: '#5b7f95', accent: '#f97316', font: 'rounded', weight: 800, radius: 20, decoration: '' },
+  autumn: { background: '#2b1a0e', backgroundAlt: '#7c2d12', text: '#fef3c7', muted: '#d6b98c', accent: '#f59e0b', font: 'serif', weight: 700, radius: 16, decoration: '' },
+  winter: { background: '#e0f2fe', backgroundAlt: '#f8fafc', text: '#0f172a', muted: '#64748b', accent: '#0284c7', font: 'system', weight: 700, radius: 16, decoration: '' },
 };
 
 /** Meteorological seasons, northern hemisphere. */
@@ -60,18 +60,56 @@ export type FontChoice = FontId | 'theme';
 export type Overflow = 'compact' | 'shrink';
 export const OVERFLOW_MODES: readonly Overflow[] = ['compact', 'shrink'];
 
+export type CounterElement = 'label' | 'cost' | 'status' | 'elapsed' | 'personTime' | 'costPerMinute';
+export const COUNTER_ELEMENTS: readonly CounterElement[] = [
+  'label',
+  'cost',
+  'status',
+  'elapsed',
+  'personTime',
+  'costPerMinute',
+];
+
+/** Per-element tweaks. `null` / 'theme' keep whatever the preset defines. */
+export interface ElementStyle {
+  font: FontChoice;
+  /** 50..250 percent, 100 = the preset size. */
+  scale: number;
+  color: string | null;
+}
+
+export type BackgroundMode = 'solid' | 'gradient';
+export type GradientDirection = 'horizontal' | 'vertical';
+export const BACKGROUND_MODES: readonly BackgroundMode[] = ['solid', 'gradient'];
+export const GRADIENT_DIRECTIONS: readonly GradientDirection[] = ['horizontal', 'vertical'];
+
+export interface BackgroundStyle {
+  mode: BackgroundMode;
+  color: string;
+  colorAlt: string;
+  direction: GradientDirection;
+  /** 0 = fully transparent, 100 = solid. */
+  opacity: number;
+  /** 0..40 px, 0 = square corners. */
+  radius: number;
+}
+
+/** The tweaks stored for one style; `styleDefaults`/`styleFor` fill whatever is missing. */
+export interface StyleOverride {
+  elements: Record<CounterElement, ElementStyle>;
+  background: BackgroundStyle;
+}
+
 export interface DisplaySettings {
   theme: ThemeId;
   /** Desktop camera: widget when overlaid on a webcam, fullscreen otherwise. */
   layout: Layout;
-  costFont: FontChoice;
-  timeFont: FontChoice;
-  costScale: number;
-  timeScale: number;
   overflow: Overflow;
   mirror: MirrorSettings;
   /** Where the widget card sits on the camera frame; null keeps the built-in corner (ADR-0023). */
   overlay: OverlayRect | null;
+  /** Customisation per style id, so each style keeps its own look; absent = the preset (ADR-0029). */
+  styles: Partial<Record<ThemeId, StyleOverride>>;
 }
 
 /** Widget card rectangle, as fractions of the camera frame (0..1). */
@@ -140,28 +178,37 @@ export const NO_MIRROR: MirrorSettings = {
 
 export const MIN_SCALE = 0.5;
 export const MAX_SCALE = 2.5;
+export const MIN_RADIUS = 0;
+export const MAX_RADIUS = 40;
+export const MIN_OPACITY = 0;
+export const MAX_OPACITY = 100;
 
+/** `ElementStyle.scale` is a percentage; MIN_SCALE..MAX_SCALE is the multiplier the renderer applies. */
+const MIN_ELEMENT_SCALE = MIN_SCALE * 100;
+const MAX_ELEMENT_SCALE = MAX_SCALE * 100;
+
+/** The radius comes from each preset: `styleDefaults(theme).background.radius`. */
 export const DEFAULT_DISPLAY: DisplaySettings = {
   theme: 'classic',
   layout: 'fullscreen',
-  costFont: 'theme',
-  timeFont: 'theme',
-  costScale: 1,
-  timeScale: 1,
   overflow: 'compact',
   mirror: NO_MIRROR,
   overlay: null,
+  styles: {},
 };
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
   allowed.includes(value as T) ? (value as T) : fallback;
 
-const scale = (value: unknown): number =>
-  typeof value === 'number' && Number.isFinite(value) ? Math.min(MAX_SCALE, Math.max(MIN_SCALE, value)) : 1;
+const clampNumber = (value: unknown, min: number, max: number, fallback: number): number =>
+  typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
 
 const FONT_CHOICES: readonly FontChoice[] = ['theme', ...FONT_IDS];
 
-/** Validates untrusted (stored) display settings. */
+const HEX_COLOR = /^#[0-9a-f]{3}$|^#[0-9a-f]{6}$/i;
+const isHex = (value: unknown): value is string => typeof value === 'string' && HEX_COLOR.test(value);
+
+/** Validates untrusted (stored) display settings. Old `costFont`/`costScale` keys are ignored (ADR-0029). */
 export function normalizeDisplay(raw: unknown): DisplaySettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const mirror = (r.mirror && typeof r.mirror === 'object' ? r.mirror : {}) as Record<string, unknown>;
@@ -169,10 +216,6 @@ export function normalizeDisplay(raw: unknown): DisplaySettings {
   return {
     theme: oneOf(r.theme, THEME_IDS, DEFAULT_DISPLAY.theme),
     layout: oneOf<Layout>(r.layout, ['fullscreen', 'widget'], DEFAULT_DISPLAY.layout),
-    costFont: oneOf(r.costFont, FONT_CHOICES, 'theme'),
-    timeFont: oneOf(r.timeFont, FONT_CHOICES, 'theme'),
-    costScale: scale(r.costScale),
-    timeScale: scale(r.timeScale),
     overflow: oneOf(r.overflow, OVERFLOW_MODES, DEFAULT_DISPLAY.overflow),
     mirror: {
       sourceH: flag(mirror.sourceH),
@@ -181,7 +224,131 @@ export function normalizeDisplay(raw: unknown): DisplaySettings {
       overlayV: flag(mirror.overlayV),
     },
     overlay: normalizeOverlay(r.overlay),
+    styles: normalizeStyles(r.styles),
   };
+}
+
+/** A stored override may be partial: written by an older build, or hand-edited in devtools. */
+interface StoredStyle {
+  elements?: Partial<Record<CounterElement, ElementStyle>>;
+  background?: Partial<BackgroundStyle>;
+}
+
+/** Only known style ids survive, and each one drops whatever equals the preset defaults. */
+function normalizeStyles(raw: unknown): Partial<Record<ThemeId, StyleOverride>> {
+  const styles: Partial<Record<ThemeId, StyleOverride>> = {};
+  if (!raw || typeof raw !== 'object') return styles;
+  const source = raw as Record<string, unknown>;
+  for (const id of THEME_IDS) {
+    const style = normalizeStyle(source[id]);
+    // Partial on purpose: `styleFor` completes it from the preset of the theme in force.
+    if (style) styles[id] = style as StyleOverride;
+  }
+  return styles;
+}
+
+function normalizeStyle(raw: unknown): StoredStyle | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const source = (r.elements && typeof r.elements === 'object' ? r.elements : {}) as Record<string, unknown>;
+  const elements: Partial<Record<CounterElement, ElementStyle>> = {};
+  for (const element of COUNTER_ELEMENTS) {
+    const value = source[element];
+    if (!value || typeof value !== 'object') continue;
+    const e = value as Record<string, unknown>;
+    const style: Partial<ElementStyle> = {};
+    const font = oneOf(e.font, FONT_CHOICES, 'theme');
+    if (font !== 'theme') style.font = font;
+    const elementScale = clampNumber(e.scale, MIN_ELEMENT_SCALE, MAX_ELEMENT_SCALE, 100);
+    if (elementScale !== 100) style.scale = elementScale;
+    if (isHex(e.color)) style.color = e.color;
+    if (Object.keys(style).length > 0) elements[element] = style as ElementStyle;
+  }
+  const background = normalizeBackground(r.background);
+  const stored: StoredStyle = {};
+  if (Object.keys(elements).length > 0) stored.elements = elements;
+  if (background) stored.background = background;
+  return Object.keys(stored).length > 0 ? stored : null;
+}
+
+function normalizeBackground(raw: unknown): Partial<BackgroundStyle> | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  // Colours are either absent (keep the preset's) or a valid hex; anything else drops the object.
+  if ((r.color !== undefined && !isHex(r.color)) || (r.colorAlt !== undefined && !isHex(r.colorAlt))) return null;
+  const background: Partial<BackgroundStyle> = {};
+  if (isHex(r.color)) background.color = r.color;
+  if (isHex(r.colorAlt)) background.colorAlt = r.colorAlt;
+  const mode = oneOf(r.mode, BACKGROUND_MODES, 'gradient');
+  if (mode !== 'gradient') background.mode = mode;
+  const direction = oneOf(r.direction, GRADIENT_DIRECTIONS, 'vertical');
+  if (direction !== 'vertical') background.direction = direction;
+  const opacity = clampNumber(r.opacity, MIN_OPACITY, MAX_OPACITY, MAX_OPACITY);
+  if (opacity !== MAX_OPACITY) background.opacity = opacity;
+  // Any finite radius is a real tweak, 0 (square corners) included: the preset radius is unknown here.
+  if (typeof r.radius === 'number' && Number.isFinite(r.radius)) {
+    background.radius = clampNumber(r.radius, MIN_RADIUS, MAX_RADIUS, MIN_RADIUS);
+  }
+  return Object.keys(background).length > 0 ? background : null;
+}
+
+/** The preset values, used when a style has no stored tweaks. */
+export function styleDefaults(theme: Theme): StyleOverride {
+  const elements = {} as Record<CounterElement, ElementStyle>;
+  for (const element of COUNTER_ELEMENTS) elements[element] = { font: 'theme', scale: 100, color: null };
+  return {
+    elements,
+    background: {
+      mode: 'gradient',
+      color: theme.background,
+      colorAlt: theme.backgroundAlt,
+      direction: 'vertical',
+      opacity: MAX_OPACITY,
+      radius: theme.radius,
+    },
+  };
+}
+
+/**
+ * Stored tweaks for `display.theme`, completed from the preset. `theme` is the already-resolved
+ * theme, so `seasons` gets the season in force.
+ */
+export function styleFor(display: DisplaySettings, theme: Theme): StyleOverride {
+  const defaults = styleDefaults(theme);
+  const stored = (display.styles ? display.styles[display.theme] : undefined) as StoredStyle | undefined;
+  if (!stored || typeof stored !== 'object') return defaults;
+  const elements = {} as Record<CounterElement, ElementStyle>;
+  for (const element of COUNTER_ELEMENTS) {
+    const raw = stored.elements ? stored.elements[element] : undefined;
+    const saved = raw && typeof raw === 'object' ? raw : undefined;
+    const fallback = defaults.elements[element];
+    elements[element] = {
+      font: saved ? oneOf(saved.font, FONT_CHOICES, 'theme') : fallback.font,
+      scale: saved ? clampNumber(saved.scale, MIN_ELEMENT_SCALE, MAX_ELEMENT_SCALE, 100) : fallback.scale,
+      color: saved && isHex(saved.color) ? saved.color : null,
+    };
+  }
+  const bg = (
+    stored.background && typeof stored.background === 'object' ? stored.background : {}
+  ) as Partial<BackgroundStyle>;
+  return {
+    elements,
+    background: {
+      mode: oneOf(bg.mode, BACKGROUND_MODES, defaults.background.mode),
+      color: isHex(bg.color) ? bg.color : defaults.background.color,
+      colorAlt: isHex(bg.colorAlt) ? bg.colorAlt : defaults.background.colorAlt,
+      direction: oneOf(bg.direction, GRADIENT_DIRECTIONS, defaults.background.direction),
+      opacity: clampNumber(bg.opacity, MIN_OPACITY, MAX_OPACITY, MAX_OPACITY),
+      radius: clampNumber(bg.radius, MIN_RADIUS, MAX_RADIUS, defaults.background.radius),
+    },
+  };
+}
+
+/** Drops the tweaks of the selected style, restoring the preset. */
+export function resetStyle(display: DisplaySettings): DisplaySettings {
+  const styles = { ...display.styles };
+  delete styles[display.theme];
+  return { ...display, styles };
 }
 
 function normalizeOverlay(raw: unknown): OverlayRect | null {

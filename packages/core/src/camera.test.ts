@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CAMERA_RATIOS, CAMERA_SIZES, cameraInput, DEFAULT_CAMERA, normalizeCamera } from './camera';
 import { createMeeting, totalHourlyRate } from './cost';
-import { DEFAULT_DISPLAY } from './themes';
+import { DEFAULT_DISPLAY, THEMES } from './themes';
 
 function meeting() {
   return {
@@ -106,27 +106,35 @@ describe('camera input', () => {
     expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'es', DEFAULT_CAMERA).labels.totalCost).toBe('Coste total');
   });
 
-  it('passes the display settings through', () => {
+  it('passes the display settings through, with the style resolved', () => {
     const display = {
       ...DEFAULT_DISPLAY,
       theme: 'halloween' as const,
       layout: 'widget' as const,
-      costFont: 'mono' as const,
-      timeFont: 'serif' as const,
-      costScale: 1.5,
-      timeScale: 0.8,
       overflow: 'shrink' as const,
     };
     expect(cameraInput(meeting(), display, 'en', DEFAULT_CAMERA).display).toEqual({
       theme: 'halloween',
       layout: 'widget',
-      costFont: 'mono',
-      timeFont: 'serif',
-      costScale: 1.5,
-      timeScale: 0.8,
       overflow: 'shrink',
       mirror: { sourceH: false, sourceV: false, overlayH: false, overlayV: false },
       overlay: null,
+      elements: {
+        label: { font: 'theme', scale: 100, color: null },
+        cost: { font: 'theme', scale: 100, color: null },
+        status: { font: 'theme', scale: 100, color: null },
+        elapsed: { font: 'theme', scale: 100, color: null },
+        personTime: { font: 'theme', scale: 100, color: null },
+        costPerMinute: { font: 'theme', scale: 100, color: null },
+      },
+      background: {
+        mode: 'gradient',
+        color: THEMES.halloween.background,
+        colorAlt: THEMES.halloween.backgroundAlt,
+        direction: 'vertical',
+        opacity: 100,
+        radius: THEMES.halloween.radius,
+      },
     });
   });
 

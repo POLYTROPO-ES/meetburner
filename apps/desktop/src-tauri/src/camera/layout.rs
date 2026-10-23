@@ -11,6 +11,11 @@ pub const WIDGET_WIDTH_RATIO: f32 = 0.42;
 pub const WIDGET_HEIGHT_RATIO: f32 = 0.30;
 /// Inner padding of the widget card.
 pub const WIDGET_PADDING: f32 = 28.0;
+/// Font size of the `labels.total_cost` line, as a fraction of the frame height. The web
+/// paints it at `4cqh` inside a container as tall as the frame (`.counter-view .label`).
+pub const LABEL_HEIGHT_RATIO: f32 = 0.04;
+/// Line box of that line, relative to its font size: enough room for the ascent and descent.
+pub const LABEL_LINE_HEIGHT: f32 = 1.2;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rect {
@@ -35,6 +40,17 @@ impl Rect {
     }
 }
 
+/// Font size of the `labels.total_cost` line for a frame `height` pixels tall and a
+/// `scale` in the `0.5..2.5` range the UI sends (1.0 = [`LABEL_HEIGHT_RATIO`]).
+pub fn label_font_px(height: f32, scale: f32) -> f32 {
+    let scale = if scale.is_finite() {
+        scale.max(0.0)
+    } else {
+        1.0
+    };
+    (height * LABEL_HEIGHT_RATIO * scale).max(8.0)
+}
+
 /// Where the counter goes inside the frame and how its text is stacked.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CounterLayout {
@@ -42,6 +58,9 @@ pub struct CounterLayout {
     pub card: Option<Rect>,
     /// Area available for the counter content (card minus padding, or the fullscreen inset).
     pub content: Rect,
+    /// Band reserved for the `labels.total_cost` line, directly above `cost`. `None` when no
+    /// line is drawn: the widget hides it like the web, and an empty label keeps today's layout.
+    pub label: Option<Rect>,
     pub cost: Rect,
     pub time: Rect,
     pub footer: Rect,
@@ -58,6 +77,22 @@ pub fn counter_layout_in(
     height: f32,
     layout: Layout,
     overlay: Option<Rect>,
+) -> CounterLayout {
+    counter_layout_with_label(width, height, layout, overlay, None)
+}
+
+/// Same as [`counter_layout_in`], but `fullscreen` can reserve a band at the top of the content
+/// for the `labels.total_cost` line (`label_scale` is `elements.label.scale`).
+///
+/// The other text boxes keep their proportions over the height that is left, so the cost, the
+/// time and the status shrink by the label height instead of overlapping it. `widget` never
+/// draws the label (the web hides it too), so it ignores `label_scale` completely.
+pub fn counter_layout_with_label(
+    width: f32,
+    height: f32,
+    layout: Layout,
+    overlay: Option<Rect>,
+    label_scale: Option<f32>,
 ) -> CounterLayout {
     let (card, content) = match layout {
         Layout::Fullscreen => (
@@ -89,28 +124,41 @@ pub fn counter_layout_in(
             (Some(card), card.inset(padding))
         }
     };
-    let cost_h = content.h * 0.62;
-    let time_h = content.h * 0.22;
+    let label_h = match (layout, label_scale) {
+        (Layout::Fullscreen, Some(scale)) => label_font_px(height, scale) * LABEL_LINE_HEIGHT,
+        _ => 0.0,
+    };
+    // The cost, the time and the status share what the label leaves, in the same proportions.
+    let stack_h = (content.h - label_h).max(0.0);
+    let stack_y = content.y + label_h;
+    let cost_h = stack_h * 0.62;
+    let time_h = stack_h * 0.22;
     CounterLayout {
         card,
         content,
-        cost: Rect {
+        label: (label_h > 0.0).then_some(Rect {
             x: content.x,
             y: content.y,
+            w: content.w,
+            h: label_h,
+        }),
+        cost: Rect {
+            x: content.x,
+            y: stack_y,
             w: content.w,
             h: cost_h,
         },
         time: Rect {
             x: content.x,
-            y: content.y + cost_h,
+            y: stack_y + cost_h,
             w: content.w,
             h: time_h,
         },
         footer: Rect {
             x: content.x,
-            y: content.y + cost_h + time_h,
+            y: stack_y + cost_h + time_h,
             w: content.w,
-            h: content.h - cost_h - time_h,
+            h: stack_h - cost_h - time_h,
         },
     }
 }
@@ -245,20 +293,70 @@ mod tests {
     #[test]
     fn text_boxes_stack_inside_the_content_area() {
         for layout_kind in [Layout::Fullscreen, Layout::Widget] {
-            let layout = counter_layout(1280.0, 720.0, layout_kind);
-            let content = layout.content;
-            assert!(layout.cost.y >= content.y);
-            assert!(
-                layout.cost.h > layout.time.h,
-                "the cost is the biggest value"
-            );
-            assert_eq!(layout.time.y, layout.cost.y + layout.cost.h);
-            assert_eq!(layout.footer.y, layout.time.y + layout.time.h);
-            assert!(layout.footer.y + layout.footer.h <= content.y + content.h + 0.01);
-            for box_ in [layout.cost, layout.time, layout.footer] {
-                assert!(box_.x >= content.x && box_.x + box_.w <= content.x + content.w + 0.01);
+            for label in [None, Some(1.0), Some(2.5)] {
+                let layout = counter_layout_with_label(1280.0, 720.0, layout_kind, None, label);
+                let content = layout.content;
+                assert!(layout.cost.y >= content.y);
+                assert!(
+                    layout.cost.h > layout.time.h,
+                    "the cost is the biggest value"
+                );
+                assert_eq!(layout.time.y, layout.cost.y + layout.cost.h);
+                assert_eq!(layout.footer.y, layout.time.y + layout.time.h);
+                assert!(layout.footer.y + layout.footer.h <= content.y + content.h + 0.01);
+                for box_ in [layout.cost, layout.time, layout.footer] {
+                    assert!(box_.x >= content.x && box_.x + box_.w <= content.x + content.w + 0.01);
+                }
+                if let Some(band) = layout.label {
+                    assert!(band.y >= content.y);
+                    assert!(band.y + band.h <= content.y + content.h + 0.01);
+                    assert_eq!(layout.cost.y, band.y + band.h);
+                }
             }
         }
+    }
+
+    #[test]
+    fn a_fullscreen_label_reserves_a_band_above_the_cost() {
+        let without = counter_layout(1280.0, 720.0, Layout::Fullscreen);
+        let with = counter_layout_with_label(1280.0, 720.0, Layout::Fullscreen, None, Some(1.0));
+        assert_eq!(without.label, None, "no line, no band");
+        assert!(with.label.is_some());
+
+        let band = with.label.expect("band");
+        let px = label_font_px(720.0, 1.0);
+        assert!((px - 28.8).abs() < 0.01, "4 % of 720: {px}");
+        assert!((band.h - px * LABEL_LINE_HEIGHT).abs() < 0.01);
+        assert_eq!(band.y, with.content.y, "the band opens the content");
+        assert_eq!(with.cost.y, band.y + band.h, "the cost starts below it");
+        assert_eq!(with.cost.w, without.cost.w, "the cost keeps the full width");
+        assert_eq!(with.cost.x, without.cost.x);
+
+        // The shared budget shrinks by the band, so nothing overlaps and nothing overflows.
+        assert!(with.cost.h < without.cost.h);
+        assert!(with.time.h < without.time.h);
+        assert!(with.footer.h < without.footer.h);
+        assert!(band.h < with.cost.h, "the label never takes over the cost");
+        assert!((with.footer.y + with.footer.h - (with.content.y + with.content.h)).abs() < 0.01);
+
+        // The band grows with the element scale, so a bigger label never spills into the cost.
+        let doubled = counter_layout_with_label(1280.0, 720.0, Layout::Fullscreen, None, Some(2.0));
+        assert!(doubled.label.expect("band").h > band.h * 1.9);
+    }
+
+    #[test]
+    fn no_label_keeps_todays_layout() {
+        assert_eq!(
+            counter_layout_with_label(1280.0, 720.0, Layout::Fullscreen, None, None),
+            counter_layout(1280.0, 720.0, Layout::Fullscreen)
+        );
+    }
+
+    #[test]
+    fn a_widget_never_reserves_a_label_band() {
+        let with = counter_layout_with_label(1280.0, 720.0, Layout::Widget, None, Some(2.5));
+        assert_eq!(with.label, None, "the web hides the label in the widget");
+        assert_eq!(with, counter_layout(1280.0, 720.0, Layout::Widget));
     }
 
     #[test]

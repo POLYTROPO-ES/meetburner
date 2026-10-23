@@ -3,14 +3,17 @@
 
 use ab_glyph::{point, Font, PxScale, ScaleFont};
 use serde::Deserialize;
-use tiny_skia::{Color, FillRule, Paint, Path, PathBuilder, Pixmap, PixmapPaint, Transform};
+use tiny_skia::{
+    Color, FillRule, GradientStop, LinearGradient, Paint, Path, PathBuilder, Pixmap, PixmapPaint,
+    Point, SpreadMode, Transform,
+};
 
 use crate::camera::fonts::Fonts;
 use crate::camera::format::{format_duration, format_money, format_money_compact};
 use crate::camera::frame::{normalize_size, Frame, FRAME_HEIGHT, FRAME_WIDTH};
 #[cfg(test)]
 use crate::camera::layout::counter_layout;
-use crate::camera::layout::{counter_layout_in, fit_cost, Rect};
+use crate::camera::layout::{counter_layout_with_label, fit_cost, label_font_px, Rect};
 
 use crate::camera::theme::{self, FontChoice, Layout, Overflow, Theme};
 
@@ -95,11 +98,11 @@ fn default_locale() -> String {
 pub struct DisplayConfig {
     pub theme: String,
     pub layout: Layout,
-    pub cost_font: FontChoice,
-    pub time_font: FontChoice,
-    pub cost_scale: f32,
-    pub time_scale: f32,
     pub overflow: Overflow,
+    /// Font, size and colour per counter line (ADR-0029).
+    pub elements: Elements,
+    /// Card paint: solid or gradient, opacity and radius (ADR-0029).
+    pub background: BackgroundStyle,
     /// Per-layer mirroring; the webcam and the counter are independent (ADR-0022).
     pub mirror: Mirror,
     /// Where the widget card goes, as fractions of the frame (ADR-0023).
@@ -154,34 +157,30 @@ pub struct Mirror {
     pub overlay_v: bool,
 }
 
-/// Untrusted shape from the UI: strings for every enum, scales clamped (ADR-0006).
+/// Untrusted shape from the UI: strings for every enum, values clamped (ADR-0006, ADR-0029).
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct DisplayConfigWire {
     pub theme: String,
     pub layout: String,
-    pub cost_font: String,
-    pub time_font: String,
-    pub cost_scale: f32,
-    pub time_scale: f32,
     pub overflow: String,
     pub mirror: Mirror,
     pub overlay: Option<Overlay>,
+    pub elements: ElementsWire,
+    /// Absent in older payloads: keeps the flat theme background the renderer always painted.
+    pub background: Option<BackgroundWire>,
 }
 
 impl Default for DisplayConfigWire {
     fn default() -> Self {
-        let display = DisplayConfig::default();
         DisplayConfigWire {
-            theme: display.theme,
+            theme: "classic".into(),
             layout: "fullscreen".into(),
-            cost_font: "theme".into(),
-            time_font: "theme".into(),
-            cost_scale: display.cost_scale,
-            time_scale: display.time_scale,
             overflow: "compact".into(),
             mirror: Mirror::default(),
             overlay: None,
+            elements: ElementsWire::default(),
+            background: None,
         }
     }
 }
@@ -195,11 +194,9 @@ impl From<DisplayConfigWire> for DisplayConfig {
                 wire.theme
             },
             layout: theme::parse_layout(&wire.layout),
-            cost_font: theme::parse_font_choice(&wire.cost_font),
-            time_font: theme::parse_font_choice(&wire.time_font),
-            cost_scale: clamp_scale(wire.cost_scale),
-            time_scale: clamp_scale(wire.time_scale),
             overflow: theme::parse_overflow(&wire.overflow),
+            elements: Elements::resolve(&wire.elements),
+            background: BackgroundStyle::resolve(wire.background.as_ref()),
             mirror: wire.mirror,
             overlay: wire.overlay.and_then(Overlay::sanitized),
         }
@@ -214,20 +211,237 @@ fn clamp_scale(value: f32) -> f32 {
     }
 }
 
+/// Largest card radius the UI offers, in pixels (ADR-0029).
+const MAX_RADIUS: f32 = 40.0;
+
+/// `#rgb` or `#rrggbb`, like the web; anything else keeps the preset colour.
+fn parse_hex_color(value: &str) -> Option<(u8, u8, u8)> {
+    let hex = value.strip_prefix('#')?;
+    match hex.len() {
+        3 => {
+            let mut digits = hex.chars().map(|digit| digit.to_digit(16));
+            let r = digits.next()?? as u8;
+            let g = digits.next()?? as u8;
+            let b = digits.next()?? as u8;
+            Some((r * 17, g * 17, b * 17))
+        }
+        6 => {
+            let value = u32::from_str_radix(hex, 16).ok()?;
+            Some(((value >> 16) as u8, (value >> 8) as u8, value as u8))
+        }
+        _ => None,
+    }
+}
+
+/// Percent 0..100 to the 0.0..1.0 multiplier; missing or corrupt values stay solid.
+fn clamp_opacity(value: Option<f32>) -> f32 {
+    match value {
+        Some(value) if value.is_finite() => value.clamp(0.0, 100.0) / 100.0,
+        _ => 1.0,
+    }
+}
+
+/// `None` keeps the preset radius; corrupt values fall back to it too.
+fn clamp_radius(value: Option<f32>) -> Option<f32> {
+    value
+        .filter(|radius| radius.is_finite())
+        .map(|radius| radius.clamp(0.0, MAX_RADIUS))
+}
+
 impl Default for DisplayConfig {
     fn default() -> Self {
         DisplayConfig {
             theme: "classic".into(),
             layout: Layout::Fullscreen,
-            cost_font: FontChoice::Theme,
-            time_font: FontChoice::Theme,
-            cost_scale: 1.0,
-            time_scale: 1.0,
             overflow: Overflow::Compact,
+            elements: Elements::default(),
+            background: BackgroundStyle::default(),
             mirror: Mirror::default(),
             overlay: None,
         }
     }
+}
+
+/// One customisable counter line: font, size and colour (ADR-0029).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ElementStyle {
+    /// `FontChoice::Theme` keeps the preset font.
+    pub font: FontChoice,
+    /// Multiplier applied to the preset size: 1.0 = the preset size.
+    pub scale: f32,
+    /// `None` keeps the preset colour, including the accent of a running cost.
+    pub color: Option<(u8, u8, u8)>,
+}
+
+impl Default for ElementStyle {
+    fn default() -> Self {
+        ElementStyle {
+            font: FontChoice::Theme,
+            scale: 1.0,
+            color: None,
+        }
+    }
+}
+
+impl ElementStyle {
+    /// Untrusted payload values: missing pieces keep the preset, scales are clamped.
+    fn resolve(wire: &ElementWire) -> ElementStyle {
+        ElementStyle {
+            font: wire
+                .font
+                .as_deref()
+                .map(theme::parse_font_choice)
+                .unwrap_or(FontChoice::Theme),
+            scale: clamp_scale(wire.scale.unwrap_or(100.0) / 100.0),
+            color: wire.color.as_deref().and_then(parse_hex_color),
+        }
+    }
+}
+
+/// The four lines the camera draws, each with its own style (ADR-0029).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Elements {
+    /// `totalCost` above the amount in `fullscreen`; the widget hides it, like the web.
+    pub label: ElementStyle,
+    pub cost: ElementStyle,
+    /// The elapsed time (or `starts in`) line.
+    pub elapsed: ElementStyle,
+    /// The cost-per-minute line under the time.
+    pub cost_per_minute: ElementStyle,
+}
+
+impl Elements {
+    fn resolve(wire: &ElementsWire) -> Elements {
+        Elements {
+            label: ElementStyle::resolve(&wire.label),
+            cost: ElementStyle::resolve(&wire.cost),
+            elapsed: ElementStyle::resolve(&wire.elapsed),
+            cost_per_minute: ElementStyle::resolve(&wire.cost_per_minute),
+        }
+    }
+}
+
+/// Untrusted element style; every field left out keeps the preset.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ElementWire {
+    pub font: Option<String>,
+    /// Percent, 100 = the preset size.
+    pub scale: Option<f32>,
+    pub color: Option<String>,
+}
+
+/// Untrusted per-element styles; a missing element keeps the preset.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ElementsWire {
+    pub label: ElementWire,
+    pub cost: ElementWire,
+    /// The web customises the status line it shows; the camera draws no status line (the
+    /// counter card has no room), so this is accepted and ignored on purpose.
+    pub status: ElementWire,
+    /// Older web builds sent `time`: the alias keeps those payloads landing here.
+    #[serde(alias = "time")]
+    pub elapsed: ElementWire,
+    /// The web customises the person-time stats grid it shows; the camera draws no stats
+    /// grid (the counter card has no room), so this is accepted and ignored on purpose.
+    pub person_time: ElementWire,
+    pub cost_per_minute: ElementWire,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BackgroundMode {
+    Solid,
+    Gradient,
+}
+
+/// Linear gradient axis: left to right, or top to bottom.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GradientDirection {
+    Horizontal,
+    Vertical,
+}
+
+/// How the counter card is painted (ADR-0029).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BackgroundStyle {
+    pub mode: BackgroundMode,
+    /// Solid fill, or the gradient start; `None` keeps the theme background.
+    pub color: Option<(u8, u8, u8)>,
+    /// Gradient end; `None` keeps the theme's alternate background.
+    pub color_alt: Option<(u8, u8, u8)>,
+    pub direction: GradientDirection,
+    /// 0.0 = fully transparent (only the text remains), 1.0 = solid.
+    pub opacity: f32,
+    /// `None` keeps the preset radius.
+    pub radius: Option<f32>,
+}
+
+impl Default for BackgroundStyle {
+    /// Today's look: a flat, opaque theme background with the preset radius.
+    fn default() -> Self {
+        BackgroundStyle {
+            mode: BackgroundMode::Solid,
+            color: None,
+            color_alt: None,
+            direction: GradientDirection::Vertical,
+            opacity: 1.0,
+            radius: None,
+        }
+    }
+}
+
+impl BackgroundStyle {
+    /// `None` (no `background` in the payload) keeps the look the renderer always had.
+    fn resolve(wire: Option<&BackgroundWire>) -> BackgroundStyle {
+        match wire {
+            None => BackgroundStyle::default(),
+            Some(wire) => BackgroundStyle {
+                // ADR-0029: the web has always painted a gradient, so an omitted `mode`
+                // means `gradient`; only an explicit `solid` turns it off.
+                mode: match wire.mode.as_deref() {
+                    Some("solid") => BackgroundMode::Solid,
+                    _ => BackgroundMode::Gradient,
+                },
+                color: wire.color.as_deref().and_then(parse_hex_color),
+                color_alt: wire.color_alt.as_deref().and_then(parse_hex_color),
+                direction: match wire.direction.as_deref() {
+                    Some("horizontal") => GradientDirection::Horizontal,
+                    _ => GradientDirection::Vertical,
+                },
+                opacity: clamp_opacity(wire.opacity),
+                radius: clamp_radius(wire.radius),
+            },
+        }
+    }
+
+    fn color_or(&self, theme: &Theme) -> (u8, u8, u8) {
+        self.color.unwrap_or(theme.background)
+    }
+
+    fn color_alt_or(&self, theme: &Theme) -> (u8, u8, u8) {
+        self.color_alt.unwrap_or(theme.background_alt)
+    }
+
+    fn radius_or(&self, theme: &Theme) -> f32 {
+        self.radius.unwrap_or(theme.radius)
+    }
+
+    fn alpha(&self) -> u8 {
+        (self.opacity * 255.0).round().clamp(0.0, 255.0) as u8
+    }
+}
+
+/// Untrusted card paint; a missing field keeps its default (ADR-0029).
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct BackgroundWire {
+    pub mode: Option<String>,
+    pub color: Option<String>,
+    pub color_alt: Option<String>,
+    pub direction: Option<String>,
+    pub opacity: Option<f32>,
+    pub radius: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -261,6 +475,8 @@ pub struct CostText {
 
 /// Fraction of the available width the cost should occupy by default.
 pub const COST_FILL_RATIO: f32 = 0.9;
+/// Letter spacing of the `labels.total_cost` line, in em (`letter-spacing: 0.1em` on the web).
+const LABEL_TRACKING_EM: f32 = 0.1;
 /// Largest em size for the cost, as a fraction of its box height. Money uses digits and
 /// the currency symbol, whose ink is about 0.7 em tall, so 1.0 still fits the box.
 pub const COST_MAX_HEIGHT_RATIO: f32 = 1.0;
@@ -285,7 +501,7 @@ pub fn cost_text(
     font_px: f32,
 ) -> CostText {
     let theme = theme::theme(&input.display.theme, now_ms);
-    let font = fonts.get(input.display.cost_font.resolve(&theme));
+    let font = fonts.get(input.display.elements.cost.font.resolve(&theme));
     let cost = counter_values(input, now_ms).cost;
     let full = format_money(cost, &input.currency, &input.locale);
     let compact = format_money_compact(cost, &input.currency, &input.locale);
@@ -302,11 +518,11 @@ pub fn cost_text(
     }
 }
 
-/// Renders one frame. `background` is the captured webcam frame in overlay mode;
-/// `None` fills the frame with the theme background (counter-only mode).
+/// Renders one frame. `background` is the captured webcam frame in overlay mode; `None`
+/// leaves the black canvas of a counter-only frame visible behind the painted background.
 ///
-/// The counter is drawn on its own transparent layer and then composited, so the webcam and
-/// the counter can be mirrored independently (ADR-0022).
+/// The counter is painted on its own transparent layer and then composited, so the webcam
+/// and the counter can be mirrored independently (ADR-0022).
 pub fn render(
     input: &CounterInput,
     fonts: &Fonts,
@@ -322,11 +538,18 @@ pub fn render(
         w: overlay.w,
         h: overlay.h,
     });
-    let layout = counter_layout_in(
+    let elements = input.display.elements;
+    // The web hides `totalCost` inside the widget, and an empty label draws nothing at all,
+    // so both cases keep the layout the renderer always had (ADR-0029).
+    let label_text = input.labels.total_cost.trim().to_uppercase();
+    let label_scale = (input.display.layout == Layout::Fullscreen && !label_text.is_empty())
+        .then_some(elements.label.scale);
+    let layout = counter_layout_with_label(
         width as f32,
         height as f32,
         input.display.layout,
         overlay_rect,
+        label_scale,
     );
     let mut pixmap = match background {
         Some(frame) => {
@@ -336,21 +559,52 @@ pub fn render(
             pixmap_from_frame(&frame)
         }
         None => {
+            // Nothing behind the counter: a black canvas, so a transparent or missing
+            // background shows what the virtual camera actually has behind it (ADR-0029).
             let mut pixmap = Pixmap::new(width, height).expect("frame size");
-            pixmap.fill(color(theme.background));
+            pixmap.fill(Color::BLACK);
             pixmap
         }
     };
+    let background_style = input.display.background;
     let mut overlay = Pixmap::new(width, height).expect("frame size");
-    if let Some(card) = layout.card {
-        fill_card(&mut overlay, card, &theme);
-    }
+    // The background belongs to the counter layer, so mirroring moves it with its text
+    // (ADR-0022); its alpha blends it into the webcam or the black canvas (ADR-0029).
+    let (card, radius) = match layout.card {
+        Some(card) => (card, background_style.radius_or(&theme)),
+        // Fullscreen: the background covers the whole frame and has no card corners.
+        None => (
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                w: width as f32,
+                h: height as f32,
+            },
+            0.0,
+        ),
+    };
+    paint_background(&mut overlay, card, radius, &background_style, &theme);
 
     let values = counter_values(input, now_ms);
-    let cost_font = input.display.cost_font.resolve(&theme);
-    let time_font = input.display.time_font.resolve(&theme);
+    // Same rule as `meetingSnapshot` in the web (`running`): the cost glows while counting.
+    let running = input.end_at.is_none() && now_ms >= input.start_at;
 
-    let cost_font_ref = fonts.get(cost_font);
+    if let Some(band) = layout.label {
+        let label_style = elements.label;
+        let label_px = label_font_px(height as f32, label_style.scale);
+        draw_centered_tracked(
+            &mut overlay,
+            &label_text,
+            fonts.get(label_style.font.resolve(&theme)),
+            label_px,
+            element_color(label_style.color, theme.muted),
+            band,
+            label_px * LABEL_TRACKING_EM,
+        );
+    }
+
+    let cost_style = elements.cost;
+    let cost_font_ref = fonts.get(cost_style.font.resolve(&theme));
     let cost_full = format_money(values.cost, &input.currency, &input.locale);
     let base_px = fit_font_px(
         &cost_full,
@@ -358,7 +612,7 @@ pub fn render(
         layout.cost.w * COST_FILL_RATIO,
         layout.cost.h * COST_MAX_HEIGHT_RATIO,
     );
-    let cost_px = (base_px * input.display.cost_scale).max(12.0);
+    let cost_px = (base_px * cost_style.scale).max(12.0);
     let cost = cost_text(input, fonts, now_ms, layout.cost.w, cost_px);
     let cost_value = if values.starts_in_ms > 0 {
         format_money(0.0, &input.currency, &input.locale)
@@ -370,11 +624,15 @@ pub fn render(
         &cost_value,
         cost_font_ref,
         cost_px * cost.scale,
-        color(theme.text),
+        element_color(
+            cost_style.color,
+            if running { theme.accent } else { theme.text },
+        ),
         layout.cost,
     );
 
-    let time_px = (layout.time.h * 0.55 * input.display.time_scale).max(14.0);
+    let elapsed_style = elements.elapsed;
+    let time_px = (layout.time.h * 0.55).max(14.0) * elapsed_style.scale;
     let time_value = if values.starts_in_ms > 0 {
         format!(
             "{} {}",
@@ -387,13 +645,14 @@ pub fn render(
     draw_centered(
         &mut overlay,
         &time_value,
-        fonts.get(time_font),
+        fonts.get(elapsed_style.font.resolve(&theme)),
         time_px,
-        color(theme.muted),
+        element_color(elapsed_style.color, theme.muted),
         layout.time,
     );
 
-    let footer_px = (layout.footer.h * 0.5).clamp(12.0, 30.0);
+    let footer_style = elements.cost_per_minute;
+    let footer_px = (layout.footer.h * 0.5).clamp(12.0, 30.0) * footer_style.scale;
     let footer = format!(
         "{} {}",
         input.labels.cost_per_minute,
@@ -402,9 +661,9 @@ pub fn render(
     draw_centered(
         &mut overlay,
         &footer,
-        fonts.get(time_font),
+        fonts.get(footer_style.font.resolve(&theme)),
         footer_px,
-        color(theme.muted),
+        element_color(footer_style.color, theme.muted),
         layout.footer,
     );
 
@@ -455,15 +714,63 @@ fn color(rgb: (u8, u8, u8)) -> Color {
     Color::from_rgba8(rgb.0, rgb.1, rgb.2, 255)
 }
 
-fn fill_card(pixmap: &mut Pixmap, card: Rect, theme: &Theme) {
+/// A per-element colour override, or the preset rule when the UI sends `null`.
+fn element_color(override_color: Option<(u8, u8, u8)>, preset: (u8, u8, u8)) -> Color {
+    color(override_color.unwrap_or(preset))
+}
+
+/// Paints the card with the requested background (ADR-0029). The alpha travels in the paint, so
+/// tiny-skia blends it into the webcam (or the black canvas) exactly like the glyphs: the text
+/// stays fully opaque and only the panel fades.
+fn paint_background(
+    pixmap: &mut Pixmap,
+    card: Rect,
+    radius: f32,
+    style: &BackgroundStyle,
+    theme: &Theme,
+) {
     let Some(rect) = tiny_skia::Rect::from_xywh(card.x, card.y, card.w, card.h) else {
         return;
     };
-    let Some(path) = rounded_rect(rect, theme.radius) else {
+    let Some(path) = rounded_rect(rect, radius) else {
         return;
     };
+    // Fully transparent: nothing to paint, so whatever is behind stays untouched.
+    let alpha = style.alpha();
+    if alpha == 0 {
+        return;
+    }
     let mut paint = Paint::default();
-    paint.set_color(color(theme.background));
+    match style.mode {
+        BackgroundMode::Solid => {
+            paint.set_color(with_alpha(style.color_or(theme), alpha));
+        }
+        BackgroundMode::Gradient => {
+            let (start, end) = match style.direction {
+                GradientDirection::Horizontal => (
+                    Point::from_xy(rect.x(), rect.y()),
+                    Point::from_xy(rect.x() + rect.width(), rect.y()),
+                ),
+                GradientDirection::Vertical => (
+                    Point::from_xy(rect.x(), rect.y()),
+                    Point::from_xy(rect.x(), rect.y() + rect.height()),
+                ),
+            };
+            let Some(shader) = LinearGradient::new(
+                start,
+                end,
+                vec![
+                    GradientStop::new(0.0, with_alpha(style.color_or(theme), alpha)),
+                    GradientStop::new(1.0, with_alpha(style.color_alt_or(theme), alpha)),
+                ],
+                SpreadMode::Pad,
+                Transform::identity(),
+            ) else {
+                return;
+            };
+            paint.shader = shader;
+        }
+    }
     pixmap.fill_path(
         &path,
         &paint,
@@ -471,6 +778,10 @@ fn fill_card(pixmap: &mut Pixmap, card: Rect, theme: &Theme) {
         Transform::identity(),
         None,
     );
+}
+
+fn with_alpha(rgb: (u8, u8, u8), alpha: u8) -> Color {
+    Color::from_rgba8(rgb.0, rgb.1, rgb.2, alpha)
 }
 
 /// tiny-skia 0.11 has no rounded-rect helper: build it with quadrants (kappa curves).
@@ -540,6 +851,7 @@ fn draw_decoration(pixmap: &mut Pixmap, theme: &Theme, fonts: &Fonts, area: Rect
         px,
         color: color(theme.muted),
         clip: area,
+        tracking: 0.0,
     };
     draw_text(
         pixmap,
@@ -550,12 +862,14 @@ fn draw_decoration(pixmap: &mut Pixmap, theme: &Theme, fonts: &Fonts, area: Rect
     );
 }
 
-/// Font, size, colour and the box glyphs are clipped to (never paint over the webcam).
+/// Font, size, colour, tracking and the box glyphs are clipped to (never paint over the webcam).
 struct TextStyle<'a> {
     font: &'a ab_glyph::FontVec,
     px: f32,
     color: Color,
     clip: Rect,
+    /// Extra advance after every glyph, in pixels (the label is tracked like the web).
+    tracking: f32,
 }
 
 fn draw_centered(
@@ -566,7 +880,19 @@ fn draw_centered(
     color: Color,
     rect: Rect,
 ) {
-    let width = measure(text, font, px);
+    draw_centered_tracked(pixmap, text, font, px, color, rect, 0.0);
+}
+
+fn draw_centered_tracked(
+    pixmap: &mut Pixmap,
+    text: &str,
+    font: &ab_glyph::FontVec,
+    px: f32,
+    color: Color,
+    rect: Rect,
+    tracking: f32,
+) {
+    let width = measure_tracked(text, font, px, tracking);
     let scaled = font.as_scaled(PxScale::from(px));
     let x = rect.x + (rect.w - width) / 2.0;
     let baseline = rect.y + rect.h / 2.0 + (scaled.ascent() + scaled.descent()) / 2.0;
@@ -575,6 +901,7 @@ fn draw_centered(
         px,
         color,
         clip: rect,
+        tracking,
     };
     draw_text(pixmap, text, &style, x, baseline);
 }
@@ -602,7 +929,7 @@ fn draw_text(pixmap: &mut Pixmap, text: &str, style: &TextStyle<'_>, start_x: f3
                 }
             });
         }
-        pen_x += scaled.h_advance(id);
+        pen_x += scaled.h_advance(id) + style.tracking;
         previous = Some(id);
     }
 }
@@ -612,19 +939,29 @@ fn blend(pixmap: &mut Pixmap, x: i32, y: i32, color: Color, coverage: f32) {
     if x < 0 || y < 0 || x >= width || y >= height {
         return;
     }
-    let alpha = coverage.clamp(0.0, 1.0);
-    if alpha <= 0.0 {
+    let coverage = coverage.clamp(0.0, 1.0);
+    if coverage <= 0.0 {
         return;
     }
     let index = ((y as u32 * pixmap.width() + x as u32) * 4) as usize;
     let source = [color.red(), color.green(), color.blue()];
     let data = pixmap.data_mut();
+    // tiny-skia stores premultiplied pixels: use its source-over maths so glyphs blend into
+    // the painted card (which may be translucent) exactly like the card blends into the frame.
+    let destination_alpha = data[index + 3] as f32 / 255.0;
+    let alpha = coverage + destination_alpha * (1.0 - coverage);
     for (channel, source_value) in source.iter().enumerate() {
         let destination = data[index + channel] as f32 / 255.0;
-        let out = destination * (1.0 - alpha) + source_value * alpha;
+        let out = source_value * coverage + destination * (1.0 - coverage);
         data[index + channel] = (out * 255.0).round().clamp(0.0, 255.0) as u8;
     }
-    data[index + 3] = 255;
+    data[index + 3] = (alpha * 255.0).round().clamp(0.0, 255.0) as u8;
+}
+
+/// Same as [`measure`], plus the tracking the label adds after every glyph but the last.
+fn measure_tracked(text: &str, font: &ab_glyph::FontVec, px: f32, tracking: f32) -> f32 {
+    let gaps = text.chars().count().saturating_sub(1) as f32;
+    measure(text, font, px) + tracking * gaps
 }
 
 fn measure(text: &str, font: &ab_glyph::FontVec, px: f32) -> f32 {
@@ -731,6 +1068,59 @@ mod tests {
             }
         }
         (max > min).then_some((min, max))
+    }
+
+    /// Top and bottom edge of the painted pixels inside `rect`.
+    fn ink_height(frame: &Frame, rect: Rect, background: (u8, u8, u8)) -> u32 {
+        let mut min = u32::MAX;
+        let mut max = 0;
+        for y in rect.y as u32..(rect.y + rect.h) as u32 {
+            for x in rect.x as u32..(rect.x + rect.w) as u32 {
+                if frame.pixel(x, y) != background {
+                    min = min.min(y);
+                    max = max.max(y);
+                }
+            }
+        }
+        max.saturating_sub(min)
+    }
+
+    /// Whether any pixel inside `rect` has exactly `expected`.
+    fn has_colour(frame: &Frame, rect: Rect, expected: (u8, u8, u8)) -> bool {
+        for y in rect.y as u32..(rect.y + rect.h) as u32 {
+            for x in rect.x as u32..(rect.x + rect.w) as u32 {
+                if frame.pixel(x, y) == expected {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// How many pixels of the whole frame have exactly `expected`.
+    fn colour_count(frame: &Frame, expected: (u8, u8, u8)) -> usize {
+        let mut count = 0;
+        for y in 0..frame.height() {
+            for x in 0..frame.width() {
+                if frame.pixel(x, y) == expected {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+
+    /// How many pixels inside `rect` differ between two renders.
+    fn differing_pixels(left: &Frame, right: &Frame, rect: Rect) -> usize {
+        let mut count = 0;
+        for y in rect.y as u32..(rect.y + rect.h) as u32 {
+            for x in rect.x as u32..(rect.x + rect.w) as u32 {
+                if left.pixel(x, y) != right.pixel(x, y) {
+                    count += 1;
+                }
+            }
+        }
+        count
     }
 
     #[test]
@@ -1050,7 +1440,7 @@ mod tests {
     #[test]
     fn normalises_untrusted_display_settings() {
         let input: CounterInput = serde_json::from_str(
-            r#"{"display":{"theme":"nope","layout":"widget","costFont":"mono","timeFont":"nonsense","costScale":9,"timeScale":0.1,"overflow":"shrink"}}"#,
+            r##"{"display":{"theme":"nope","layout":"widget","overflow":"shrink","elements":{"cost":{"font":"mono","scale":900,"color":"#FF0000"},"elapsed":{"scale":10,"color":"not-a-colour"}},"background":{"mode":"solid","color":"#fff","opacity":900,"radius":-5}}}"##,
         )
         .expect("display parses");
         assert_eq!(
@@ -1058,15 +1448,62 @@ mod tests {
             "unknown themes fall back when rendering"
         );
         assert_eq!(input.display.layout, Layout::Widget);
-        assert_eq!(
-            input.display.cost_font,
-            FontChoice::Font(crate::camera::theme::FontId::Mono)
-        );
-        assert_eq!(input.display.time_font, FontChoice::Theme);
-        assert_eq!(input.display.cost_scale, 2.5);
-        assert_eq!(input.display.time_scale, 0.5);
         assert_eq!(input.display.overflow, Overflow::Shrink);
+        assert_eq!(
+            input.display.elements.cost.font,
+            FontChoice::Font(theme::FontId::Mono)
+        );
+        assert_eq!(input.display.elements.cost.scale, 2.5, "clamped to 250%");
+        assert_eq!(input.display.elements.cost.color, Some((255, 0, 0)));
+        assert_eq!(input.display.elements.elapsed.scale, 0.5, "clamped to 50%");
+        assert_eq!(
+            input.display.elements.elapsed.color, None,
+            "an invalid colour keeps the preset"
+        );
+        assert_eq!(
+            input.display.elements.label,
+            ElementStyle::default(),
+            "elements left out keep the preset"
+        );
+        assert_eq!(input.display.background.mode, BackgroundMode::Solid);
+        assert_eq!(
+            input.display.background.color,
+            Some((255, 255, 255)),
+            "#fff expands to #ffffff"
+        );
+        assert_eq!(input.display.background.opacity, 1.0, "clamped to 100%");
+        assert_eq!(input.display.background.radius, Some(0.0), "clamped to 0");
         assert_eq!(input.display.overlay, None, "no overlay by default");
+    }
+
+    #[test]
+    fn an_omitted_background_mode_means_gradient_with_the_theme_colours() {
+        let input: CounterInput =
+            serde_json::from_str(r#"{"display":{"background":{"radius":0}}}"#)
+                .expect("display parses");
+        let background = input.display.background;
+        assert_eq!(
+            background.mode,
+            BackgroundMode::Gradient,
+            "ADR-0029 default"
+        );
+        assert_eq!(background.direction, GradientDirection::Vertical);
+        assert_eq!(background.opacity, 1.0);
+        assert_eq!(background.radius, Some(0.0));
+        assert_eq!((background.color, background.color_alt), (None, None));
+
+        let frame = render(&input, &fonts(), 1_060_000, None);
+        let top = frame.pixel(5, 2);
+        let bottom = frame.pixel(5, FRAME_HEIGHT - 2);
+        assert_ne!(top, bottom, "the preset painted a gradient");
+        assert!(
+            top.0 <= 0x10 && top.1 <= 0x12 && top.2 <= 0x16,
+            "the gradient starts at the theme background: {top:?}"
+        );
+        assert!(
+            bottom.0 >= 0x17 && bottom.1 >= 0x1a && bottom.2 >= 0x21,
+            "the gradient ends at the theme backgroundAlt: {bottom:?}"
+        );
     }
 
     #[test]
@@ -1121,6 +1558,542 @@ mod tests {
         assert_eq!(
             (overlay.x, overlay.y, overlay.w, overlay.h),
             (0.1, 0.2, 0.3, 0.4)
+        );
+    }
+
+    #[test]
+    fn a_payload_without_elements_or_background_keeps_the_preset_look() {
+        // Older web builds send neither `elements` nor `background`: the renderer must keep
+        // the look it had before ADR-0029 (preset fonts, colours, sizes and a flat panel).
+        let input: CounterInput = serde_json::from_str(
+            r#"{"startAt":1000000,"ratePerMs":0.01,"endAt":1060000,"display":{"theme":"classic"}}"#,
+        )
+        .expect("payload parses");
+        assert_eq!(input.display.elements, Elements::default());
+        assert_eq!(input.display.background, BackgroundStyle::default());
+        assert_eq!(
+            input.display.background.mode,
+            BackgroundMode::Solid,
+            "no gradient without a background object"
+        );
+
+        let fonts = fonts();
+        let frame = render(&input, &fonts, 1_100_000, None);
+        let background = (0x0f, 0x11, 0x15);
+        assert_eq!(frame.pixel(0, 0), background, "flat theme background");
+        assert_eq!(frame.pixel(FRAME_WIDTH - 1, FRAME_HEIGHT - 1), background);
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+        assert!(ink_inside(&frame, layout.cost, background) > 0);
+        assert!(ink_inside(&frame, layout.time, background) > 0);
+        assert!(ink_inside(&frame, layout.footer, background) > 0);
+
+        // The widget card is flat as well: same colour at its top and at its bottom.
+        let mut widget = input;
+        widget.display.layout = Layout::Widget;
+        let frame = render(&widget, &fonts, 1_100_000, None);
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Widget);
+        let card = layout.card.expect("card");
+        let centre = (card.x + card.w / 2.0) as u32;
+        assert_eq!(frame.pixel(centre, card.y as u32 + 2), background);
+        assert_eq!(
+            frame.pixel(centre, (card.y + card.h - 2.0) as u32),
+            background,
+            "no gradient: the bottom matches the top"
+        );
+    }
+
+    #[test]
+    fn a_transparent_background_leaves_the_webcam_and_still_draws_the_text() {
+        let mut input = input();
+        input.display.layout = Layout::Widget;
+        input.display.background = BackgroundStyle {
+            mode: BackgroundMode::Solid,
+            color: Some((255, 255, 255)),
+            opacity: 0.0,
+            ..BackgroundStyle::default()
+        };
+        let webcam = (0x22, 0x44, 0x66);
+        let frame = render(
+            &input,
+            &fonts(),
+            1_060_000,
+            Some(&Frame::filled(FRAME_WIDTH, FRAME_HEIGHT, webcam)),
+        );
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Widget);
+        let card = layout.card.expect("card");
+        assert_eq!(
+            frame.pixel((card.x + card.w / 2.0) as u32, card.y as u32 + 2),
+            webcam,
+            "the card paint is gone, so the webcam shows through"
+        );
+        assert!(
+            ink_inside(&frame, layout.cost, webcam) > 0,
+            "the text is still drawn over the webcam"
+        );
+
+        // Fullscreen has no webcam: the black canvas shows through instead of the panel.
+        let mut fullscreen = input;
+        fullscreen.display.layout = Layout::Fullscreen;
+        let frame = render(&fullscreen, &fonts(), 1_060_000, None);
+        assert_eq!(frame.pixel(0, 0), (0, 0, 0), "black canvas");
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+        assert!(ink_inside(&frame, layout.cost, (0, 0, 0)) > 0);
+    }
+
+    #[test]
+    fn a_half_transparent_background_blends_with_what_is_behind() {
+        let mut input = input();
+        input.display.background = BackgroundStyle {
+            mode: BackgroundMode::Solid,
+            color: Some((255, 255, 255)),
+            opacity: 0.5,
+            ..BackgroundStyle::default()
+        };
+        let behind = (0x00, 0x20, 0x40);
+        let frame = render(
+            &input,
+            &fonts(),
+            1_060_000,
+            Some(&Frame::filled(FRAME_WIDTH, FRAME_HEIGHT, behind)),
+        );
+        let blended = frame.pixel(0, 0);
+        // alpha = round(0.5 * 255) = 128: out = behind * (1 - a) + white * a.
+        assert!(
+            (i32::from(blended.0) - 128).abs() <= 2
+                && (i32::from(blended.1) - 144).abs() <= 2
+                && (i32::from(blended.2) - 160).abs() <= 2,
+            "half way between {behind:?} and white: {blended:?}"
+        );
+    }
+
+    #[test]
+    fn a_gradient_background_runs_along_its_direction() {
+        let mut input = input();
+        input.display.background = BackgroundStyle {
+            mode: BackgroundMode::Gradient,
+            color: Some((0, 0, 0)),
+            color_alt: Some((255, 255, 255)),
+            direction: GradientDirection::Vertical,
+            opacity: 1.0,
+            radius: None,
+        };
+        let frame = render(&input, &fonts(), 1_060_000, None);
+        let top = frame.pixel(5, 2);
+        let bottom = frame.pixel(5, FRAME_HEIGHT - 2);
+        assert!(top.0 < bottom.0, "top to bottom: {top:?} -> {bottom:?}");
+        assert_eq!(
+            frame.pixel(2, 5),
+            frame.pixel(FRAME_WIDTH - 2, 5),
+            "a vertical gradient does not change left to right"
+        );
+
+        input.display.background.direction = GradientDirection::Horizontal;
+        let frame = render(&input, &fonts(), 1_060_000, None);
+        let left = frame.pixel(2, 5);
+        let right = frame.pixel(FRAME_WIDTH - 2, 5);
+        assert!(left.0 < right.0, "left to right: {left:?} -> {right:?}");
+        assert_eq!(
+            frame.pixel(5, 2),
+            frame.pixel(5, FRAME_HEIGHT - 2),
+            "a horizontal gradient does not change top to bottom"
+        );
+    }
+
+    #[test]
+    fn the_background_radius_controls_the_card_corners() {
+        let mut input = input();
+        input.display.layout = Layout::Widget;
+        input.display.background = BackgroundStyle {
+            mode: BackgroundMode::Solid,
+            color: Some((255, 255, 255)),
+            opacity: 1.0,
+            radius: Some(0.0),
+            ..BackgroundStyle::default()
+        };
+        let webcam = (0x22, 0x44, 0x66);
+        let webcam_frame = Frame::filled(FRAME_WIDTH, FRAME_HEIGHT, webcam);
+        let square = render(&input, &fonts(), 1_060_000, Some(&webcam_frame));
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Widget);
+        let card = layout.card.expect("card");
+        let (corner_x, corner_y) = (card.x as u32, card.y as u32);
+        assert_eq!(
+            square.pixel(corner_x, corner_y),
+            (255, 255, 255),
+            "radius 0 gives a square corner"
+        );
+        let painted = colour_count(&square, (255, 255, 255));
+
+        input.display.background.radius = Some(40.0);
+        let rounded = render(&input, &fonts(), 1_060_000, Some(&webcam_frame));
+        assert_eq!(
+            rounded.pixel(corner_x, corner_y),
+            webcam,
+            "radius 40 clips the corner"
+        );
+        assert!(
+            colour_count(&rounded, (255, 255, 255)) < painted,
+            "rounded corners paint less of the card"
+        );
+        assert_ne!(
+            rounded.pixel(corner_x + 40, corner_y + 1),
+            webcam,
+            "the card starts further in at the top edge"
+        );
+    }
+
+    #[test]
+    fn per_element_colours_override_the_preset_and_null_keeps_it() {
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+        let classic = theme::theme("classic", 1_060_000);
+
+        let mut overridden = input();
+        overridden.display.elements.cost.color = Some((255, 0, 0));
+        overridden.display.elements.elapsed.color = Some((0, 255, 0));
+        overridden.display.elements.cost_per_minute.color = Some((0, 0, 255));
+        let frame = render(&overridden, &fonts(), 1_060_000, None);
+        assert!(
+            has_colour(&frame, layout.cost, (255, 0, 0)),
+            "cost override"
+        );
+        assert!(
+            has_colour(&frame, layout.time, (0, 255, 0)),
+            "elapsed override"
+        );
+        assert!(
+            has_colour(&frame, layout.footer, (0, 0, 255)),
+            "cost-per-minute override"
+        );
+        assert!(!has_colour(&frame, layout.time, classic.muted));
+
+        // `null` keeps the preset: the accent while running, the muted colour for the rest.
+        let frame = render(&input(), &fonts(), 1_060_000, None);
+        assert!(
+            has_colour(&frame, layout.cost, classic.accent),
+            "a running cost keeps the accent ({:?})",
+            classic.accent
+        );
+        assert!(has_colour(&frame, layout.time, classic.muted));
+        assert!(has_colour(&frame, layout.footer, classic.muted));
+
+        let mut stopped = input();
+        stopped.end_at = Some(1_030_000);
+        let frame = render(&stopped, &fonts(), 1_060_000, None);
+        assert!(
+            has_colour(&frame, layout.cost, classic.text),
+            "a stopped meeting draws the cost in the text colour"
+        );
+    }
+
+    #[test]
+    fn per_element_fonts_fall_back_to_the_preset_or_use_the_explicit_font() {
+        let input: CounterInput = serde_json::from_str(
+            r#"{"display":{"elements":{"cost":{"font":"mono"},"elapsed":{"font":"theme"},"label":{"font":"nope"}}}}"#,
+        )
+        .expect("display parses");
+        assert_eq!(
+            input.display.elements.cost.font,
+            FontChoice::Font(theme::FontId::Mono)
+        );
+        assert_eq!(input.display.elements.elapsed.font, FontChoice::Theme);
+        assert_eq!(
+            input.display.elements.label.font,
+            FontChoice::Theme,
+            "unknown font ids keep the preset"
+        );
+        assert_eq!(
+            input.display.elements.cost_per_minute,
+            ElementStyle::default()
+        );
+
+        // The explicit face really reaches the drawing.
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+        let mut preset = input;
+        preset.display.elements.cost.font = FontChoice::Theme;
+        let preset_frame = render(&preset, &fonts(), 1_060_000, None);
+        preset.display.elements.cost.font = FontChoice::Font(theme::FontId::Mono);
+        let mono_frame = render(&preset, &fonts(), 1_060_000, None);
+        assert!(
+            differing_pixels(&preset_frame, &mono_frame, layout.cost) > 0,
+            "the mono face changes the glyphs"
+        );
+    }
+
+    #[test]
+    fn an_element_scale_changes_its_size() {
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+        let background = (0x0f, 0x11, 0x15);
+        let mut input = input();
+        let preset = render(&input, &fonts(), 1_060_000, None);
+        let preset_height = ink_height(&preset, layout.time, background);
+        let preset_width = ink_bounds(&preset, layout.time, background)
+            .map(|(min, max)| max - min)
+            .unwrap_or(0);
+
+        input.display.elements.elapsed.scale = 2.0;
+        let doubled = render(&input, &fonts(), 1_060_000, None);
+        let doubled_height = ink_height(&doubled, layout.time, background);
+        let doubled_width = ink_bounds(&doubled, layout.time, background)
+            .map(|(min, max)| max - min)
+            .unwrap_or(0);
+        assert!(
+            doubled_height > preset_height,
+            "{doubled_height} px tall at 200% vs {preset_height} px at 100%"
+        );
+        assert!(
+            doubled_width > preset_width,
+            "{doubled_width} px wide at 200% vs {preset_width} px at 100%"
+        );
+    }
+
+    #[test]
+    fn elapsed_styles_the_time_line() {
+        let input: CounterInput = serde_json::from_str(
+            r##"{"startAt":1000000,"ratePerMs":0.01,"display":{"elements":{"elapsed":{"font":"mono","scale":200,"color":"#00FF00"}}}}"##,
+        )
+        .expect("payload parses");
+        assert_eq!(
+            input.display.elements.elapsed.font,
+            FontChoice::Font(theme::FontId::Mono)
+        );
+        assert_eq!(input.display.elements.elapsed.scale, 2.0);
+        assert_eq!(input.display.elements.elapsed.color, Some((0, 255, 0)));
+
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+        let frame = render(&input, &fonts(), 1_060_000, None);
+        assert!(
+            has_colour(&frame, layout.time, (0, 255, 0)),
+            "`elapsed` paints the elapsed-time line"
+        );
+        assert!(
+            !has_colour(&frame, layout.footer, (0, 255, 0)),
+            "`elapsed` does not leak into the cost-per-minute footer"
+        );
+    }
+
+    #[test]
+    fn an_old_payload_styles_the_time_line_through_the_time_alias() {
+        let input: CounterInput = serde_json::from_str(
+            r##"{"display":{"elements":{"time":{"font":"mono","scale":200,"color":"#FF0000"}}}}"##,
+        )
+        .expect("older payloads still parse");
+        assert_eq!(
+            input.display.elements.elapsed.font,
+            FontChoice::Font(theme::FontId::Mono)
+        );
+        assert_eq!(input.display.elements.elapsed.scale, 2.0);
+        assert_eq!(input.display.elements.elapsed.color, Some((255, 0, 0)));
+
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+        let frame = render(&input, &fonts(), 1_060_000, None);
+        assert!(
+            has_colour(&frame, layout.time, (255, 0, 0)),
+            "`time` still lands on the elapsed-time line"
+        );
+    }
+
+    #[test]
+    fn cost_per_minute_styles_the_footer() {
+        let layout = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+        let background = (0x0f, 0x11, 0x15);
+        let preset = render(&input(), &fonts(), 1_060_000, None);
+        let preset_height = ink_height(&preset, layout.footer, background);
+
+        let styled: CounterInput = serde_json::from_str(
+            r##"{"startAt":1000000,"ratePerMs":0.01,"display":{"elements":{"costPerMinute":{"font":"mono","scale":200,"color":"#0000FF"}}}}"##,
+        )
+        .expect("payload parses");
+        assert_eq!(
+            styled.display.elements.cost_per_minute.font,
+            FontChoice::Font(theme::FontId::Mono)
+        );
+        assert_eq!(styled.display.elements.cost_per_minute.scale, 2.0);
+        assert_eq!(
+            styled.display.elements.cost_per_minute.color,
+            Some((0, 0, 255))
+        );
+
+        let frame = render(&styled, &fonts(), 1_060_000, None);
+        assert!(
+            has_colour(&frame, layout.footer, (0, 0, 255)),
+            "`costPerMinute` paints the footer"
+        );
+        assert!(
+            !has_colour(&frame, layout.time, (0, 0, 255)),
+            "`costPerMinute` does not leak into the elapsed line"
+        );
+        assert!(
+            ink_height(&frame, layout.footer, background) > preset_height,
+            "200 % grows the footer glyphs"
+        );
+    }
+
+    #[test]
+    fn status_and_person_time_styles_are_accepted_but_never_drawn() {
+        // The web customises a status line and the person-time stats grid; the camera draws
+        // neither (no room in the counter card), so a loud style on them changes no pixel.
+        let ignored: CounterInput = serde_json::from_str(
+            r##"{"startAt":1000000,"ratePerMs":0.01,"display":{"elements":{"status":{"font":"mono","scale":250,"color":"#FF0000"},"personTime":{"font":"mono","scale":250,"color":"#00FF00"}}}}"##,
+        )
+        .expect("the camera accepts the styles the web sends");
+
+        let fonts = fonts();
+        let frame = render(&ignored, &fonts, 1_060_000, None);
+        let preset = render(&input(), &fonts, 1_060_000, None);
+        assert_eq!(
+            frame, preset,
+            "the camera draws neither a status line nor the person-time stats grid"
+        );
+    }
+
+    /// The layout `render` builds for a fullscreen frame with the label at `scale`.
+    fn fullscreen_layout(scale: f32) -> crate::camera::layout::CounterLayout {
+        counter_layout_with_label(
+            FRAME_WIDTH as f32,
+            FRAME_HEIGHT as f32,
+            Layout::Fullscreen,
+            None,
+            Some(scale),
+        )
+    }
+
+    #[test]
+    fn fullscreen_paints_the_label_above_the_cost() {
+        let fonts = fonts();
+        let background = (0x0f, 0x11, 0x15);
+        let layout = fullscreen_layout(1.0);
+        let band = layout.label.expect("fullscreen reserves a label band");
+
+        let frame = render(&input(), &fonts, 1_060_000, None);
+        let preset_ink = ink_inside(&frame, band, background);
+        assert!(preset_ink > 0, "the label is painted in its band");
+        assert_eq!(
+            ink_outside(&frame, layout.content, background),
+            0,
+            "the label neither overlaps nor overflows the content"
+        );
+        let preset_height = ink_height(&frame, band, background);
+        assert!(
+            preset_height as f32 > band.h * 0.4,
+            "{preset_height} px of ink in a {} px band: about 4 % of the frame height",
+            band.h
+        );
+        assert!(
+            ink_inside(&frame, layout.cost, background) > 0,
+            "the cost is still drawn below the label"
+        );
+
+        // A style override reaches the glyphs: 200 % paints a bigger label.
+        let mut scaled_input = input();
+        scaled_input.display.elements.label.scale = 2.0;
+        let scaled_layout = fullscreen_layout(2.0);
+        let scaled_band = scaled_layout.label.expect("band");
+        let scaled = render(&scaled_input, &fonts, 1_060_000, None);
+        let scaled_ink = ink_inside(&scaled, scaled_band, background);
+        assert!(
+            scaled_band.h > band.h && scaled_ink > preset_ink,
+            "200 % paints {scaled_ink} px vs {preset_ink} px at 100 %"
+        );
+        assert!(
+            ink_height(&scaled, scaled_band, background) > preset_height,
+            "the label glyphs grow with the scale"
+        );
+        assert!(
+            ink_inside(&scaled, scaled_layout.cost, background) > 0,
+            "the cost keeps its (smaller) box and its fit/overflow rules"
+        );
+    }
+
+    #[test]
+    fn the_widget_never_draws_the_label() {
+        let fonts = fonts();
+        let mut widget = input();
+        widget.display.layout = Layout::Widget;
+        let webcam = Frame::filled(FRAME_WIDTH, FRAME_HEIGHT, (0x22, 0x44, 0x66));
+        let without = render(&widget, &fonts, 1_060_000, Some(&webcam));
+
+        // Same frame with a label the web would hide in the widget: nothing may change.
+        let mut labelled = widget.clone();
+        labelled.labels.total_cost = "Total cost".into();
+        labelled.display.elements.label.scale = 2.5;
+        labelled.display.elements.label.color = Some((255, 0, 0));
+        labelled.display.elements.label.font = FontChoice::Font(theme::FontId::Mono);
+        let with = render(&labelled, &fonts, 1_060_000, Some(&webcam));
+
+        assert_eq!(without, with, "widget frames stay pixel-identical");
+        let whole_frame = Rect {
+            x: 0.0,
+            y: 0.0,
+            w: FRAME_WIDTH as f32,
+            h: FRAME_HEIGHT as f32,
+        };
+        assert!(
+            !has_colour(&with, whole_frame, (255, 0, 0)),
+            "the label colour never reaches a widget frame"
+        );
+    }
+
+    #[test]
+    fn an_empty_label_draws_nothing_and_keeps_todays_layout() {
+        let fonts = fonts();
+        let background = (0x0f, 0x11, 0x15);
+        let mut input = input();
+        input.labels.total_cost = String::new();
+        let blank = render(&input, &fonts, 1_060_000, None);
+
+        // Today's geometry: the cost, the time and the status keep their boxes.
+        let today = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+        assert!(ink_inside(&blank, today.cost, background) > 0);
+        assert!(ink_inside(&blank, today.time, background) > 0);
+        assert!(ink_inside(&blank, today.footer, background) > 0);
+
+        // A style that would be loud still paints nothing when the text is empty.
+        let mut styled = input.clone();
+        styled.display.elements.label.scale = 2.5;
+        styled.display.elements.label.color = Some((255, 0, 0));
+        let styled_frame = render(&styled, &fonts, 1_060_000, None);
+        assert_eq!(blank, styled_frame, "no band, no glyphs");
+
+        // And the text really is what moves the cost down.
+        let mut labelled = input;
+        labelled.labels.total_cost = "Total cost".into();
+        let labelled_frame = render(&labelled, &fonts, 1_060_000, None);
+        assert_ne!(blank, labelled_frame, "the label changes the geometry");
+    }
+
+    #[test]
+    fn the_label_is_uppercased_like_the_web() {
+        let fonts = fonts();
+        let mut input = input();
+        input.labels.total_cost = "Total cost".into();
+        let mixed_case = render(&input, &fonts, 1_060_000, None);
+        input.labels.total_cost = "TOTAL COST".into();
+        let uppercase = render(&input, &fonts, 1_060_000, None);
+        assert_eq!(mixed_case, uppercase, "`text-transform: uppercase`");
+    }
+
+    #[test]
+    fn the_label_keeps_the_muted_preset_when_its_colour_is_null() {
+        let fonts = fonts();
+        let band = fullscreen_layout(1.0).label.expect("band");
+        let classic = theme::theme("classic", 1_060_000);
+
+        let preset = render(&input(), &fonts, 1_060_000, None);
+        assert!(
+            has_colour(&preset, band, classic.muted),
+            "color: null keeps the muted preset ({:?})",
+            classic.muted
+        );
+
+        let mut overridden = input();
+        overridden.display.elements.label.color = Some((255, 0, 0));
+        let frame = render(&overridden, &fonts, 1_060_000, None);
+        assert!(
+            has_colour(&frame, band, (255, 0, 0)),
+            "an explicit colour replaces the preset"
+        );
+        assert!(
+            colour_count(&frame, classic.muted) < colour_count(&preset, classic.muted),
+            "the label no longer paints muted pixels"
         );
     }
 }
