@@ -16,6 +16,15 @@ A live meeting-cost overlay that shows the combined cost of everyone's time. Ava
 - License: [MIT](LICENSE)
 - Agents: [.github/agents/](.github/agents/)
 
+## What each version can do
+
+| Platform | Scope |
+|---|---|
+| **Windows** desktop | Full: setup page, counter window, webcam overlay and the **MeetBurner Camera** virtual camera (DirectShow) |
+| **Linux** desktop | Setup page, counter window and share links. No virtual camera yet: the v4l2loopback sink is M5 |
+| **macOS** desktop | Setup page, counter window and share links. No virtual camera yet: a CoreMediaIO camera extension needs Apple Developer signing and notarization (M11, [ADR-0028](docs/decisions/0028-macos-without-virtual-camera.md)) |
+| **Web** ([meetburner.com](https://meetburner.com)) | Full web feature set: setup, counter window, share links. A browser cannot publish a virtual camera |
+
 ## Layout
 
 ```
@@ -66,8 +75,9 @@ A release is cut from a tag: `git tag vX.Y.Z && git push origin vX.Y.Z` builds W
 | `MeetBurner_<version>_x64.exe` | portable, one file: the camera driver is inside and is written next to the exe on the first registration ([ADR-0026](docs/decisions/0026-portable-single-file.md)) |
 | `MeetBurner_<version>_portable_x64.zip` | portable, the same exe plus `resources\MeetBurnerCamera.dll`; use it when antivirus or SmartScreen flags the one-file build |
 | `..._amd64.deb`, `..._amd64.AppImage` | Linux |
+| `MeetBurner_<version>_universal.dmg` | macOS, Apple silicon and Intel. Unsigned: Gatekeeper asks for confirmation on the first launch (ADR-0028) |
 
-Until the repository is public, release assets are only visible to collaborators; the download button on meetburner.com waits for that flip.
+Release assets are public and the footer of [meetburner.com](https://meetburner.com) links to the latest one.
 
 Locally, `npm run build:desktop` writes the NSIS/MSI installers to `apps/desktop/src-tauri/target/release/bundle` and the exe to `target/release`. Step-by-step, including what each file is for: [apps/desktop/README.md](apps/desktop/README.md#install-vs-portable).
 
