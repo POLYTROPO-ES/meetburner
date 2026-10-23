@@ -93,7 +93,8 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 ### M9. Stage 1 release — `architect` + `desktop`
 - [~] Release workflow: tag `vX.Y.Z` builds Windows (NSIS, MSI, portable exe and zip) and Linux (`.deb`, AppImage) and publishes a draft-first GitHub Release with `SHA256SUMS.txt` (ADR-0025, ADR-0026); pending the first tagged release
 - [x] Release notes: GitHub's generated notes from the merged PRs
-- [ ] Code signing (Windows): certificate pending (owner is getting one); the workflow signs the driver and the installers as soon as `WINDOWS_CERTIFICATE` and `WINDOWS_CERTIFICATE_PASSWORD` exist (ADR-0025)
+- [x] MIT license and the [code signing policy](../code-signing-policy.md) the SignPath review asks for (ADR-0027)
+- [ ] Code signing (Windows): SignPath Foundation application pending (ADR-0027); until it is approved, releases ship unsigned and the workflow has no certificate to import
 - [ ] Flip the repository to public so `releases/latest/download/…` works for end users, then add the download button on meetburner.com
 - [ ] User docs: install, Linux module setup, troubleshooting
 
