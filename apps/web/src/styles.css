@@ -69,6 +69,8 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
 .style-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; align-items: start; margin-top: 1rem; }
 .style-groups h3 { margin: 0 0 0.5rem; font-size: 1rem; }
 .style-mode { align-self: end; }
+.style-bg-colors { display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap; }
+.style-bg-colors > label { flex: 1 1 9rem; }
 .style-groups input[type='color'] { width: 2.6rem; height: 2.2rem; padding: 0.15rem; }
 .style-elements { display: flex; flex-direction: column; gap: 0.75rem; }
 .style-element { display: grid; grid-template-columns: 4.5rem minmax(0, 1.1fr) minmax(0, 1fr) auto; gap: 0.5rem; align-items: end; }
@@ -184,13 +186,25 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
   color: var(--el-status-color, var(--muted));
 }
 .counter-view .time {
-  font-family: var(--el-time-font);
+  font-family: var(--el-elapsed-font);
   font-variant-numeric: tabular-nums;
-  color: var(--el-time-color, var(--text));
+  color: var(--el-elapsed-color, var(--text));
 }
 .stats { display: flex; gap: 4cqw; flex-wrap: wrap; justify-content: center; margin: 1cqh 0 0; }
-.stats dt { color: var(--muted); font-size: 3.5cqh; }
-.stats dd { margin: 0; font-size: min(calc(3.5cqw * var(--el-time-size)), calc(7cqh * var(--el-time-size))); font-variant-numeric: tabular-nums; }
+.stats dd { margin: 0; font-variant-numeric: tabular-nums; }
+/* Each stat row gets its element's --el-<el>-{font,size,color} inline (CounterView). */
+.stats > div[data-el='elapsed'] dt,
+.stats > div[data-el='elapsed'] dd { font-family: var(--el-elapsed-font); }
+.stats > div[data-el='elapsed'] dt { font-size: calc(3.5cqh * var(--el-elapsed-size)); color: var(--el-elapsed-color, var(--muted)); }
+.stats > div[data-el='elapsed'] dd { font-size: min(calc(3.5cqw * var(--el-elapsed-size)), calc(7cqh * var(--el-elapsed-size))); color: var(--el-elapsed-color, var(--text)); }
+.stats > div[data-el='personTime'] dt,
+.stats > div[data-el='personTime'] dd { font-family: var(--el-personTime-font); }
+.stats > div[data-el='personTime'] dt { font-size: calc(3.5cqh * var(--el-personTime-size)); color: var(--el-personTime-color, var(--muted)); }
+.stats > div[data-el='personTime'] dd { font-size: min(calc(3.5cqw * var(--el-personTime-size)), calc(7cqh * var(--el-personTime-size))); color: var(--el-personTime-color, var(--text)); }
+.stats > div[data-el='costPerMinute'] dt,
+.stats > div[data-el='costPerMinute'] dd { font-family: var(--el-costPerMinute-font); }
+.stats > div[data-el='costPerMinute'] dt { font-size: calc(3.5cqh * var(--el-costPerMinute-size)); color: var(--el-costPerMinute-color, var(--muted)); }
+.stats > div[data-el='costPerMinute'] dd { font-size: min(calc(3.5cqw * var(--el-costPerMinute-size)), calc(7cqh * var(--el-costPerMinute-size))); color: var(--el-costPerMinute-color, var(--text)); }
 
 /* Widget: small card meant to sit over a webcam image */
 .counter-view.widget { background: transparent; align-items: flex-end; justify-content: flex-end; padding: 3cqw; }
@@ -202,7 +216,7 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
   box-shadow: 0 0.5cqw 2cqw rgb(0 0 0 / 0.35);
 }
 .counter-view.widget .total { font-size: calc(6cqw * var(--el-cost-size) * var(--fit, 1)); }
-.counter-view.widget .time { margin: 0; font-size: calc(3cqw * var(--el-time-size)); color: var(--el-time-color, var(--muted)); }
+.counter-view.widget .time { margin: 0; font-size: calc(3cqw * var(--el-elapsed-size)); color: var(--el-elapsed-color, var(--muted)); }
 .counter-view.widget .status { font-size: calc(2cqw * var(--el-status-size)); }
 .counter-view.widget .decoration { font-size: 3cqw; }
 .counter-view.embedded.widget { background: repeating-conic-gradient(#2a2f3a 0 25%, #20242c 0 50%) 0 0 / 24px 24px; }

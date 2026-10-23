@@ -461,16 +461,16 @@ export function Setup() {
                   </option>
                 ))}
               </select>
-              <label>
-                {t(lang, 'bg.color')}
-                <input
-                  type="color"
-                  value={style.background.color}
-                  onChange={(e) => updateBackground({ color: e.target.value })}
-                />
-              </label>
-              {style.background.mode === 'gradient' && (
-                <>
+              <div className="style-bg-colors">
+                <label>
+                  {t(lang, 'bg.color')}
+                  <input
+                    type="color"
+                    value={style.background.color}
+                    onChange={(e) => updateBackground({ color: e.target.value })}
+                  />
+                </label>
+                {style.background.mode === 'gradient' && (
                   <label>
                     {t(lang, 'bg.colorAlt')}
                     <input
@@ -479,20 +479,22 @@ export function Setup() {
                       onChange={(e) => updateBackground({ colorAlt: e.target.value })}
                     />
                   </label>
-                  <label>
-                    {t(lang, 'bg.direction')}
-                    <select
-                      value={style.background.direction}
-                      onChange={(e) => updateBackground({ direction: e.target.value as GradientDirection })}
-                    >
-                      {GRADIENT_DIRECTIONS.map((direction) => (
-                        <option key={direction} value={direction}>
-                          {t(lang, `bg.${direction}`)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </>
+                )}
+              </div>
+              {style.background.mode === 'gradient' && (
+                <label>
+                  {t(lang, 'bg.direction')}
+                  <select
+                    value={style.background.direction}
+                    onChange={(e) => updateBackground({ direction: e.target.value as GradientDirection })}
+                  >
+                    {GRADIENT_DIRECTIONS.map((direction) => (
+                      <option key={direction} value={direction}>
+                        {t(lang, `bg.${direction}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
               <label>
                 {t(lang, 'bg.opacity')} ({style.background.opacity}%)

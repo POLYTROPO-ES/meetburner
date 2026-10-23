@@ -9,10 +9,13 @@ import {
   resolveTheme,
   styleFor,
   t,
+  type CounterElement,
   type DisplaySettings,
   type Lang,
   type Meeting,
   type MeetingSnapshot,
+  type StyleOverride,
+  type Theme,
 } from '@meetburner/core';
 
 interface Props {
@@ -23,6 +26,21 @@ interface Props {
   now: number;
   /** Rendered inside a box (setup preview) instead of a whole window. */
   embedded?: boolean;
+}
+
+/** The three CSS variables the stylesheet reads for one counter element (ADR-0029). */
+function elementVars(
+  element: CounterElement,
+  style: StyleOverride,
+  theme: Theme,
+): CSSProperties & Record<string, string> {
+  const elementStyle = style.elements[element];
+  return {
+    [`--el-${element}-font`]: resolveFont(elementStyle.font, theme),
+    [`--el-${element}-size`]: String(elementStyle.scale / 100),
+    // Empty = the CSS fallback, so the preset colour (including the running accent) wins.
+    [`--el-${element}-color`]: elementStyle.color ?? '',
+  };
 }
 
 export function CounterView({ meeting, snapshot: s, display, lang, now, embedded }: Props) {
@@ -42,13 +60,7 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
     '--accent': theme.accent,
     '--weight': theme.weight,
   };
-  for (const element of COUNTER_ELEMENTS) {
-    const elementStyle = style.elements[element];
-    vars[`--el-${element}-font`] = resolveFont(elementStyle.font, theme);
-    vars[`--el-${element}-size`] = String(elementStyle.scale / 100);
-    // Empty = the CSS fallback, so the preset colour (including the running accent) wins.
-    vars[`--el-${element}-color`] = elementStyle.color ?? '';
-  }
+  for (const element of COUNTER_ELEMENTS) Object.assign(vars, elementVars(element, style, theme));
 
   const status =
     meeting.startAt === null
@@ -98,20 +110,23 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
         </p>
         {status && <p className="status">{status}</p>}
         {widget ? (
-          <p className="time">{formatDuration(s.elapsedMs)}</p>
+          <p className="time" style={elementVars('elapsed', style, theme)}>
+            {formatDuration(s.elapsedMs)}
+          </p>
         ) : (
+          // One control per row: the style applies to both the heading and the value.
           <dl className="stats">
-            <div>
+            <div data-el="elapsed" style={elementVars('elapsed', style, theme)}>
               <dt>{t(lang, 'elapsed')}</dt>
-              <dd className="time">{formatDuration(s.elapsedMs)}</dd>
+              <dd>{formatDuration(s.elapsedMs)}</dd>
             </div>
-            <div>
+            <div data-el="personTime" style={elementVars('personTime', style, theme)}>
               <dt>{t(lang, 'personTime')}</dt>
-              <dd className="time">
+              <dd>
                 {formatDuration(s.personTimeMs)} <small>({meeting.participants.length})</small>
               </dd>
             </div>
-            <div>
+            <div data-el="costPerMinute" style={elementVars('costPerMinute', style, theme)}>
               <dt>{t(lang, 'costPerMinute')}</dt>
               <dd>{formatMoney(s.costPerMinute, meeting.currency, locale)}</dd>
             </div>
