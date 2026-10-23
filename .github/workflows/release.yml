@@ -128,12 +128,14 @@ jobs:
           }
           if ($LASTEXITCODE -ne 0) { throw 'tauri build failed' }
 
-      - name: Assemble the portable build
+      - name: Assemble the portable builds
         run: |
           $version = '${{ needs.check.outputs.version }}'
+          $single = "MeetBurner_${version}_x64.exe"
+          Copy-Item 'apps/desktop/src-tauri/target/release/meetburner.exe' $single
           $stage = Join-Path $env:RUNNER_TEMP "MeetBurner_${version}_portable_x64"
           New-Item -ItemType Directory -Force -Path (Join-Path $stage 'resources') | Out-Null
-          Copy-Item 'apps/desktop/src-tauri/target/release/meetburner.exe' $stage
+          Copy-Item $single $stage
           Copy-Item 'apps/desktop/src-tauri/target/release/resources/MeetBurnerCamera.dll' (Join-Path $stage 'resources')
           Compress-Archive -Path (Join-Path $stage '*') -DestinationPath "MeetBurner_${version}_portable_x64.zip"
 
@@ -144,6 +146,7 @@ jobs:
           path: |
             apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
             apps/desktop/src-tauri/target/release/bundle/msi/*.msi
+            MeetBurner_*_x64.exe
             MeetBurner_*_portable_x64.zip
 
   linux:
@@ -205,10 +208,22 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" dist/* --clobber
 
       - name: Note an unsigned build
-        if: needs.windows.outputs.signed != 'true'
+        env:
+          SIGNED: ${{ needs.windows.outputs.signed }}
         run: |
           gh release view "$GITHUB_REF_NAME" --json body -q .body > notes.md
-          printf '\n> This build is not code signed. Windows SmartScreen warns the first time; choose *More info*, then *Run anyway*.\n' >> notes.md
+          cat >> notes.md <<'NOTES'
+
+          ### Portable builds
+
+          Both files are the same `meetburner.exe`. Pick one:
+
+          - `MeetBurner_*_x64.exe` — one file. The first *Register webcam for meets* writes `MeetBurnerCamera.v<N>.dll` next to the exe and registers that file, because Windows COM loads the filter from a path.
+          - `MeetBurner_*_portable_x64.zip` — the same exe plus `resources\MeetBurnerCamera.dll`, already on disk. Nothing is extracted, so antivirus and SmartScreen see a plain application folder. Prefer this one if the single file is flagged: an unsigned exe that drops a DLL and registers a COM server matches dropper heuristics.
+          NOTES
+          if [ "$SIGNED" != "true" ]; then
+            printf '\n> This build is not code signed. Windows SmartScreen warns the first time; choose *More info*, then *Run anyway*.\n' >> notes.md
+          fi
           gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
 
       - name: Publish
