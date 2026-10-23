@@ -60,7 +60,7 @@ Desktop app: GitHub Releases built from `v*` tags by `.github/workflows/release.
 - Modes: `counter only` (fullscreen layout, solid themed background) or `overlay` (widget layout composited on a selected physical webcam).
 - One producer (the app) and one platform sink per OS. See [ADR-0002](decisions/0002-virtual-camera.md).
 
-### Implemented pipeline (M4 + producer of M6)
+### Implemented pipeline (M4, M5 + producer of M6)
 
 `apps/desktop/src-tauri/src/camera/`:
 
@@ -73,10 +73,8 @@ camera_start/update/stop (Tauri commands)
         │  themes_data.rs (generated from themes.ts, ADR-0014)         ▼
         └─ fonts (system font files, no bundled binaries)      VirtualCameraSink
                                                                       │
-                                          Windows: WinSharedMemSink ──┘
-                                          Local\MeetBurnerCamera + event (ADR-0013)
-                                                                      │
-                                                          DirectShow / MF DLL (M6/M8)
+                                          Windows: WinSharedMemSink ──┤ DirectShow / MF DLL (M6/M8)
+                                          Linux: V4l2Sink (YUYV) ──────┘ /dev/videoN (v4l2loopback)
 ```
 
 - The cost is computed from timestamps on every frame (`ratePerMs × elapsed`), never accumulated, so the camera and the windows always agree.
@@ -89,3 +87,4 @@ camera_start/update/stop (Tauri commands)
 - The counter is drawn on its own transparent layer and composited last, so the webcam and the counter can be mirrored independently (`display.mirror`, ADR-0022).
 - The webcam is captured by `nokhwa` on its own thread (`camera/source.rs`), converted to BGRA, scaled to the output size and kept as the newest frame only; the render thread never blocks on it (ADR-0021). If the camera is busy or unplugged the counter is published on the themed background instead.
 - The Windows producer writes a 48-byte header (magic, version, size, fps, state, frame counter, timestamp, seqlock) followed by the BGRA payload into a named shared-memory mapping. Consumers read it with the seqlock retry loop, so they never block the producer and never get a torn frame.
+- On Linux, `V4l2Sink` publishes YUYV (`V4L2_PIX_FMT_YUYV`): it detects a device through `/sys/class/video4linux/video*/name` (a `MeetBurner` card first, then v4l2loopback's default `Dummy video device`, then `MEETBURNER_V4L2_DEVICE`), sets the format with `VIDIOC_S_FMT` and writes one frame per tick to `/dev/videoN`. The app never loads kernel modules: without a device `NullSink` discards frames and `camera_v4l2_status` reports `{ "available": false }` (ADR-0002).
