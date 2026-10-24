@@ -98,7 +98,7 @@ jobs:
             "signed=true" >> $env:GITHUB_OUTPUT
           }
 
-      - name: Sign the driver
+      - name: Sign the drivers
         if: steps.signing.outputs.signed == 'true'
         run: |
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
@@ -106,7 +106,8 @@ jobs:
           if (-not $signtool) { throw 'signtool.exe not found in the Windows SDK' }
           & $signtool.FullName sign /fd sha256 /td sha256 /tr http://timestamp.digicert.com `
             /f $env:MEETBURNER_PFX /p $env:WINDOWS_CERTIFICATE_PASSWORD `
-            native/vcam-windows/build/Release/MeetBurnerCamera.dll
+            native/vcam-windows/build/Release/MeetBurnerCamera.dll `
+            native/vcam-windows/build/Release/MeetBurnerMfCamera.dll
           if ($LASTEXITCODE -ne 0) { throw 'signtool failed' }
 
       - name: Build the app and the installers

@@ -1,0 +1,8 @@
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE
+    DllRegisterServer PRIVATE
+    DllUnregisterServer PRIVATE
+    MB_MfSupported
+    MB_MfRegister
+    MB_MfUnregister
