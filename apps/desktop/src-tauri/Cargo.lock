@@ -2034,7 +2034,7 @@ dependencies = [
 
 [[package]]
 name = "meetburner"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "ab_glyph",
  "libc",
