@@ -3,7 +3,7 @@ dist/
 target/
 /build/
 apps/desktop/src-tauri/gen/
-apps/desktop/src-tauri/resources/MeetBurnerCamera.dll
+apps/desktop/src-tauri/resources/*.dll
 native/vcam-windows/build/
 apps/desktop/src-tauri/target*/
 *.log

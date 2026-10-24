@@ -22,12 +22,13 @@ Download from [the latest release](https://github.com/POLYTROPO-ES/meetburner/re
 
 - `MeetBurner_<version>_x64-setup.exe` (NSIS) or `..._x64_en-US.msi` — recommended; installs into
   your user profile and adds an entry to *Apps & features*.
-- `MeetBurner_<version>_x64.exe` — portable, a single file. The first time you register the
-  camera, the driver is written next to the exe, so keep it in a writable folder.
-- `MeetBurner_<version>_portable_x64.zip` — the same portable exe plus
-  `resources\MeetBurnerCamera.dll` already on disk. Prefer this one if antivirus or SmartScreen
-  flags the single-file build: an unsigned exe that drops a DLL and registers a COM server looks
-  like a dropper to heuristics.
+- `MeetBurner_<version>_x64.exe` — portable, a single file. It carries the DirectShow camera
+  only; the Windows 11 Media Foundation camera needs the DLL that the zip ships. The first time
+  you register the camera, the driver is written next to the exe, so keep it in a writable folder.
+- `MeetBurner_<version>_portable_x64.zip` — the same portable exe plus the camera DLLs already
+  on disk, both the DirectShow filter and the Windows 11 Media Foundation camera. Prefer this
+  one if antivirus or SmartScreen flags the single-file build: an unsigned exe that drops a DLL
+  and registers a COM server looks like a dropper to heuristics.
 
 **macOS**
 

@@ -137,7 +137,7 @@ jobs:
           $stage = Join-Path $env:RUNNER_TEMP "MeetBurner_${version}_portable_x64"
           New-Item -ItemType Directory -Force -Path (Join-Path $stage 'resources') | Out-Null
           Copy-Item $single $stage
-          Copy-Item 'apps/desktop/src-tauri/target/release/resources/MeetBurnerCamera.dll' (Join-Path $stage 'resources')
+          Copy-Item 'apps/desktop/src-tauri/target/release/resources/*.dll' (Join-Path $stage 'resources')
           Compress-Archive -Path (Join-Path $stage '*') -DestinationPath "MeetBurner_${version}_portable_x64.zip"
 
       - uses: actions/upload-artifact@v4
