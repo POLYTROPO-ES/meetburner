@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent } from 'react';
+import { useRef, type KeyboardEvent, type PointerEvent } from 'react';
 import {
   formatDuration,
   formatMoney,
@@ -29,6 +29,9 @@ interface Props {
 
 type Drag = { mode: 'move' | 'resize'; x: number; y: number; rect: OverlayRect };
 
+/** One arrow press moves or resizes the card by 1 % of the camera frame (ADR-0023). */
+const KEY_STEP = 0.01;
+
 /**
  * Drag-and-drop placement of the counter card on the camera frame (ADR-0023): drag the card
  * to move it, drag its bottom-right corner to resize. The real renderer computes the font
@@ -36,6 +39,7 @@ type Drag = { mode: 'move' | 'resize'; x: number; y: number; rect: OverlayRect }
  */
 export function OverlayEditor({ rect, width, height, meeting, snapshot, theme, lang, onChange, onReset }: Props) {
   const stage = useRef<HTMLDivElement>(null);
+  const card = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
   const palette = resolveTheme(theme, new Date());
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
@@ -44,6 +48,8 @@ export function OverlayEditor({ rect, width, height, meeting, snapshot, theme, l
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
+    // Focus the card so Escape reaches its handler even when the drag began on the handle.
+    card.current?.focus({ preventScroll: true });
     drag.current = { mode, x: event.clientX, y: event.clientY, rect };
   };
 
@@ -66,17 +72,30 @@ export function OverlayEditor({ rect, width, height, meeting, snapshot, theme, l
     onPointerCancel: end,
   };
 
+  // The same gestures from the keyboard: arrows move the card, Shift+arrows resize it.
+  const keyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      // Cancels a drag in progress; the card keeps the position it last reached.
+      drag.current = null;
+      return;
+    }
+    const dx = event.key === 'ArrowRight' ? KEY_STEP : event.key === 'ArrowLeft' ? -KEY_STEP : 0;
+    const dy = event.key === 'ArrowDown' ? KEY_STEP : event.key === 'ArrowUp' ? -KEY_STEP : 0;
+    if (dx === 0 && dy === 0) return;
+    event.preventDefault();
+    onChange(event.shiftKey ? resizeOverlay(rect, dx, dy) : moveOverlay(rect, dx, dy));
+  };
+
   return (
     <div className="overlay-editor">
-      <div
-        ref={stage}
-        className="overlay-stage"
-        style={{ aspectRatio: `${width} / ${height}` }}
-        aria-label={t(lang, 'overlayPosition')}
-        role="group"
-      >
+      <div ref={stage} className="overlay-stage" style={{ aspectRatio: `${width} / ${height}` }}>
         <div
+          ref={card}
           className="overlay-card"
+          tabIndex={0}
+          role="group"
+          aria-label={t(lang, 'overlayPosition')}
+          onKeyDown={keyDown}
           style={{
             left: `${rect.x * 100}%`,
             top: `${rect.y * 100}%`,

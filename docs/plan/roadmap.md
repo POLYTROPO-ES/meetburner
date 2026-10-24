@@ -33,7 +33,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Layouts fullscreen/widget; user picks font and size for the cost and the time; live preview
 - [x] "Share the cost" link with a meeting summary: total time, total cost, cost/min (ADR-0009)
 - [x] Large amounts that do not fit: abbreviate (K, M, B) or shrink the font, user selectable (ADR-0010)
-- [ ] Polish: responsive, accessibility (labels, contrast), popup-blocked fallback
+- [x] Polish: responsive down to 360 px, accessibility (names, contrast, keyboard, live region), popup-blocked fallback
 - [x] Deploy to Cloudflare Pages (`npm run deploy:web`, `_headers`), served at https://meetburner.com
 - **Done when:** a non-technical user can run a meeting counter in < 30 s.
 

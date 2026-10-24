@@ -413,6 +413,7 @@ export function Setup() {
                     <label>
                       {t(lang, 'styleFont')}
                       <select
+                        aria-label={`${t(lang, 'styleFont')}: ${t(lang, `element.${element}`)}`}
                         value={elementStyle.font}
                         onChange={(e) => updateElement(element, { font: e.target.value as FontChoice })}
                       >
@@ -427,6 +428,7 @@ export function Setup() {
                       {t(lang, 'styleSize')} ({elementStyle.scale}%)
                       <input
                         type="range"
+                        aria-label={`${t(lang, 'styleSize')}: ${t(lang, `element.${element}`)}`}
                         min={ELEMENT_SCALE_MIN}
                         max={ELEMENT_SCALE_MAX}
                         step={ELEMENT_SCALE_STEP}
@@ -439,6 +441,7 @@ export function Setup() {
                         {t(lang, 'styleColor')}
                         <input
                           type="color"
+                          aria-label={`${t(lang, 'styleColor')}: ${t(lang, `element.${element}`)}`}
                           value={elementStyle.color ?? presetColor}
                           onChange={(e) => updateElement(element, { color: e.target.value })}
                         />
