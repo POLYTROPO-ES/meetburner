@@ -95,10 +95,9 @@ describe('seasons', () => {
 });
 
 describe('display settings', () => {
-  it('default to classic, fullscreen and no stored styles', () => {
+  it('default to classic, compact and no stored styles', () => {
     expect(DEFAULT_DISPLAY).toEqual({
       theme: 'classic',
-      layout: 'fullscreen',
       overflow: 'compact',
       mirror: { sourceH: false, sourceV: false, overlayH: false, overlayV: false },
       overlay: null,
@@ -133,8 +132,8 @@ describe('display settings', () => {
   });
 
   it('keep valid values and reject unknown ones', () => {
-    const d = normalizeDisplay({ theme: 'halloween', layout: 'widget', overflow: 'shrink' });
-    expect(d).toMatchObject({ theme: 'halloween', layout: 'widget', overflow: 'shrink' });
+    const d = normalizeDisplay({ theme: 'halloween', overflow: 'shrink' });
+    expect(d).toMatchObject({ theme: 'halloween', overflow: 'shrink' });
     expect(normalizeDisplay({ overflow: 'explode' }).overflow).toBe('compact');
   });
 

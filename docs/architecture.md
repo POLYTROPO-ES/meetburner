@@ -45,8 +45,8 @@ flowchart LR
 ## Counter styles ([ADR-0006](decisions/0006-counter-styles-and-layouts.md))
 
 - Themes (classic, modern, formal, halloween, christmas, 4 seasons, minimalist) are plain data in `packages/core/src/themes.ts`, shared by the web UI (CSS variables) and the Rust camera renderer.
-- Layout `fullscreen` (camera without source webcam) or `widget` (small card over a source webcam).
-- User picks the font and size of the cost and of the time. `CounterView` renders the setup preview and the counter window.
+- Layout `fullscreen` (the card covers the frame) or `widget` (a card over the source webcam). It is **derived** from the card rectangle by `cameraInput`, never stored, and the setup page no longer asks for it ([ADR-0032](decisions/0032-one-counter-surface.md)).
+- User picks the font and size of the cost and of the time. `CounterView` renders the setup preview and the counter window; the desktop setup page renders the same component inside the card it places on the frame, so preview and output cannot drift ([ADR-0032](decisions/0032-one-counter-surface.md)).
 
 ## Hosting
 
@@ -57,7 +57,7 @@ Desktop app: GitHub Releases built from `v*` tags by `.github/workflows/release.
 ## Virtual camera (desktop only)
 
 - The counter frame for the camera is rendered **in Rust**, not captured from the webview: no window needed, constant 30 fps, low CPU.
-- Modes: `counter only` (fullscreen layout, solid themed background) or `overlay` (widget layout composited on a selected physical webcam).
+- Modes: `counter only` (no source webcam, so the card covers the frame) or `overlay` (the card composited on a selected physical webcam). The mode follows the card rectangle ([ADR-0032](decisions/0032-one-counter-surface.md)).
 - One producer (the app) and one platform sink per OS. See [ADR-0002](decisions/0002-virtual-camera.md).
 
 ### Implemented pipeline (M4, M5 + producer of M6)
@@ -80,11 +80,11 @@ camera_start/update/stop (Tauri commands)
 - The cost is computed from timestamps on every frame (`ratePerMs × elapsed`), never accumulated, so the camera and the windows always agree.
 - The pipeline is live while the app is open and the driver is registered: before the meeting starts the payload is a zero-length window, so the meeting app can preview `00:00:00` / `0,00 €` (ADR-0018).
 - The cost font is fitted to 90 % of the available width by default; the user size multiplies that fit, and the compact/shrink rule applies past the box.
-- The output size is part of the camera payload (`640×360`, `1280×720`, `1920×1080`); the setup page offers it in fullscreen mode. Unknown sizes fall back to 720p.
+- The output size is part of the camera payload (`640×360`, `1280×720`, `1920×1080`); the setup page offers it among the camera options. Unknown sizes fall back to 720p.
 - `camera_update` pushes every parameter change to the render thread, which applies it on the next frame. The shared mapping is created once with room for the largest size, so a resolution change never closes it (ADR-0019).
 - Frames are copied into the DirectShow sample bottom-up (`biHeight > 0`) and scaled to the negotiated media type keeping the aspect ratio: Media Foundation (Chrome, Meet, new Teams) ignores a negative height and would show a top-down buffer upside down (ADR-0019).
 - On Windows 11 (build 22000+) a second camera, **MeetBurner Camera (Windows 11)**, is an in-proc Media Foundation media source (`native/vcam-windows/mf`) that reads the **same mapping**. It declares a positive `MF_MT_DEFAULT_STRIDE` (top-down) and copies the producer's rows in order, without flipping: the bottom-up `biHeight > 0` rule above is DirectShow-only (ADR-0031 amendment). `MFCreateVirtualCamera` is resolved at run time, so the app and the DLL still run on Windows 10, where the status reports `supported: false`. New Teams and the Windows Camera app need this one; Zoom, OBS, Chrome/Edge (Meet) and Teams classic keep using the DirectShow filter (ADR-0031).
-- Overlay mode keeps the webcam frame as the background and draws the themed card (`widget`) in the bottom-right corner; glyphs are clipped to their box so nothing is painted over the webcam.
+- Overlay mode keeps the webcam frame as the background and draws the themed card where the user placed it (bottom-right by default); glyphs are clipped to their box so nothing is painted over the webcam.
 - The counter is drawn on its own transparent layer and composited last, so the webcam and the counter can be mirrored independently (`display.mirror`, ADR-0022).
 - The webcam is captured by `nokhwa` on its own thread (`camera/source.rs`), converted to BGRA, scaled to the output size and kept as the newest frame only; the render thread never blocks on it (ADR-0021). If the camera is busy or unplugged the counter is published on the themed background instead.
 - The Windows producer writes a 48-byte header (magic, version, size, fps, state, frame counter, timestamp, seqlock) followed by the BGRA payload into a named shared-memory mapping. Consumers read it with the seqlock retry loop, so they never block the producer and never get a torn frame.

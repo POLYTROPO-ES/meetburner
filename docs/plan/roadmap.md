@@ -40,7 +40,8 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 ### M3. Desktop shell — `desktop`
 - [~] Tauri 2 app loading `apps/web` (dev URL / dist)
 - [ ] Counter opens as native `WebviewWindow` (always-on-top option)
-- [~] Camera settings page: output resolution (fullscreen) done (ADR-0015); Register/Clean webcam buttons done (ADR-0017); camera live while the app is open, errors shown without stopping the app (ADR-0018); mode, source webcam and overlay layout still pending
+- [~] Camera settings page: output resolution done (ADR-0015); Register/Clean webcam buttons done (ADR-0017); camera live while the app is open, errors shown without stopping the app (ADR-0018); source webcam and card placement done (ADR-0021, ADR-0023)
+- [x] One configuration surface: the card is placed, resized and turned on the camera frame and the style block edits that same card, so Layout is derived instead of chosen (ADR-0032)
 - [~] Packaging in CI: Windows NSIS + MSI, portable one-file exe and zip, Linux `.deb` + AppImage (`.github/workflows/release.yml`, ADR-0025, ADR-0026); pending the first green dry run
 - **Done when:** installers build in CI for Windows and Linux.
 

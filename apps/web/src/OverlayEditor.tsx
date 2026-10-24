@@ -1,48 +1,71 @@
 import { useRef, type KeyboardEvent, type PointerEvent } from 'react';
 import {
-  formatDuration,
-  formatMoney,
+  effectiveOverlay,
+  FULL_FRAME,
   moveOverlay,
   resizeOverlay,
   resolveTheme,
+  styleFor,
   t,
+  type CameraSettings,
+  type DisplaySettings,
   type Lang,
   type Meeting,
   type MeetingSnapshot,
   type OverlayRect,
-  type ThemeId,
 } from '@meetburner/core';
+import { CounterView } from './CounterView';
 
 interface Props {
-  /** Card rectangle as fractions of the camera frame. */
-  rect: OverlayRect;
-  /** Camera output size, used for the aspect ratio of the stage. */
-  width: number;
-  height: number;
+  display: DisplaySettings;
+  camera: CameraSettings;
   meeting: Meeting;
   snapshot: MeetingSnapshot;
-  theme: ThemeId;
   lang: Lang;
-  onChange: (rect: OverlayRect) => void;
-  onReset: () => void;
+  now: number;
+  /** Rotation in force for the selected style, in degrees. */
+  rotation: number;
+  /** New card rectangle; `null` restores the built-in corner. */
+  onRect: (rect: OverlayRect | null) => void;
+  /** New rotation in degrees; the caller stores it with the style. */
+  onRotation: (degrees: number) => void;
 }
 
 type Drag = { mode: 'move' | 'resize'; x: number; y: number; rect: OverlayRect };
+type Turn = { cx: number; cy: number; start: number; rotation: number };
 
 /** One arrow press moves or resizes the card by 1 % of the camera frame (ADR-0023). */
 const KEY_STEP = 0.01;
+/** One arrow press on the turn handle, and the step Shift snaps to. */
+const TURN_STEP = 5;
+const TURN_SNAP = 15;
+
+const angleTo = (x: number, y: number, cx: number, cy: number) => (Math.atan2(y - cy, x - cx) * 180) / Math.PI;
+/** 0..360, so a card never stores -90 degrees. */
+const wrap = (value: number) => ((value % 360) + 360) % 360;
 
 /**
- * Drag-and-drop placement of the counter card on the camera frame (ADR-0023): drag the card
- * to move it, drag its bottom-right corner to resize. The real renderer computes the font
- * sizes from the card, so this is a gesture surface, not a pixel-perfect preview.
+ * The one place the counter is configured (ADR-0032): the card sits on the camera frame, is
+ * dragged and resized on it, and turned with its handle, while the style block below edits
+ * the same card. It draws the real `CounterView`, so the two can no longer disagree.
  */
-export function OverlayEditor({ rect, width, height, meeting, snapshot, theme, lang, onChange, onReset }: Props) {
+export function OverlayEditor({
+  display,
+  camera,
+  meeting,
+  snapshot,
+  lang,
+  now,
+  rotation,
+  onRect,
+  onRotation,
+}: Props) {
   const stage = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
-  const palette = resolveTheme(theme, new Date());
-  const locale = lang === 'es' ? 'es-ES' : 'en-US';
+  const turn = useRef<Turn | null>(null);
+  const rect = effectiveOverlay(display, camera);
+  const radius = styleFor(display, resolveTheme(display.theme, new Date(now))).background.radius;
 
   const start = (mode: Drag['mode']) => (event: PointerEvent<HTMLElement>) => {
     event.preventDefault();
@@ -59,7 +82,7 @@ export function OverlayEditor({ rect, width, height, meeting, snapshot, theme, l
     if (!state || !box || box.clientWidth === 0 || box.clientHeight === 0) return;
     const dx = (event.clientX - state.x) / box.clientWidth;
     const dy = (event.clientY - state.y) / box.clientHeight;
-    onChange(state.mode === 'move' ? moveOverlay(state.rect, dx, dy) : resizeOverlay(state.rect, dx, dy));
+    onRect(state.mode === 'move' ? moveOverlay(state.rect, dx, dy) : resizeOverlay(state.rect, dx, dy));
   };
 
   const end = () => {
@@ -70,6 +93,37 @@ export function OverlayEditor({ rect, width, height, meeting, snapshot, theme, l
     onPointerMove: move,
     onPointerUp: end,
     onPointerCancel: end,
+  };
+
+  // Turning follows the pointer around the card centre, the way the renderer turns the layer.
+  const startTurn = (event: PointerEvent<HTMLElement>) => {
+    const box = card.current?.getBoundingClientRect();
+    if (!box) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const cx = box.left + box.width / 2;
+    const cy = box.top + box.height / 2;
+    turn.current = { cx, cy, start: angleTo(event.clientX, event.clientY, cx, cy), rotation };
+  };
+
+  const turnMove = (event: PointerEvent<HTMLElement>) => {
+    const state = turn.current;
+    if (!state) return;
+    const delta = angleTo(event.clientX, event.clientY, state.cx, state.cy) - state.start;
+    const next = wrap(state.rotation + delta);
+    const snapped = event.shiftKey ? (Math.round(next / TURN_SNAP) * TURN_SNAP) % 360 : Math.round(next);
+    onRotation(wrap(snapped));
+  };
+
+  const turnEnd = () => {
+    turn.current = null;
+  };
+
+  const turnHandlers = {
+    onPointerMove: turnMove,
+    onPointerUp: turnEnd,
+    onPointerCancel: turnEnd,
   };
 
   // The same gestures from the keyboard: arrows move the card, Shift+arrows resize it.
@@ -83,12 +137,34 @@ export function OverlayEditor({ rect, width, height, meeting, snapshot, theme, l
     const dy = event.key === 'ArrowDown' ? KEY_STEP : event.key === 'ArrowUp' ? -KEY_STEP : 0;
     if (dx === 0 && dy === 0) return;
     event.preventDefault();
-    onChange(event.shiftKey ? resizeOverlay(rect, dx, dy) : moveOverlay(rect, dx, dy));
+    onRect(event.shiftKey ? resizeOverlay(rect, dx, dy) : moveOverlay(rect, dx, dy));
+  };
+
+  // The turn handle is a slider: arrows turn the card, Home puts it upright.
+  const turnKeyDown = (event: KeyboardEvent<HTMLSpanElement>) => {
+    if (event.key === 'Home') {
+      // The card would otherwise move: its own handler must not see this key.
+      event.preventDefault();
+      event.stopPropagation();
+      onRotation(0);
+      return;
+    }
+    const step =
+      event.key === 'ArrowRight' || event.key === 'ArrowDown'
+        ? TURN_STEP
+        : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+          ? -TURN_STEP
+          : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onRotation(wrap(rotation + step));
   };
 
   return (
     <div className="overlay-editor">
-      <div ref={stage} className="overlay-stage" style={{ aspectRatio: `${width} / ${height}` }}>
+      <p className="muted">{t(lang, 'overlayHint')}</p>
+      <div ref={stage} className="overlay-stage" style={{ aspectRatio: `${camera.width} / ${camera.height}` }}>
         <div
           ref={card}
           className="overlay-card"
@@ -101,17 +177,37 @@ export function OverlayEditor({ rect, width, height, meeting, snapshot, theme, l
             top: `${rect.y * 100}%`,
             width: `${rect.w * 100}%`,
             height: `${rect.h * 100}%`,
-            background: palette.background,
-            color: palette.text,
-            borderRadius: `${Math.max(4, Math.min(24, palette.radius))}px`,
+            borderRadius: `${radius}px`,
+            transform: `rotate(${rotation}deg)`,
           }}
           onPointerDown={start('move')}
           {...handlers}
         >
-          <span className="overlay-cost">
-            {formatMoney(snapshot.totalCost, meeting.currency, locale)}
+          <CounterView
+            meeting={meeting}
+            snapshot={snapshot}
+            display={display}
+            lang={lang}
+            now={now}
+            embedded
+            rotateCard={false}
+          />
+          <span
+            className="overlay-turn"
+            role="slider"
+            tabIndex={0}
+            aria-label={t(lang, 'overlayRotate')}
+            aria-valuemin={0}
+            aria-valuemax={360}
+            aria-valuenow={Math.round(rotation)}
+            aria-valuetext={`${Math.round(rotation)}°`}
+            title={t(lang, 'overlayRotate')}
+            onKeyDown={turnKeyDown}
+            onPointerDown={startTurn}
+            {...turnHandlers}
+          >
+            ⟳
           </span>
-          <span className="overlay-time">{formatDuration(snapshot.elapsedMs)}</span>
           <span
             className="overlay-handle"
             aria-hidden="true"
@@ -121,7 +217,10 @@ export function OverlayEditor({ rect, width, height, meeting, snapshot, theme, l
         </div>
       </div>
       <div className="row">
-        <button type="button" onClick={onReset}>
+        <button type="button" onClick={() => onRect(FULL_FRAME)}>
+          {t(lang, 'overlayFill')}
+        </button>
+        <button type="button" onClick={() => onRect(null)}>
           {t(lang, 'overlayReset')}
         </button>
       </div>

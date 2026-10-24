@@ -46,9 +46,6 @@ const en = {
   salariesAreEstimates: 'Salaries are rough estimates. Edit them freely.',
   display: 'Counter style',
   style: 'Style',
-  layout: 'Layout',
-  'layout.fullscreen': 'Fullscreen',
-  'layout.widget': 'Widget',
   costFont: 'Cost font',
   timeFont: 'Time font',
   costSize: 'Cost size',
@@ -68,7 +65,9 @@ const en = {
   mirrorVertical: 'Mirror vertically',
   overlayPosition: 'Counter position',
   overlayHint:
-    'Drag the card to move it, drag its corner to resize. The counter font follows the card size.',
+    'Drag the card to move it, its corner to resize, the handle on top to turn it. The counter follows the card size.',
+  overlayRotate: 'Turn the card',
+  overlayFill: 'Fill frame',
   overlayReset: 'Reset position',
   cameraResolution: 'Camera resolution',
   cameraResolutionHint:
@@ -178,9 +177,6 @@ const es: Record<MessageKey, string> = {
   salariesAreEstimates: 'Los salarios son estimaciones aproximadas. Puedes editarlos.',
   display: 'Estilo del contador',
   style: 'Estilo',
-  layout: 'Formato',
-  'layout.fullscreen': 'Pantalla completa',
-  'layout.widget': 'Widget',
   costFont: 'Fuente del coste',
   timeFont: 'Fuente del tiempo',
   costSize: 'Tamaño del coste',
@@ -200,7 +196,9 @@ const es: Record<MessageKey, string> = {
   mirrorVertical: 'Espejo vertical',
   overlayPosition: 'Posición del contador',
   overlayHint:
-    'Arrastra la tarjeta para moverla y su esquina para cambiar el tamaño. La fuente del contador se adapta al tamaño.',
+    'Arrastra la tarjeta para moverla, su esquina para cambiar el tamaño y el tirador de arriba para girarla. El contador se adapta al tamaño de la tarjeta.',
+  overlayRotate: 'Girar la tarjeta',
+  overlayFill: 'Ocupar el encuadre',
   overlayReset: 'Restablecer posición',
   cameraResolution: 'Resolución de la cámara',
   cameraResolutionHint:

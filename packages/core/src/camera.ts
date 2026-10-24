@@ -1,6 +1,9 @@
 import { totalHourlyRate, type Meeting } from './cost';
 import { t, type Lang } from './i18n';
 import {
+  defaultOverlayRect,
+  fillsFrame,
+  FULL_FRAME,
   resolveTheme,
   styleFor,
   type BackgroundStyle,
@@ -74,6 +77,16 @@ export interface CameraLabels {
   startsIn: string;
 }
 
+/**
+ * The card the camera actually draws (ADR-0032): the stored rectangle, the built-in corner when
+ * the user never moved it, or the whole frame when there is no webcam to sit on.
+ */
+export function effectiveOverlay(display: DisplaySettings, camera: CameraSettings): OverlayRect {
+  const size = normalizeCamera(camera);
+  if (display.overlay) return display.overlay;
+  return size.source === null ? FULL_FRAME : defaultOverlayRect(size.width, size.height);
+}
+
 export interface CameraDisplay {
   theme: string;
   layout: string;
@@ -119,6 +132,7 @@ export function cameraInput(
   const size = normalizeCamera(camera);
   const idle = meeting.startAt === null;
   const style = styleFor(display, resolveTheme(display.theme, new Date(nowMs)));
+  const overlay = effectiveOverlay(display, size);
   return {
     startAt: idle ? nowMs : (meeting.startAt as number),
     endAt: idle ? nowMs : meeting.endAt,
@@ -133,10 +147,11 @@ export function cameraInput(
     },
     display: {
       theme: display.theme,
-      layout: display.layout,
+      // Covering the frame is the fullscreen layout; anything smaller is a card (ADR-0032).
+      layout: fillsFrame(overlay) ? 'fullscreen' : 'widget',
       overflow: display.overflow,
       mirror: display.mirror,
-      overlay: display.overlay,
+      overlay,
       rotation: style.rotation,
       elements: style.elements,
       background: style.background,

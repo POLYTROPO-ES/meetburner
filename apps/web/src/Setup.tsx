@@ -8,7 +8,6 @@ import {
   countriesByName,
   COUNTER_ELEMENTS,
   CURRENCIES,
-  defaultOverlayRect,
   encodeSummary,
   findPreset,
   FONT_IDS,
@@ -44,7 +43,6 @@ import {
   type FontChoice,
   type GradientDirection,
   type Lang,
-  type Layout,
   type Overflow,
   type Participant,
   type StyleOverride,
@@ -360,46 +358,42 @@ export function Setup() {
       <section>
         <h2>{t(lang, 'display')}</h2>
         <div className="display-settings">
-          <div className="grid">
-            <label>
-              {t(lang, 'style')}
-              <select value={display.theme} onChange={(e) => updateDisplay({ theme: e.target.value as ThemeId })}>
-                {THEME_IDS.map((id) => (
-                  <option key={id} value={id}>
-                    {t(lang, `theme.${id}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t(lang, 'layout')}
-              <select value={display.layout} onChange={(e) => updateDisplay({ layout: e.target.value as Layout })}>
-                <option value="fullscreen">{t(lang, 'layout.fullscreen')}</option>
-                <option value="widget">{t(lang, 'layout.widget')}</option>
-              </select>
-            </label>
-            <label>
-              {t(lang, 'overflow')}
-              <select value={display.overflow} onChange={(e) => updateDisplay({ overflow: e.target.value as Overflow })}>
-                {OVERFLOW_MODES.map((m) => (
-                  <option key={m} value={m}>
-                    {t(lang, `overflow.${m}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <figure className="preview">
-            <figcaption className="muted">{t(lang, 'preview')}</figcaption>
-            <CounterView
+          <label className="style-pick">
+            {t(lang, 'style')}
+            <select value={display.theme} onChange={(e) => updateDisplay({ theme: e.target.value as ThemeId })}>
+              {THEME_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {t(lang, `theme.${id}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {hasVirtualCamera() ? (
+            // One preview: the card is placed and turned where the camera draws it (ADR-0032).
+            <OverlayEditor
+              display={display}
+              camera={camera}
               meeting={meeting}
               snapshot={meetingSnapshot(meeting, now)}
-              display={display}
               lang={lang}
               now={now}
-              embedded
+              rotation={style.rotation}
+              onRect={(overlay) => updateDisplay({ overlay })}
+              onRotation={(rotation) => saveStyle({ ...style, rotation })}
             />
-          </figure>
+          ) : (
+            <figure className="preview">
+              <figcaption className="muted">{t(lang, 'preview')}</figcaption>
+              <CounterView
+                meeting={meeting}
+                snapshot={meetingSnapshot(meeting, now)}
+                display={display}
+                lang={lang}
+                now={now}
+                embedded
+              />
+            </figure>
+          )}
         </div>
         <div className="style-groups">
           <div>
@@ -554,10 +548,20 @@ export function Setup() {
                   aria-label={t(lang, 'styleRotation')}
                   min={MIN_ROTATION}
                   max={MAX_ROTATION}
-                  step={5}
+                  step={1}
                   value={style.rotation}
                   onChange={(e) => saveStyle({ ...style, rotation: e.target.valueAsNumber })}
                 />
+              </label>
+              <label>
+                {t(lang, 'overflow')}
+                <select value={display.overflow} onChange={(e) => updateDisplay({ overflow: e.target.value as Overflow })}>
+                  {OVERFLOW_MODES.map((m) => (
+                    <option key={m} value={m}>
+                      {t(lang, `overflow.${m}`)}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
           </div>
@@ -584,8 +588,6 @@ export function Setup() {
                 onChange={(e) => {
                   const source = e.target.value === '' ? null : e.target.value;
                   setCamera({ ...camera, source });
-                  // The card keeps the counter readable over the video (ADR-0021).
-                  setDisplay({ ...display, layout: source === null ? 'fullscreen' : 'widget' });
                 }}
               >
                 <option value="">{t(lang, 'cameraSourceNone')}</option>
@@ -657,22 +659,6 @@ export function Setup() {
             </label>
           </div>
           <p className="muted">{t(lang, 'cameraResolutionHint')}</p>
-          {display.layout === 'widget' && (
-            <>
-              <p className="muted">{t(lang, 'overlayHint')}</p>
-              <OverlayEditor
-                rect={display.overlay ?? defaultOverlayRect(camera.width, camera.height)}
-                width={camera.width}
-                height={camera.height}
-                meeting={meeting}
-                snapshot={meetingSnapshot(meeting, now)}
-                theme={display.theme}
-                lang={lang}
-                onChange={(rect) => updateDisplay({ overlay: rect })}
-                onReset={() => updateDisplay({ overlay: null })}
-              />
-            </>
-          )}
           <p className="muted">{t(lang, 'cameraLiveHint')}</p>
           {isWindows() && (
             <>
