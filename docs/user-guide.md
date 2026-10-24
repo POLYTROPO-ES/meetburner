@@ -101,7 +101,9 @@ Notes:
 - Meeting apps keep the frame size they negotiated when they opened the camera. The counter is
   always scaled to fit; reselect the camera only if you want a different frame shape.
 - The overlay card can be dragged and resized on the webcam preview. The camera image and the
-  card can be mirrored independently.
+  card can be mirrored independently: **Camera image** flips the video, **Counter card** flips
+  the card together with its text, for apps that mirror the stream themselves. Neither shows in
+  this window; check the result in the app that uses the camera.
 - The camera can be overlaid on a real webcam or stand alone. If the webcam is busy or
   unplugged, the counter keeps running on its own.
 

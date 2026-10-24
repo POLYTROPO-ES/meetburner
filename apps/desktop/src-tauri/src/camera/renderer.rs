@@ -1401,6 +1401,22 @@ mod tests {
         (min, max)
     }
 
+    /// Horizontal span of every pixel that is not the webcam colour: the whole counter layer,
+    /// turn included, whether or not the resampling kept the card's exact background colour.
+    fn layer_span(frame: &Frame, webcam: (u8, u8, u8)) -> (u32, u32) {
+        let mut min = u32::MAX;
+        let mut max = 0;
+        for y in 0..frame.height() {
+            for x in 0..frame.width() {
+                if frame.pixel(x, y) != webcam {
+                    min = min.min(x);
+                    max = max.max(x);
+                }
+            }
+        }
+        (min, max)
+    }
+
     #[test]
     fn mirroring_the_source_flips_the_webcam_but_not_the_card() {
         let mut input = input();
@@ -1453,6 +1469,43 @@ mod tests {
             mirrored.pixel(FRAME_WIDTH - 1, FRAME_HEIGHT - 1),
             webcam,
             "the mirrored card no longer covers the bottom-right corner"
+        );
+    }
+
+    /// ADR-0022 flips the counter layer, so the turn has to follow the card to where the flip
+    /// left it. Turning around the unmirrored centre would fling it out of the frame.
+    #[test]
+    fn a_mirrored_card_turns_around_its_mirrored_centre() {
+        let fonts = fonts();
+        let mut input = input();
+        input.display.layout = Layout::Widget;
+        input.display.mirror.overlay_h = true;
+        let webcam = (0x22, 0x44, 0x66);
+        let background = Frame::filled(FRAME_WIDTH, FRAME_HEIGHT, webcam);
+
+        let upright = render(&input, &fonts, 1_060_000, Some(&background));
+        let (left, right) = layer_span(&upright, webcam);
+        assert!(
+            right < FRAME_WIDTH / 2,
+            "the flip parks the card on the left: ends at {right}"
+        );
+        let centre = (left + right) as f32 / 2.0;
+
+        input.display.rotation = 90.0;
+        let turned = render(&input, &fonts, 1_060_000, Some(&background));
+        let (turned_left, turned_right) = layer_span(&turned, webcam);
+        assert!(
+            turned_right > turned_left,
+            "the card is still drawn somewhere after the turn"
+        );
+        let turned_centre = (turned_left + turned_right) as f32 / 2.0;
+        assert!(
+            (turned_centre - centre).abs() <= 2.0,
+            "the turn keeps the card around its mirrored centre: {turned_centre} vs {centre}"
+        );
+        assert!(
+            turned_centre < FRAME_WIDTH as f32 / 2.0,
+            "the turned card stays on the left: {turned_centre}"
         );
     }
 
