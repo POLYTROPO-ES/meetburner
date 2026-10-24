@@ -80,8 +80,10 @@ export interface CameraDisplay {
   overflow: string;
   mirror: MirrorSettings;
   overlay: OverlayRect | null;
+  /** Degrees, 0..360 clockwise; 0 keeps the counter upright. */
+  rotation: number;
   /** Complete per-element style: 'theme' keeps the preset font, which the Rust renderer resolves. */
-  elements: Record<CounterElement, { font: string; scale: number; color: string | null }>;
+  elements: Record<CounterElement, { font: string; scale: number; color: string | null; visible: boolean }>;
   background: BackgroundStyle;
 }
 
@@ -135,6 +137,7 @@ export function cameraInput(
       overflow: display.overflow,
       mirror: display.mirror,
       overlay: display.overlay,
+      rotation: style.rotation,
       elements: style.elements,
       background: style.background,
     },
