@@ -83,7 +83,10 @@ Two fields joined the model without changing its shape:
   to the others.
 - `StyleOverride.rotation` (0..360 degrees, default `0`) turns the counter. It rotates the card
   and its text only — never the webcam image — around the card centre (widget) or the frame
-  centre (fullscreen). A full turn (`360`) draws exactly like `0`.
+  centre (fullscreen). A full turn (`360`) draws exactly like `0`. Mirroring the card flips the
+  whole layer first (ADR-0022), so the turn then follows the card to its mirrored centre rather
+  than the original one; a mirrored layer turns its text mirrored, which is the point of the
+  compensation.
 
 Both follow the per-style rule above: each preset remembers whether a text is shown and how far
 it is turned.
