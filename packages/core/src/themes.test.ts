@@ -39,6 +39,44 @@ describe('themes', () => {
   });
 });
 
+/** WCAG 2.2 relative luminance of a #rrggbb colour. */
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5]
+    .map((start) => parseInt(hex.slice(start, start + 2), 16) / 255)
+    .map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** WCAG 2.2 contrast ratio between two #rrggbb colours. */
+function contrast(a: string, b: string): number {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
+}
+
+describe('theme contrast (WCAG AA)', () => {
+  // The card paints a gradient between the two backgrounds, so both must pass.
+  const backgrounds = (theme: (typeof THEMES)[keyof typeof THEMES]) => [theme.background, theme.backgroundAlt];
+
+  it.each(Object.entries(THEMES))('%s keeps text readable on both backgrounds', (_id, theme) => {
+    for (const background of backgrounds(theme)) {
+      expect(contrast(theme.text, background)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it.each(Object.entries(THEMES))('%s keeps muted text readable on both backgrounds', (_id, theme) => {
+    for (const background of backgrounds(theme)) {
+      expect(contrast(theme.muted, background)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it.each(Object.entries(THEMES))('%s keeps the accent readable for the large cost figure', (_id, theme) => {
+    // The cost is large text (>= 24 px or >= 18.66 px bold), so 3:1 is the AA threshold.
+    for (const background of backgrounds(theme)) {
+      expect(contrast(theme.accent, background)).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
 describe('seasons', () => {
   it.each([
     [2, 'spring'],

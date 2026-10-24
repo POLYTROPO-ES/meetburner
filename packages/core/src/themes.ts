@@ -34,11 +34,11 @@ export const THEMES: Record<Exclude<ThemeId, 'seasons'> | Season, Theme> = {
   formal: { background: '#f7f5f0', backgroundAlt: '#e9e4d8', text: '#1c1c1c', muted: '#6b6457', accent: '#1f3a5f', font: 'serif', weight: 600, radius: 4, decoration: '' },
   halloween: { background: '#1a0f05', backgroundAlt: '#3d1d00', text: '#ffedd5', muted: '#c2a383', accent: '#ff7518', font: 'display', weight: 700, radius: 16, decoration: '🎃🦇' },
   christmas: { background: '#0b3d20', backgroundAlt: '#7a0f1a', text: '#fffaf0', muted: '#c9dcc8', accent: '#ffd34e', font: 'serif', weight: 700, radius: 16, decoration: '' },
-  minimalist: { background: '#ffffff', backgroundAlt: '#ffffff', text: '#111111', muted: '#8a8a8a', accent: '#111111', font: 'system', weight: 300, radius: 0, decoration: '' },
-  spring: { background: '#f0fdf4', backgroundAlt: '#fce7f3', text: '#14532d', muted: '#6b8f71', accent: '#db2777', font: 'rounded', weight: 700, radius: 20, decoration: '' },
-  summer: { background: '#fff7d6', backgroundAlt: '#7dd3fc', text: '#0c4a6e', muted: '#5b7f95', accent: '#f97316', font: 'rounded', weight: 800, radius: 20, decoration: '' },
+  minimalist: { background: '#ffffff', backgroundAlt: '#ffffff', text: '#111111', muted: '#767676', accent: '#111111', font: 'system', weight: 300, radius: 0, decoration: '' },
+  spring: { background: '#f0fdf4', backgroundAlt: '#fce7f3', text: '#14532d', muted: '#4c7055', accent: '#db2777', font: 'rounded', weight: 700, radius: 20, decoration: '' },
+  summer: { background: '#fff7d6', backgroundAlt: '#7dd3fc', text: '#0c4a6e', muted: '#34566a', accent: '#c2410c', font: 'rounded', weight: 800, radius: 20, decoration: '' },
   autumn: { background: '#2b1a0e', backgroundAlt: '#7c2d12', text: '#fef3c7', muted: '#d6b98c', accent: '#f59e0b', font: 'serif', weight: 700, radius: 16, decoration: '' },
-  winter: { background: '#e0f2fe', backgroundAlt: '#f8fafc', text: '#0f172a', muted: '#64748b', accent: '#0284c7', font: 'system', weight: 700, radius: 16, decoration: '' },
+  winter: { background: '#e0f2fe', backgroundAlt: '#f8fafc', text: '#0f172a', muted: '#5a6b83', accent: '#0284c7', font: 'system', weight: 700, radius: 16, decoration: '' },
 };
 
 /** Meteorological seasons, northern hemisphere. */
