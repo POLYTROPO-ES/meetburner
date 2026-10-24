@@ -89,8 +89,10 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
 .style-bg-colors > label { flex: 1 1 9rem; }
 .style-groups input[type='color'] { width: 2.6rem; height: 2.2rem; padding: 0.15rem; }
 .style-elements { display: flex; flex-direction: column; gap: 0.75rem; }
-.style-element { display: grid; grid-template-columns: 4.5rem minmax(0, 1.1fr) minmax(0, 1fr) auto; gap: 0.5rem; align-items: end; }
-.style-element-name { font-weight: 600; padding-bottom: 0.5rem; }
+.style-element { display: grid; grid-template-columns: 6rem minmax(0, 1.1fr) minmax(0, 1fr) auto; gap: 0.5rem; align-items: end; }
+/* Name on top, its visibility checkbox under it, so the row keeps its four columns. */
+.style-element-name { display: flex; flex-direction: column; gap: 0.15rem; font-weight: 600; }
+.style-element-name .checkbox { font-size: 0.8rem; font-weight: 400; gap: 0.25rem; }
 .style-element label { font-size: 0.8rem; }
 .style-element select { width: 100%; }
 .style-element input[type='range'] { width: 100%; }
@@ -100,7 +102,7 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
 @media (max-width: 720px) {
   .display-settings { grid-template-columns: 1fr; }
   .style-element { grid-template-columns: 1fr 1fr; }
-  .style-element-name { grid-column: 1 / -1; padding-bottom: 0; }
+  .style-element-name { grid-column: 1 / -1; }
 }
 
 /* Overlay editor: drag the card to move it, its corner to resize (ADR-0023) */
@@ -183,7 +185,18 @@ button.counter-stop {
   );
 }
 .counter-view.embedded { height: auto; aspect-ratio: 16 / 9; border: 1px solid var(--border); border-radius: 8px; }
-.counter-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1cqh; padding: 3cqw; }
+/* Rotation turns the card only, so a fullscreen background stays where it is; the widget card
+   rotates as one, background included. `.counter-view` clips whatever leaves the stage. */
+.counter-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1cqh;
+  padding: 3cqw;
+  transform: rotate(var(--rotation, 0deg));
+  transform-origin: center;
+}
 .counter-view .decoration { position: absolute; top: 0; right: 0; font-size: 6cqh; transform: translate(40%, -40%); }
 .counter-view .label {
   margin: 0;
