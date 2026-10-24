@@ -72,3 +72,18 @@ interface DisplaySettings {
   running cost.
 - The setup page grows a dense block of controls; they stay inside the existing "Counter style"
   section, collapsed behind the style selector.
+
+## Amendment (2026-10-24): visibility and rotation
+
+Two fields joined the model without changing its shape:
+
+- `ElementStyle.visible` (default `true`) hides one of the six texts while keeping its font, size
+  and colour, so showing it again does not need to be re-configured. A hidden element also stops
+  reserving space in the camera layout: the label band and the time/footer lines give their room
+  to the others.
+- `StyleOverride.rotation` (0..360 degrees, default `0`) turns the counter. It rotates the card
+  and its text only — never the webcam image — around the card centre (widget) or the frame
+  centre (fullscreen). A full turn (`360`) draws exactly like `0`.
+
+Both follow the per-style rule above: each preset remembers whether a text is shown and how far
+it is turned.
