@@ -18,6 +18,20 @@ target_compile_definitions(MeetBurnerCamera PRIVATE
 target_compile_options(MeetBurnerCamera PRIVATE /W4 /permissive- /utf-8)
 target_link_libraries(MeetBurnerCamera PRIVATE strmiids uuid ole32 oleaut32 user32 gdi32)
 
+# Media Foundation virtual camera for Windows 11 (M8, ADR-0031). It reads the same shared
+# memory as the DirectShow filter and is registered per user by the app. The target builds
+# on any Windows SDK: MFCreateVirtualCamera is resolved at run time, never linked.
+add_library(MeetBurnerMfCamera SHARED
+    mf/dll.cpp
+    mf/frames.cpp
+    mf/meetburner_mf_camera.def
+)
+target_include_directories(MeetBurnerMfCamera PRIVATE common mf)
+target_compile_definitions(MeetBurnerMfCamera PRIVATE
+    UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
+target_compile_options(MeetBurnerMfCamera PRIVATE /W4 /permissive- /utf-8)
+target_link_libraries(MeetBurnerMfCamera PRIVATE mfplat mfuuid ole32 oleaut32 uuid user32 gdi32)
+
 enable_testing()
 
 add_executable(reader_test tests/reader_test.cpp)
@@ -34,6 +48,15 @@ target_compile_definitions(frame_test PRIVATE
 target_compile_options(frame_test PRIVATE /W4 /permissive- /utf-8)
 target_link_libraries(frame_test PRIVATE strmiids uuid ole32 oleaut32 user32 gdi32)
 add_test(NAME meetburner_frame COMMAND frame_test)
+
+# Unit tests for the Media Foundation frame helpers: bottom-up RGB32 and aspect-fit (ADR-0019).
+add_executable(mf_frames_test tests/mf_frames_test.cpp mf/frames.cpp)
+target_include_directories(mf_frames_test PRIVATE common mf)
+target_compile_definitions(mf_frames_test PRIVATE
+    UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
+target_compile_options(mf_frames_test PRIVATE /W4 /permissive- /utf-8)
+target_link_libraries(mf_frames_test PRIVATE user32 gdi32)
+add_test(NAME meetburner_mf_frames COMMAND mf_frames_test)
 
 # Diagnostic: prints what a DirectShow consumer sees for the registered device.
 add_executable(dshow_probe tests/dshow_probe.cpp)

@@ -77,6 +77,18 @@ Everything you type stays in the browser's local storage on that device. There i
    MeetBurner is open, so you can preview it before joining.
 4. **Clean webcam for meets** removes the registration. Uninstalling the app removes it too.
 
+On Windows 11 (build 22000 or later) MeetBurner publishes a **second camera**, **MeetBurner
+Camera (Windows 11)**, with the same counter. It uses Media Foundation instead of DirectShow
+and exists for apps that only list Media Foundation cameras, mainly **new Teams** and the
+**Windows Camera** app. The app registers it per Windows account, also without an
+administrator prompt; on Windows 10 it is not available and the app reports that it needs
+Windows 11. If an app lists both, either works:
+
+- **MeetBurner Camera** — Zoom, OBS, Teams classic, Google Meet in Chrome/Edge, Firefox,
+  ffmpeg. Try this one first.
+- **MeetBurner Camera (Windows 11)** — new Teams, Windows Camera, other Media Foundation-only
+  apps.
+
 Notes:
 
 - Enumerating cameras loads the driver into that process. Chrome, Edge and some meeting apps

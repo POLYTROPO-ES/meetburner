@@ -86,8 +86,8 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - **Done when:** overlay works on both Linux and Windows sinks.
 
 ### M8. Windows virtual camera (Media Foundation) — `vcam-windows`
-- [ ] COM media source DLL (`native/vcam-windows/mf`) reading the same shared memory
-- [ ] `MFCreateVirtualCamera` lifecycle owned by the app (Windows 11 only)
+- [x] COM media source DLL (`native/vcam-windows/mf`) reading the same shared memory
+- [x] `MFCreateVirtualCamera` lifecycle owned by the app (Windows 11 only)
 - [ ] Verified in new Teams and Windows Camera app
 - **Done when:** MF camera visible on Windows 11 without breaking DirectShow one.
 

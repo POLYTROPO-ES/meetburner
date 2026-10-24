@@ -21,7 +21,7 @@ A live meeting-cost overlay that shows the combined cost of everyone's time. Ava
 
 | Platform | Scope |
 |---|---|
-| **Windows** desktop | Full: setup page, counter window, webcam overlay and the **MeetBurner Camera** virtual camera (DirectShow) |
+| **Windows** desktop | Full: setup page, counter window, webcam overlay and the **MeetBurner Camera** virtual camera — DirectShow, plus the **MeetBurner Camera (Windows 11)** Media Foundation camera for new Teams and Windows Camera ([ADR-0031](docs/decisions/0031-windows-mf-virtual-camera.md)) |
 | **Linux** desktop | Everything on the setup page, the counter window, share links and the *MeetBurner Camera* virtual camera once `v4l2loopback` is loaded ([setup](native/vcam-linux/README.md), [ADR-0030](docs/decisions/0030-linux-camera-v4l2loopback.md)) |
 | **macOS** desktop | Setup page, counter window and share links. No virtual camera yet: a CoreMediaIO camera extension needs Apple Developer signing and notarization (M11, [ADR-0028](docs/decisions/0028-macos-without-virtual-camera.md)) |
 | **Web** ([meetburner.com](https://meetburner.com)) | Full web feature set: setup, counter window, share links. A browser cannot publish a virtual camera |

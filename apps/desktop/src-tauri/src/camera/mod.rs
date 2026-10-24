@@ -8,6 +8,7 @@ pub mod format;
 pub mod frame;
 pub mod ipc;
 pub mod layout;
+pub mod mf;
 pub mod renderer;
 pub mod sink;
 pub mod source;

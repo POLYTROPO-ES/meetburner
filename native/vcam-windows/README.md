@@ -1,6 +1,6 @@
 # vcam-windows
 
-Owner: `vcam-windows` agent. See [ADR-0002](../../docs/decisions/0002-virtual-camera.md), [ADR-0013](../../docs/decisions/0013-windows-frame-ipc.md), [ADR-0016](../../docs/decisions/0016-dshow-filter-and-per-user-registration.md) and [ADR-0019](../../docs/decisions/0019-camera-frame-orientation-and-mapping.md).
+Owner: `vcam-windows` agent. See [ADR-0002](../../docs/decisions/0002-virtual-camera.md), [ADR-0013](../../docs/decisions/0013-windows-frame-ipc.md), [ADR-0016](../../docs/decisions/0016-dshow-filter-and-per-user-registration.md), [ADR-0019](../../docs/decisions/0019-camera-frame-orientation-and-mapping.md) and [ADR-0031](../../docs/decisions/0031-windows-mf-virtual-camera.md).
 
 ```
 CMakeLists.txt
@@ -8,8 +8,13 @@ common/meetburner_camera.h   frame contract + seqlock reader (DLL and tests)
 dshow/                       DirectShow source filter ("MeetBurner Camera")
 dshow/frames.h               media type, bottom-up blit, "not running" frame
 dshow/vcam.cpp               bottom-up RGB32 source filter
+mf/                          Media Foundation virtual camera ("MeetBurner Camera (Windows 11)")
+mf/mf_camera_api.h           MB_Mf* exports + CLSID + friendly name (mirrored in camera/mf.rs)
+mf/mfvirtualcamera_api.h     minimal Windows 11 API declaration (runtime loaded)
+mf/dll.cpp                  COM media source, per-user registration, MB_Mf* exports
+mf/frames.cpp                top-down -> bottom-up flip + aspect fit + placeholder
 scripts/                     register.ps1 / unregister.ps1 (HKCU, no UAC)
-tests/                       reader_test + frame_test (CTest), dshow_probe, graph_test
+tests/                       reader_test + frame_test + mf_frames_test (CTest), dshow_probe, graph_test
 ```
 
 ## What already exists (Rust producer)
@@ -85,17 +90,87 @@ The filter registers itself under `CLSID_VideoInputDeviceCategory` (`{860BB310-5
 the DirectShow camera list of the current Windows account. Media Foundation enumerates that list too
 (through the frame-server bridge), so the device is not Chrome-only:
 
-| Consumer | Capture stack | Sees "MeetBurner Camera" |
-|----------|---------------|--------------------------|
-| Chrome, Edge (Meet, Teams web, Discord web…) | Media Foundation | yes — same Chromium stack, same result |
-| Firefox | DirectShow / Media Foundation backend | yes |
-| Zoom, Teams (classic and new), Slack, Discord | DirectShow / Media Foundation | yes |
-| OBS Studio | DirectShow | yes |
-| Windows Camera app | Media Foundation | yes |
-| ffmpeg | DirectShow | yes (verified) |
+| Consumer | Capture stack | Camera to pick |
+|----------|---------------|----------------|
+| Chrome, Edge (Meet, Teams web, Discord web…) | Media Foundation, through the DirectShow bridge | **MeetBurner Camera** — same Chromium stack, same result |
+| Firefox | DirectShow / Media Foundation backend | **MeetBurner Camera** |
+| Zoom, Teams classic, Slack, Discord | DirectShow / Media Foundation bridge | **MeetBurner Camera** |
+| OBS Studio | DirectShow | **MeetBurner Camera** |
+| New Teams, Windows Camera app | Media Foundation only | **MeetBurner Camera (Windows 11)** (ADR-0031) |
+| ffmpeg | DirectShow | **MeetBurner Camera** (verified) |
 
 Verified so far: ffmpeg (DirectShow) and Google Meet in Chrome. The rest of the list is the M6 manual
 matrix: same registration path, so a failure there is a bug in the filter, not in the visibility rules.
+
+## Two cameras: DirectShow and Media Foundation
+
+Windows 11 has a second camera that reads **the same shared memory**. Nothing in the producer
+changes: both DLLs open `Local\MeetBurnerCamera` and either (or both) can be active. They have
+different names so the camera pickers never show two identical entries:
+
+| | DirectShow (`MeetBurnerCamera.dll`) | Media Foundation (`MeetBurnerMfCamera.dll`) |
+|---|---|---|
+| Friendly name | **MeetBurner Camera** | **MeetBurner Camera (Windows 11)** |
+| Where it comes from | ADR-0016 source filter, registered per user (HKCU) | ADR-0031 COM media source + `MFCreateVirtualCamera` |
+| Windows version | Windows 10 and 11 | Windows 11 build 22000+ only; reports unsupported elsewhere |
+| Who needs it | Zoom, OBS, Chrome/Edge (Meet), Teams classic, ffmpeg | New Teams, Windows Camera app, other MF-only apps |
+| Registration | App button / `regsvr32` / `scripts/register.ps1` | App commands (`camera_mf_register`) / `regsvr32` |
+| Clean up | App button / `scripts/unregister.ps1` | App commands (`camera_mf_unregister`) / `regsvr32 /u` |
+
+Chrome, Edge and Firefox use Media Foundation too; they find the **DirectShow** camera through
+the frame-server bridge, which is why the DirectShow filter is still the one to try first. New
+Teams and the Windows Camera app only enumerate MF cameras, so they need the second one.
+
+### Build
+
+The second target is part of the same CMake project and lands in the same folder and solution:
+
+```powershell
+cmake -S native/vcam-windows -B native/vcam-windows/build -A x64
+cmake --build native/vcam-windows/build --config Release
+# Release\MeetBurnerCamera.dll and Release\MeetBurnerMfCamera.dll
+```
+
+`mf/mfvirtualcamera_api.h` mirrors the few Windows 11 declarations the DLL uses, so the build
+works with older Windows SDKs. `MFCreateVirtualCamera` is resolved at run time and never linked:
+the DLL loads on Windows 10, where `MB_MfSupported()` returns 0.
+
+### Register and remove
+
+**Normal users do it from the app** (the `camera_mf_register` / `camera_mf_unregister` commands
+behind the camera section). Both write/delete `HKCU\Software\Classes\CLSID\{9D6A2B41-…}` and
+need no administrator prompt (ADR-0016/0017 approach). The command also creates the virtual
+camera for the current Windows account with `MFVirtualCameraLifetime_System` and
+`MFVirtualCameraAccess_CurrentUser`, then calls `Start()`; unregister calls `Remove()`.
+
+Manual equivalent (for diagnostics): `regsvr32 /s <Release>\MeetBurnerMfCamera.dll` registers
+the COM server only; creating the camera itself is what `MB_MfRegister` does, so use the app or
+a tiny caller of the exports. The app status (`camera_mf_status`) calls `MB_MfSupported()` and
+shows `supported: false` on Windows 10, where there is nothing to register.
+
+### Verify the camera
+
+1. Start the app (the counter is live while it is open, ADR-0018) and register the MF camera.
+2. Open **Camera** (Windows Camera app): *MeetBurner Camera (Windows 11)* must appear in the
+   camera picker and show the counter upright, not rotated.
+3. New Teams: *Settings → Devices → Camera* must list it; the preview shows the counter.
+4. The DirectShow camera must still work at the same time: open Meet in Chrome (or ffmpeg) and
+   select **MeetBurner Camera**.
+
+If the app lists the camera but a consumer cannot activate it, see the HKCU caveat in
+[ADR-0031](../../docs/decisions/0031-windows-mf-virtual-camera.md): the frame server runs as
+`Local Service`, and an HKLM registration would be the fallback (administrator required).
+
+### What the MF media source does
+
+- `IMFMediaSourceEx` (with `IMFGetService` and `IKsControl`) + `IMFMediaStream2`, each with its
+  own `IMFMediaEventQueue`; one `PINNAME_VIDEO_CAPTURE` stream marked frame-server shareable.
+- Media type `MFVideoFormat_RGB32`, 1280×720, 30 fps, positive stride. RGB32 is bottom-up and
+  MF ignores a negative stride, so the producer's top-down rows are flipped while the sample is
+  filled; a resolution change is letterboxed into the negotiated size (ADR-0019).
+- Pull model: `RequestSample` reads the newest frame (or the "not running" placeholder) and
+  queues `MEMediaSample`. Sample times are QPC based and anchored on the header timestamp.
+- No frame for 2 s or `state = 0` → the placeholder, never a blocked or torn preview.
 
 ## Build, register and test
 
@@ -139,7 +214,7 @@ Diagnostics, if a consumer does not list or connect the camera:
 
 ## Next steps
 
-1. The app registers and cleans the driver on demand (ADR-0017); it ships as a bundle resource and, in the one-file portable, embedded in the exe (ADR-0026). The installer does not register it.
+1. The app registers and cleans the DirectShow driver on demand (ADR-0017); it ships as a bundle resource and, in the one-file portable, embedded in the exe (ADR-0026). The installer does not register it.
 2. Manual test matrix: Zoom, OBS, Chrome/Edge (Meet), Teams classic, new Teams, Windows Camera.
-3. `mf/` media source for Windows 11 (`MFCreateVirtualCamera`, M8).
+3. Verify the MF camera in new Teams and the Windows Camera app on a Windows 11 machine (M8); the code and its unit tests are done.
 
