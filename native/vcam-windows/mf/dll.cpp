@@ -4,9 +4,11 @@
 //
 // Design notes:
 //  * The media source is "pull" mode: every RequestSample reads the latest shared-memory
-//    frame, flips it into a bottom-up RGB32 sample and queues MEMediaSample. This is the
+//    frame, copies it into a top-down RGB32 sample and queues MEMediaSample. This is the
 //    shape the frame server expects from a custom media source and needs no worker thread.
-//  * MF ignores a negative stride, so rows are flipped while copying (ADR-0019).
+//  * MF_MT_DEFAULT_STRIDE is positive (5120), which tells Media Foundation the payload is
+//    top-down — the producer's own order — so no row flip is needed or wanted. A flip
+//    would render the picture upside down in every consumer (ADR-0031 amendment).
 //  * MFCreateVirtualCamera is resolved at run time: the DLL builds and loads on Windows 10,
 //    where the function is absent, and MB_MfSupported reports 0 there.
 #include "mf_camera_api.h"
@@ -516,8 +518,9 @@ HRESULT MediaStream::Initialize() {
     if (FAILED(hr)) return hr;
     hr = MFSetAttributeRatio(type.get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
     if (FAILED(hr)) return hr;
-    // Positive stride: bottom-up rows. MF ignores a negative stride, so the flip happens in
-    // FitFlipBgra instead (ADR-0019, ADR-0031).
+    // Positive stride: top-down rows, the order the producer writes. The sample is filled
+    // with FitBgra, which keeps that order (ADR-0031 amendment); DirectShow is the camera
+    // that needs bottom-up rows, not this one.
     hr = type->SetUINT32(MF_MT_DEFAULT_STRIDE, kDefaultWidth * 4);
     if (FAILED(hr)) return hr;
     hr = type->SetUINT32(MF_MT_SAMPLE_SIZE, kDefaultWidth * kDefaultHeight * 4);
@@ -652,7 +655,7 @@ HRESULT MediaStream::ProduceSample(IUnknown* token) {
         buffer->Unlock();
         return E_OUTOFMEMORY;
     }
-    FitFlipBgra(source, source_width, source_height, destination, width_ * 4, width_, height_);
+    FitBgra(source, source_width, source_height, destination, width_ * 4, width_, height_);
     buffer->Unlock();
     hr = buffer->SetCurrentLength(static_cast<DWORD>(bytes));
     if (FAILED(hr)) return hr;

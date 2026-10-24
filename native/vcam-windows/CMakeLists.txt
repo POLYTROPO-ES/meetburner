@@ -49,7 +49,8 @@ target_compile_options(frame_test PRIVATE /W4 /permissive- /utf-8)
 target_link_libraries(frame_test PRIVATE strmiids uuid ole32 oleaut32 user32 gdi32)
 add_test(NAME meetburner_frame COMMAND frame_test)
 
-# Unit tests for the Media Foundation frame helpers: bottom-up RGB32 and aspect-fit (ADR-0019).
+# Unit tests for the Media Foundation frame helpers: top-down RGB32 copy and aspect-fit
+# (ADR-0031 amendment).
 add_executable(mf_frames_test tests/mf_frames_test.cpp mf/frames.cpp)
 target_include_directories(mf_frames_test PRIVATE common mf)
 target_compile_definitions(mf_frames_test PRIVATE
