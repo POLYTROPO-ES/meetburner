@@ -72,6 +72,14 @@ function useStored<T>(key: string, parse: (raw: string | null) => T, serialize: 
 }
 
 export const useMeeting = () => useStored(MEETING_KEY, parseMeeting, JSON.stringify);
-export const useLang = () => useStored(LANG_KEY, parseLang, String);
 export const useDisplay = () => useStored(DISPLAY_KEY, parseDisplay, JSON.stringify);
 export const useCamera = () => useStored(CAMERA_KEY, parseCamera, JSON.stringify);
+
+/** The UI language; the document language follows it so screen readers pick the right voice. */
+export function useLang() {
+  const [lang, setLang] = useStored(LANG_KEY, parseLang, String);
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+  return [lang, setLang] as const;
+}

@@ -28,6 +28,12 @@ interface Props {
   embedded?: boolean;
 }
 
+/**
+ * A running cost changes on every frame, so it is announced at a readable pace instead: once
+ * when the counter starts and then at most once per interval (WCAG 4.1.3).
+ */
+const ANNOUNCE_EVERY_MS = 10_000;
+
 /** The three CSS variables the stylesheet reads for one counter element (ADR-0029). */
 function elementVars(
   element: CounterElement,
@@ -80,6 +86,30 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
   const [fit, setFit] = useState({ compact: false, scale: 1 });
   const fullCost = formatMoney(s.totalCost, meeting.currency, locale);
   const compactCost = formatMoneyCompact(s.totalCost, meeting.currency, locale);
+
+  // Screen readers get the cost at a human pace, not sixty times a second.
+  const spokenCost = `${t(lang, 'totalCost')}: ${fullCost}`;
+  const spokenFinal = `${spokenCost} · ${t(lang, 'stopped')}`;
+  const announcedAt = useRef(0);
+  const announcedStop = useRef(false);
+  const [spoken, setSpoken] = useState('');
+  useEffect(() => {
+    // The setup preview is decoration: only the counter window speaks.
+    if (embedded) return;
+    if (s.running) {
+      announcedStop.current = false;
+      const at = Date.now();
+      if (at - announcedAt.current >= ANNOUNCE_EVERY_MS) {
+        announcedAt.current = at;
+        setSpoken(spokenCost);
+      }
+    } else if (meeting.startAt !== null && meeting.endAt !== null && !announcedStop.current) {
+      // The final total is announced once, when the meeting stops.
+      announcedStop.current = true;
+      announcedAt.current = 0;
+      setSpoken(spokenFinal);
+    }
+  }, [embedded, meeting.startAt, meeting.endAt, s.running, spokenCost, spokenFinal]);
   const measure = useCallback(() => {
     if (!rootRef.current || !measureRef.current || !measureCompactRef.current) return;
     // The widget must stay small so it does not cover the webcam image.
@@ -96,6 +126,9 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
 
   return (
     <div ref={rootRef} className={classes} style={vars} data-bg={style.background.mode}>
+      <p className="sr-only" aria-live="polite">
+        {spoken}
+      </p>
       <div className="counter-card">
         {theme.decoration && <span className="decoration" aria-hidden="true">{theme.decoration}</span>}
         {!widget && <p className="label">{t(lang, 'totalCost')}</p>}
@@ -115,7 +148,7 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
           </p>
         ) : (
           // One control per row: the style applies to both the heading and the value.
-          <dl className="stats">
+          <dl className="stats" aria-label={t(lang, 'meetingSummary')}>
             <div data-el="elapsed" style={elementVars('elapsed', style, theme)}>
               <dt>{t(lang, 'elapsed')}</dt>
               <dd>{formatDuration(s.elapsedMs)}</dd>
