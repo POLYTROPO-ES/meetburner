@@ -89,6 +89,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] COM media source DLL (`native/vcam-windows/mf`) reading the same shared memory
 - [x] `MFCreateVirtualCamera` lifecycle owned by the app (Windows 11 only)
 - [ ] Verified in new Teams and Windows Camera app
+- [ ] Embed `MeetBurnerMfCamera.dll` in the single-file portable exe (ADR-0026 pattern) so the one-file download can offer the Windows 11 camera too; today the zip and the installers carry it
 - **Done when:** MF camera visible on Windows 11 without breaking DirectShow one.
 
 ### M9. Stage 1 release — `architect` + `desktop`
