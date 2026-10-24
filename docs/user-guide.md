@@ -61,7 +61,9 @@ Everything you type stays in the browser's local storage on that device. There i
 - **Style** — seven presets (Classic, Modern, Formal, Halloween, Christmas, 4 seasons,
   Minimalist). Every preset remembers its own tweaks:
   - each text element (Title, Cost, Status, Elapsed, Person-time, Cost per minute) can have its
-    own font, size and colour;
+    own font, size and colour, and can be hidden with **Show** when a meeting does not need it;
+  - the counter card can be rotated from 0° to 360° — the webcam image is never rotated, only
+    the card and its text;
   - the background can be solid or a gradient between two colours, horizontal or vertical, with
     opacity from 0 (invisible) to 100 (solid) and a corner radius from square to very rounded;
   - **Reset style** returns the selected preset to its original look.

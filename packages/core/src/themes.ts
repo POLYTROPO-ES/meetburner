@@ -76,6 +76,8 @@ export interface ElementStyle {
   /** 50..250 percent, 100 = the preset size. */
   scale: number;
   color: string | null;
+  /** false hides the element in the counter and on the camera. */
+  visible: boolean;
 }
 
 export type BackgroundMode = 'solid' | 'gradient';
@@ -98,6 +100,8 @@ export interface BackgroundStyle {
 export interface StyleOverride {
   elements: Record<CounterElement, ElementStyle>;
   background: BackgroundStyle;
+  /** Degrees, 0..360, clockwise. 0 keeps the counter upright. */
+  rotation: number;
 }
 
 export interface DisplaySettings {
@@ -182,6 +186,8 @@ export const MIN_RADIUS = 0;
 export const MAX_RADIUS = 40;
 export const MIN_OPACITY = 0;
 export const MAX_OPACITY = 100;
+export const MIN_ROTATION = 0;
+export const MAX_ROTATION = 360;
 
 /** `ElementStyle.scale` is a percentage; MIN_SCALE..MAX_SCALE is the multiplier the renderer applies. */
 const MIN_ELEMENT_SCALE = MIN_SCALE * 100;
@@ -232,6 +238,7 @@ export function normalizeDisplay(raw: unknown): DisplaySettings {
 interface StoredStyle {
   elements?: Partial<Record<CounterElement, ElementStyle>>;
   background?: Partial<BackgroundStyle>;
+  rotation?: number;
 }
 
 /** Only known style ids survive, and each one drops whatever equals the preset defaults. */
@@ -262,12 +269,16 @@ function normalizeStyle(raw: unknown): StoredStyle | null {
     const elementScale = clampNumber(e.scale, MIN_ELEMENT_SCALE, MAX_ELEMENT_SCALE, 100);
     if (elementScale !== 100) style.scale = elementScale;
     if (isHex(e.color)) style.color = e.color;
+    // Only a hidden element is a difference: missing/junk visibility means visible.
+    if (e.visible === false) style.visible = false;
     if (Object.keys(style).length > 0) elements[element] = style as ElementStyle;
   }
   const background = normalizeBackground(r.background);
   const stored: StoredStyle = {};
   if (Object.keys(elements).length > 0) stored.elements = elements;
   if (background) stored.background = background;
+  const rotation = clampNumber(r.rotation, MIN_ROTATION, MAX_ROTATION, MIN_ROTATION);
+  if (rotation !== MIN_ROTATION) stored.rotation = rotation;
   return Object.keys(stored).length > 0 ? stored : null;
 }
 
@@ -295,7 +306,9 @@ function normalizeBackground(raw: unknown): Partial<BackgroundStyle> | null {
 /** The preset values, used when a style has no stored tweaks. */
 export function styleDefaults(theme: Theme): StyleOverride {
   const elements = {} as Record<CounterElement, ElementStyle>;
-  for (const element of COUNTER_ELEMENTS) elements[element] = { font: 'theme', scale: 100, color: null };
+  for (const element of COUNTER_ELEMENTS) {
+    elements[element] = { font: 'theme', scale: 100, color: null, visible: true };
+  }
   return {
     elements,
     background: {
@@ -306,6 +319,7 @@ export function styleDefaults(theme: Theme): StyleOverride {
       opacity: MAX_OPACITY,
       radius: theme.radius,
     },
+    rotation: MIN_ROTATION,
   };
 }
 
@@ -326,6 +340,7 @@ export function styleFor(display: DisplaySettings, theme: Theme): StyleOverride 
       font: saved ? oneOf(saved.font, FONT_CHOICES, 'theme') : fallback.font,
       scale: saved ? clampNumber(saved.scale, MIN_ELEMENT_SCALE, MAX_ELEMENT_SCALE, 100) : fallback.scale,
       color: saved && isHex(saved.color) ? saved.color : null,
+      visible: saved ? saved.visible !== false : fallback.visible,
     };
   }
   const bg = (
@@ -333,6 +348,7 @@ export function styleFor(display: DisplaySettings, theme: Theme): StyleOverride 
   ) as Partial<BackgroundStyle>;
   return {
     elements,
+    rotation: clampNumber(stored.rotation, MIN_ROTATION, MAX_ROTATION, MIN_ROTATION),
     background: {
       mode: oneOf(bg.mode, BACKGROUND_MODES, defaults.background.mode),
       color: isHex(bg.color) ? bg.color : defaults.background.color,

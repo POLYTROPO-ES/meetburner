@@ -7,10 +7,12 @@ import {
   GRADIENT_DIRECTIONS,
   MAX_OPACITY,
   MAX_RADIUS,
+  MAX_ROTATION,
   MAX_SCALE,
   MESSAGES,
   MIN_OPACITY,
   MIN_RADIUS,
+  MIN_ROTATION,
   MIN_SCALE,
   normalizeDisplay,
   resetStyle,
@@ -24,7 +26,7 @@ import {
 } from './index';
 import { createMeeting } from './cost';
 
-const INHERIT: ElementStyle = { font: 'theme', scale: 100, color: null };
+const INHERIT: ElementStyle = { font: 'theme', scale: 100, color: null, visible: true };
 
 const inheritElements = () => ({
   label: { ...INHERIT },
@@ -71,6 +73,8 @@ describe('custom counter style', () => {
       ['styleFont', 'Font', 'Fuente'],
       ['styleSize', 'Size', 'Tamaño'],
       ['styleColor', 'Colour', 'Color'],
+      ['styleVisible', 'Show', 'Mostrar'],
+      ['styleRotation', 'Rotation', 'Rotación'],
       ['styleBackground', 'Background', 'Fondo'],
       ['bg.mode.solid', 'Solid', 'Sólido'],
       ['bg.mode.gradient', 'Gradient', 'Degradado'],
@@ -154,7 +158,7 @@ describe('styleFor', () => {
       },
     });
     const style = styleFor(display, THEMES.modern);
-    expect(style.elements.cost).toEqual({ font: 'mono', scale: 150, color: null });
+    expect(style.elements.cost).toEqual({ font: 'mono', scale: 150, color: null, visible: true });
     expect(style.elements.label).toEqual(INHERIT);
     expect(style.elements.elapsed).toEqual(INHERIT);
     expect(style.elements.personTime).toEqual(INHERIT);
@@ -176,11 +180,12 @@ describe('styleFor', () => {
       theme: 'classic',
       styles: {
         classic: {
+          rotation: 0,
           elements: {
             label: { ...INHERIT },
-            cost: { font: 'mono', scale: 900, color: '#abc' },
+            cost: { font: 'mono', scale: 900, color: '#abc', visible: true },
             status: { ...INHERIT },
-            elapsed: { font: 'theme', scale: 0.01, color: 'not-a-colour' },
+            elapsed: { font: 'theme', scale: 0.01, color: 'not-a-colour', visible: true },
             personTime: { ...INHERIT },
             costPerMinute: { ...INHERIT },
           },
@@ -196,8 +201,8 @@ describe('styleFor', () => {
       },
     };
     const style = styleFor(display, THEMES.classic);
-    expect(style.elements.cost).toEqual({ font: 'mono', scale: MAX_SCALE * 100, color: '#abc' });
-    expect(style.elements.elapsed).toEqual({ font: 'theme', scale: MIN_SCALE * 100, color: null });
+    expect(style.elements.cost).toEqual({ font: 'mono', scale: MAX_SCALE * 100, color: '#abc', visible: true });
+    expect(style.elements.elapsed).toEqual({ font: 'theme', scale: MIN_SCALE * 100, color: null, visible: true });
     expect(style.background).toEqual({
       mode: 'solid',
       color: '#123456',
@@ -334,8 +339,9 @@ describe('normalizeDisplay styles', () => {
     const d = normalizeDisplay({
       styles: {
         halloween: {
+          rotation: 0,
           elements: {
-            label: { font: 'theme', scale: 100, color: null },
+            label: { font: 'theme', scale: 100, color: null, visible: true },
             cost: {},
             elapsed: 5,
             status: null,
@@ -351,6 +357,83 @@ describe('normalizeDisplay styles', () => {
     expect(normalizeDisplay({ costFont: 'mono', timeFont: 'serif', costScale: 2, timeScale: 0.6 })).toEqual(
       DEFAULT_DISPLAY,
     );
+  });
+});
+
+describe('element visibility', () => {
+  it('shows every element and keeps the counter upright by default', () => {
+    expect({ MIN_ROTATION, MAX_ROTATION }).toEqual({ MIN_ROTATION: 0, MAX_ROTATION: 360 });
+    for (const theme of Object.values(THEMES)) {
+      const style = styleDefaults(theme);
+      expect(style.rotation).toBe(0);
+      for (const element of COUNTER_ELEMENTS) expect(style.elements[element].visible).toBe(true);
+    }
+  });
+
+  it('keeps a hidden element through normalisation and styleFor', () => {
+    const display = normalizeDisplay({
+      theme: 'classic',
+      styles: { classic: { elements: { status: { visible: false } } } },
+    });
+    expect(display.styles.classic).toEqual({ elements: { status: { visible: false } } });
+    const style = styleFor(display, THEMES.classic);
+    expect(style.elements.status.visible).toBe(false);
+    expect(style.elements.cost.visible).toBe(true);
+  });
+
+  it('turns a missing or non-boolean visibility into true', () => {
+    for (const visible of [undefined, null, 'no', 0, 1]) {
+      const d = normalizeDisplay({ styles: { classic: { elements: { cost: { visible, scale: 120 } } } } });
+      expect(d.styles).toEqual({ classic: { elements: { cost: { scale: 120 } } } });
+      expect(styleFor({ ...d, theme: 'classic' }, THEMES.classic).elements.cost.visible).toBe(true);
+    }
+    expect(styleFor(DEFAULT_DISPLAY, THEMES.classic).elements.cost.visible).toBe(true);
+  });
+
+  it('drops a stored visible: true but keeps visible: false', () => {
+    expect(normalizeDisplay({ styles: { classic: { elements: { cost: { visible: true } } } } }).styles).toEqual({});
+    expect(normalizeDisplay({ styles: { classic: { elements: { cost: { visible: false } } } } }).styles).toEqual({
+      classic: { elements: { cost: { visible: false } } },
+    });
+  });
+});
+
+describe('rotation', () => {
+  const rotationOf = (rotation: unknown) =>
+    styleFor(normalizeDisplay({ theme: 'classic', styles: { classic: { rotation } } }), THEMES.classic).rotation;
+
+  it('clamps into 0..360 and keeps 360', () => {
+    expect(rotationOf(-10)).toBe(MIN_ROTATION);
+    expect(rotationOf(400)).toBe(MAX_ROTATION);
+    expect(rotationOf(360)).toBe(360);
+    expect(rotationOf(90)).toBe(90);
+  });
+
+  it('turns a missing or non-numeric rotation into 0', () => {
+    for (const rotation of [undefined, 'x', Number.NaN, null, {}]) expect(rotationOf(rotation)).toBe(0);
+    expect(rotationOf(0)).toBe(0);
+  });
+
+  it('stores a clamped rotation but drops the default one', () => {
+    expect(normalizeDisplay({ styles: { classic: { rotation: 400 } } }).styles).toEqual({
+      classic: { rotation: MAX_ROTATION },
+    });
+    expect(normalizeDisplay({ styles: { classic: { rotation: 360 } } }).styles).toEqual({
+      classic: { rotation: 360 },
+    });
+    expect(normalizeDisplay({ styles: { classic: { rotation: 0 } } }).styles).toEqual({});
+    expect(normalizeDisplay({ styles: { classic: { rotation: 'x' } } }).styles).toEqual({});
+  });
+
+  it('keeps the stored rotation next to a partial element override', () => {
+    const display = normalizeDisplay({
+      theme: 'modern',
+      styles: { modern: { rotation: 15, elements: { cost: { scale: 150 } } } },
+    });
+    const style = styleFor(display, THEMES.modern);
+    expect(style.rotation).toBe(15);
+    expect(style.elements.cost).toEqual({ font: 'theme', scale: 150, color: null, visible: true });
+    expect(style.elements.label).toEqual(INHERIT);
   });
 });
 
@@ -394,7 +477,7 @@ describe('camera payload', () => {
       },
     });
     const input = cameraInput(meeting(), display, 'en', DEFAULT_CAMERA);
-    expect(input.display.elements.cost).toEqual({ font: 'mono', scale: 150, color: null });
+    expect(input.display.elements.cost).toEqual({ font: 'mono', scale: 150, color: null, visible: true });
     expect(input.display.elements.elapsed).toEqual(INHERIT);
     expect(input.display.elements.personTime).toEqual(INHERIT);
     expect(input.display.elements.costPerMinute).toEqual(INHERIT);
@@ -406,6 +489,23 @@ describe('camera payload', () => {
       opacity: 100,
       radius: THEMES.classic.radius,
     });
+  });
+
+  it('sends per-element visibility and the resolved rotation', () => {
+    const display = normalizeDisplay({
+      theme: 'classic',
+      styles: { classic: { rotation: 90, elements: { status: { visible: false } } } },
+    });
+    const input = cameraInput(meeting(), display, 'en', DEFAULT_CAMERA);
+    expect(input.display.rotation).toBe(90);
+    expect(input.display.elements.status).toEqual({ font: 'theme', scale: 100, color: null, visible: false });
+    for (const element of COUNTER_ELEMENTS) {
+      if (element !== 'status') expect(input.display.elements[element].visible).toBe(true);
+    }
+  });
+
+  it('sends an upright counter when no rotation is stored', () => {
+    expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'en', DEFAULT_CAMERA).display.rotation).toBe(0);
   });
 
   it('resolves the season in force for the "seasons" style', () => {

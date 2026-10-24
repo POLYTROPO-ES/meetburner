@@ -18,10 +18,12 @@ import {
   LANGS,
   MAX_OPACITY,
   MAX_RADIUS,
+  MAX_ROTATION,
   meetingSnapshot,
   meetingSummary,
   MIN_OPACITY,
   MIN_RADIUS,
+  MIN_ROTATION,
   OVERFLOW_MODES,
   participantHourlyRate,
   presetSalary,
@@ -409,7 +411,18 @@ export function Setup() {
                 const presetColor = element === 'cost' ? theme.accent : theme.muted;
                 return (
                   <div key={element} className="style-element">
-                    <span className="style-element-name">{t(lang, `element.${element}`)}</span>
+                    <div className="style-element-name">
+                      <span>{t(lang, `element.${element}`)}</span>
+                      <label className="checkbox">
+                        <input
+                          type="checkbox"
+                          aria-label={`${t(lang, 'styleVisible')}: ${t(lang, `element.${element}`)}`}
+                          checked={elementStyle.visible}
+                          onChange={(e) => updateElement(element, { visible: e.target.checked })}
+                        />
+                        {t(lang, 'styleVisible')}
+                      </label>
+                    </div>
                     <label>
                       {t(lang, 'styleFont')}
                       <select
@@ -532,6 +545,18 @@ export function Setup() {
                   step={1}
                   value={style.background.radius}
                   onChange={(e) => updateBackground({ radius: e.target.valueAsNumber })}
+                />
+              </label>
+              <label>
+                {t(lang, 'styleRotation')} ({style.rotation}°)
+                <input
+                  type="range"
+                  aria-label={t(lang, 'styleRotation')}
+                  min={MIN_ROTATION}
+                  max={MAX_ROTATION}
+                  step={5}
+                  value={style.rotation}
+                  onChange={(e) => saveStyle({ ...style, rotation: e.target.valueAsNumber })}
                 />
               </label>
             </div>

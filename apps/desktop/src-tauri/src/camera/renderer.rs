@@ -4,8 +4,8 @@
 use ab_glyph::{point, Font, PxScale, ScaleFont};
 use serde::Deserialize;
 use tiny_skia::{
-    Color, FillRule, GradientStop, LinearGradient, Paint, Path, PathBuilder, Pixmap, PixmapPaint,
-    Point, SpreadMode, Transform,
+    Color, FillRule, FilterQuality, GradientStop, LinearGradient, Paint, Path, PathBuilder, Pixmap,
+    PixmapPaint, Point, SpreadMode, Transform,
 };
 
 use crate::camera::fonts::Fonts;
@@ -99,10 +99,13 @@ pub struct DisplayConfig {
     pub theme: String,
     pub layout: Layout,
     pub overflow: Overflow,
-    /// Font, size and colour per counter line (ADR-0029).
+    /// Font, size, colour and visibility per counter line (ADR-0029).
     pub elements: Elements,
     /// Card paint: solid or gradient, opacity and radius (ADR-0029).
     pub background: BackgroundStyle,
+    /// Clockwise turn of the counter layer in degrees, `0..=360`. The webcam never
+    /// turns: only the card, its background and its text are rotated.
+    pub rotation: f32,
     /// Per-layer mirroring; the webcam and the counter are independent (ADR-0022).
     pub mirror: Mirror,
     /// Where the widget card goes, as fractions of the frame (ADR-0023).
@@ -169,6 +172,8 @@ pub struct DisplayConfigWire {
     pub elements: ElementsWire,
     /// Absent in older payloads: keeps the flat theme background the renderer always painted.
     pub background: Option<BackgroundWire>,
+    /// Absent in older payloads too; see [`clamp_rotation`].
+    pub rotation: Option<f32>,
 }
 
 impl Default for DisplayConfigWire {
@@ -181,6 +186,7 @@ impl Default for DisplayConfigWire {
             overlay: None,
             elements: ElementsWire::default(),
             background: None,
+            rotation: None,
         }
     }
 }
@@ -197,6 +203,7 @@ impl From<DisplayConfigWire> for DisplayConfig {
             overflow: theme::parse_overflow(&wire.overflow),
             elements: Elements::resolve(&wire.elements),
             background: BackgroundStyle::resolve(wire.background.as_ref()),
+            rotation: clamp_rotation(wire.rotation),
             mirror: wire.mirror,
             overlay: wire.overlay.and_then(Overlay::sanitized),
         }
@@ -248,6 +255,23 @@ fn clamp_radius(value: Option<f32>) -> Option<f32> {
         .map(|radius| radius.clamp(0.0, MAX_RADIUS))
 }
 
+/// Degrees `0..=360`; a missing or corrupt value keeps the counter upright.
+fn clamp_rotation(value: Option<f32>) -> f32 {
+    value
+        .filter(|degrees| degrees.is_finite())
+        .map(|degrees| degrees.clamp(0.0, 360.0))
+        .unwrap_or(0.0)
+}
+
+/// The turn actually applied: `360` is a full turn, so it draws upright like `0`.
+fn normalize_rotation(value: f32) -> f32 {
+    if value.is_finite() {
+        value.rem_euclid(360.0)
+    } else {
+        0.0
+    }
+}
+
 impl Default for DisplayConfig {
     fn default() -> Self {
         DisplayConfig {
@@ -256,13 +280,14 @@ impl Default for DisplayConfig {
             overflow: Overflow::Compact,
             elements: Elements::default(),
             background: BackgroundStyle::default(),
+            rotation: 0.0,
             mirror: Mirror::default(),
             overlay: None,
         }
     }
 }
 
-/// One customisable counter line: font, size and colour (ADR-0029).
+/// One customisable counter line: font, size, colour and visibility (ADR-0029).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ElementStyle {
     /// `FontChoice::Theme` keeps the preset font.
@@ -271,6 +296,8 @@ pub struct ElementStyle {
     pub scale: f32,
     /// `None` keeps the preset colour, including the accent of a running cost.
     pub color: Option<(u8, u8, u8)>,
+    /// A hidden line is not drawn and, in `fullscreen`, stops reserving its band.
+    pub visible: bool,
 }
 
 impl Default for ElementStyle {
@@ -279,6 +306,7 @@ impl Default for ElementStyle {
             font: FontChoice::Theme,
             scale: 1.0,
             color: None,
+            visible: true,
         }
     }
 }
@@ -294,6 +322,8 @@ impl ElementStyle {
                 .unwrap_or(FontChoice::Theme),
             scale: clamp_scale(wire.scale.unwrap_or(100.0) / 100.0),
             color: wire.color.as_deref().and_then(parse_hex_color),
+            // Absent in older payloads: every line the preset draws stays visible.
+            visible: wire.visible.unwrap_or(true),
         }
     }
 }
@@ -329,6 +359,8 @@ pub struct ElementWire {
     /// Percent, 100 = the preset size.
     pub scale: Option<f32>,
     pub color: Option<String>,
+    /// Absent means visible.
+    pub visible: Option<bool>,
 }
 
 /// Untrusted per-element styles; a missing element keeps the preset.
@@ -522,7 +554,8 @@ pub fn cost_text(
 /// leaves the black canvas of a counter-only frame visible behind the painted background.
 ///
 /// The counter is painted on its own transparent layer and then composited, so the webcam
-/// and the counter can be mirrored independently (ADR-0022).
+/// and the counter can be mirrored independently (ADR-0022) and the counter can turn without
+/// dragging the webcam with it.
 pub fn render(
     input: &CounterInput,
     fonts: &Fonts,
@@ -539,11 +572,15 @@ pub fn render(
         h: overlay.h,
     });
     let elements = input.display.elements;
-    // The web hides `totalCost` inside the widget, and an empty label draws nothing at all,
-    // so both cases keep the layout the renderer always had (ADR-0029).
+    // The web hides `totalCost` inside the widget, a hidden line is not drawn at all, and an
+    // empty label paints nothing: all three keep the layout the renderer always had. Only the
+    // label band is reserved space above the stack, so only hiding the label releases it
+    // (ADR-0029).
     let label_text = input.labels.total_cost.trim().to_uppercase();
-    let label_scale = (input.display.layout == Layout::Fullscreen && !label_text.is_empty())
-        .then_some(elements.label.scale);
+    let label_scale = (input.display.layout == Layout::Fullscreen
+        && elements.label.visible
+        && !label_text.is_empty())
+    .then_some(elements.label.scale);
     let layout = counter_layout_with_label(
         width as f32,
         height as f32,
@@ -604,84 +641,129 @@ pub fn render(
     }
 
     let cost_style = elements.cost;
-    let cost_font_ref = fonts.get(cost_style.font.resolve(&theme));
-    let cost_full = format_money(values.cost, &input.currency, &input.locale);
-    let base_px = fit_font_px(
-        &cost_full,
-        cost_font_ref,
-        layout.cost.w * COST_FILL_RATIO,
-        layout.cost.h * COST_MAX_HEIGHT_RATIO,
-    );
-    let cost_px = (base_px * cost_style.scale).max(12.0);
-    let cost = cost_text(input, fonts, now_ms, layout.cost.w, cost_px);
-    let cost_value = if values.starts_in_ms > 0 {
-        format_money(0.0, &input.currency, &input.locale)
-    } else {
-        cost.text
-    };
-    draw_centered(
-        &mut overlay,
-        &cost_value,
-        cost_font_ref,
-        cost_px * cost.scale,
-        element_color(
-            cost_style.color,
-            if running { theme.accent } else { theme.text },
-        ),
-        layout.cost,
-    );
+    if cost_style.visible {
+        let cost_font_ref = fonts.get(cost_style.font.resolve(&theme));
+        let cost_full = format_money(values.cost, &input.currency, &input.locale);
+        let base_px = fit_font_px(
+            &cost_full,
+            cost_font_ref,
+            layout.cost.w * COST_FILL_RATIO,
+            layout.cost.h * COST_MAX_HEIGHT_RATIO,
+        );
+        let cost_px = (base_px * cost_style.scale).max(12.0);
+        let cost = cost_text(input, fonts, now_ms, layout.cost.w, cost_px);
+        let cost_value = if values.starts_in_ms > 0 {
+            format_money(0.0, &input.currency, &input.locale)
+        } else {
+            cost.text
+        };
+        draw_centered(
+            &mut overlay,
+            &cost_value,
+            cost_font_ref,
+            cost_px * cost.scale,
+            element_color(
+                cost_style.color,
+                if running { theme.accent } else { theme.text },
+            ),
+            layout.cost,
+        );
+    }
 
     let elapsed_style = elements.elapsed;
-    let time_px = (layout.time.h * 0.55).max(14.0) * elapsed_style.scale;
-    let time_value = if values.starts_in_ms > 0 {
-        format!(
-            "{} {}",
-            input.labels.starts_in,
-            format_duration(values.starts_in_ms)
-        )
-    } else {
-        format_duration(values.elapsed_ms)
-    };
-    draw_centered(
-        &mut overlay,
-        &time_value,
-        fonts.get(elapsed_style.font.resolve(&theme)),
-        time_px,
-        element_color(elapsed_style.color, theme.muted),
-        layout.time,
-    );
+    if elapsed_style.visible {
+        let time_px = (layout.time.h * 0.55).max(14.0) * elapsed_style.scale;
+        let time_value = if values.starts_in_ms > 0 {
+            format!(
+                "{} {}",
+                input.labels.starts_in,
+                format_duration(values.starts_in_ms)
+            )
+        } else {
+            format_duration(values.elapsed_ms)
+        };
+        draw_centered(
+            &mut overlay,
+            &time_value,
+            fonts.get(elapsed_style.font.resolve(&theme)),
+            time_px,
+            element_color(elapsed_style.color, theme.muted),
+            layout.time,
+        );
+    }
 
     let footer_style = elements.cost_per_minute;
-    let footer_px = (layout.footer.h * 0.5).clamp(12.0, 30.0) * footer_style.scale;
-    let footer = format!(
-        "{} {}",
-        input.labels.cost_per_minute,
-        format_money(values.cost_per_minute, &input.currency, &input.locale)
-    );
-    draw_centered(
-        &mut overlay,
-        &footer,
-        fonts.get(footer_style.font.resolve(&theme)),
-        footer_px,
-        element_color(footer_style.color, theme.muted),
-        layout.footer,
-    );
+    if footer_style.visible {
+        let footer_px = (layout.footer.h * 0.5).clamp(12.0, 30.0) * footer_style.scale;
+        let footer = format!(
+            "{} {}",
+            input.labels.cost_per_minute,
+            format_money(values.cost_per_minute, &input.currency, &input.locale)
+        );
+        draw_centered(
+            &mut overlay,
+            &footer,
+            fonts.get(footer_style.font.resolve(&theme)),
+            footer_px,
+            element_color(footer_style.color, theme.muted),
+            layout.footer,
+        );
+    }
 
     draw_decoration(&mut overlay, &theme, fonts, layout.content);
 
     if mirror.overlay_h || mirror.overlay_v {
         flip_pixmap(&mut overlay, mirror.overlay_h, mirror.overlay_v);
     }
+    // The counter turns as a single layer, card and background included, and never the
+    // webcam: the layer goes through a scratch pixmap before it is composited.
+    let rotation = normalize_rotation(input.display.rotation);
+    let layer = if rotation == 0.0 {
+        overlay
+    } else {
+        let (mut centre_x, mut centre_y) = match layout.card {
+            Some(card) => (card.x + card.w / 2.0, card.y + card.h / 2.0),
+            None => (width as f32 / 2.0, height as f32 / 2.0),
+        };
+        // Mirroring already moved the card, so the turn follows its new centre.
+        if mirror.overlay_h {
+            centre_x = width as f32 - centre_x;
+        }
+        if mirror.overlay_v {
+            centre_y = height as f32 - centre_y;
+        }
+        rotate_layer(&overlay, rotation, centre_x, centre_y)
+    };
     pixmap.draw_pixmap(
         0,
         0,
-        overlay.as_ref(),
+        layer.as_ref(),
         &PixmapPaint::default(),
         Transform::identity(),
         None,
     );
 
     frame_from_pixmap(pixmap)
+}
+
+/// Turns the counter layer `degrees` clockwise around `(centre_x, centre_y)` into a scratch
+/// pixmap: tiny-skia resamples card, background and glyphs in one pass, so the text turns as a
+/// picture instead of glyph by glyph. `degrees` is never `0` here (that keeps today's pixels).
+fn rotate_layer(layer: &Pixmap, degrees: f32, centre_x: f32, centre_y: f32) -> Pixmap {
+    let mut rotated = Pixmap::new(layer.width(), layer.height()).expect("frame size");
+    rotated.draw_pixmap(
+        0,
+        0,
+        layer.as_ref(),
+        &PixmapPaint {
+            // Bilinear keeps the card edges and the glyphs from breaking up off 90°.
+            quality: FilterQuality::Bilinear,
+            ..PixmapPaint::default()
+        },
+        Transform::from_rotate_at(degrees, centre_x, centre_y),
+        None,
+    );
+    rotated
 }
 
 /// Mirrors a layer in place, horizontally and/or vertically.
@@ -1110,6 +1192,23 @@ mod tests {
         count
     }
 
+    /// Mean position of the pixels painted exactly with `expected`.
+    fn colour_centre(frame: &Frame, expected: (u8, u8, u8)) -> Option<(f32, f32)> {
+        let mut sum_x = 0.0;
+        let mut sum_y = 0.0;
+        let mut count = 0.0;
+        for y in 0..frame.height() {
+            for x in 0..frame.width() {
+                if frame.pixel(x, y) == expected {
+                    sum_x += x as f32;
+                    sum_y += y as f32;
+                    count += 1.0;
+                }
+            }
+        }
+        (count > 0.0).then(|| (sum_x / count, sum_y / count))
+    }
+
     /// How many pixels inside `rect` differ between two renders.
     fn differing_pixels(left: &Frame, right: &Frame, rect: Rect) -> usize {
         let mut count = 0;
@@ -1121,6 +1220,57 @@ mod tests {
             }
         }
         count
+    }
+
+    /// How many pixels outside `rect` differ between two renders.
+    fn differing_outside(left: &Frame, right: &Frame, rect: Rect) -> usize {
+        let mut count = 0;
+        for y in 0..left.height() {
+            for x in 0..left.width() {
+                if !rect.contains(x as f32, y as f32) && left.pixel(x, y) != right.pixel(x, y) {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+
+    /// Top row of the painted pixels inside `rect`.
+    fn ink_top(frame: &Frame, rect: Rect, background: (u8, u8, u8)) -> Option<u32> {
+        let mut min = u32::MAX;
+        let mut max = 0;
+        for y in rect.y as u32..(rect.y + rect.h) as u32 {
+            for x in rect.x as u32..(rect.x + rect.w) as u32 {
+                if frame.pixel(x, y) != background {
+                    min = min.min(y);
+                    max = max.max(y);
+                }
+            }
+        }
+        (max > min).then_some(min)
+    }
+
+    /// A hidden line must lose its own ink and change nothing outside its box.
+    fn assert_only_this_line_disappeared(
+        shown: &Frame,
+        hidden: &Frame,
+        rect: Rect,
+        background: (u8, u8, u8),
+    ) {
+        assert!(
+            ink_inside(shown, rect, background) > 0,
+            "the line is painted"
+        );
+        assert_eq!(ink_inside(hidden, rect, background), 0, "no ink left");
+        assert!(
+            differing_pixels(shown, hidden, rect) > 0,
+            "the pixels changed"
+        );
+        assert_eq!(
+            differing_outside(shown, hidden, rect),
+            0,
+            "nothing else changes"
+        );
     }
 
     #[test]
@@ -1932,7 +2082,7 @@ mod tests {
         // The web customises a status line and the person-time stats grid; the camera draws
         // neither (no room in the counter card), so a loud style on them changes no pixel.
         let ignored: CounterInput = serde_json::from_str(
-            r##"{"startAt":1000000,"ratePerMs":0.01,"display":{"elements":{"status":{"font":"mono","scale":250,"color":"#FF0000"},"personTime":{"font":"mono","scale":250,"color":"#00FF00"}}}}"##,
+            r##"{"startAt":1000000,"ratePerMs":0.01,"display":{"elements":{"status":{"font":"mono","scale":250,"color":"#FF0000","visible":false},"personTime":{"font":"mono","scale":250,"color":"#00FF00","visible":false}}}}"##,
         )
         .expect("the camera accepts the styles the web sends");
 
@@ -2094,6 +2244,268 @@ mod tests {
         assert!(
             colour_count(&frame, classic.muted) < colour_count(&preset, classic.muted),
             "the label no longer paints muted pixels"
+        );
+    }
+
+    #[test]
+    fn a_payload_without_visibility_or_rotation_keeps_every_line_visible_and_upright() {
+        // The web sends both fields now; older payloads omit them and must render as before.
+        let payload: CounterInput = serde_json::from_str(
+            r#"{"startAt":1000000,"ratePerMs":0.01,"display":{"theme":"classic"}}"#,
+        )
+        .expect("payload parses");
+        assert_eq!(payload.display.rotation, 0.0, "no rotation by default");
+        assert_eq!(payload.display.elements, Elements::default());
+        for style in [
+            payload.display.elements.label,
+            payload.display.elements.cost,
+            payload.display.elements.elapsed,
+            payload.display.elements.cost_per_minute,
+        ] {
+            assert!(style.visible, "an absent `visible` means visible");
+        }
+
+        let fonts = fonts();
+        assert_eq!(
+            render(&payload, &fonts, 1_060_000, None),
+            render(&input(), &fonts, 1_060_000, None),
+            "the defaults render exactly like today"
+        );
+    }
+
+    #[test]
+    fn parses_per_element_visibility_and_the_rotation() {
+        let input: CounterInput = serde_json::from_str(
+            r#"{"display":{"rotation":90,"elements":{"cost":{"visible":false},"status":{"visible":false},"personTime":{"visible":false}}}}"#,
+        )
+        .expect("display parses");
+        assert_eq!(input.display.rotation, 90.0);
+        assert!(!input.display.elements.cost.visible);
+        assert!(input.display.elements.label.visible);
+        assert!(input.display.elements.elapsed.visible);
+        assert!(input.display.elements.cost_per_minute.visible);
+
+        let clamped: CounterInput =
+            serde_json::from_str(r#"{"display":{"rotation":400}}"#).expect("display parses");
+        assert_eq!(clamped.display.rotation, 360.0, "clamped to a full turn");
+        let negative: CounterInput =
+            serde_json::from_str(r#"{"display":{"rotation":-20}}"#).expect("display parses");
+        assert_eq!(negative.display.rotation, 0.0, "clamped to upright");
+    }
+
+    #[test]
+    fn hiding_the_label_in_fullscreen_gives_its_band_back_to_the_cost() {
+        let fonts = fonts();
+        let background = (0x0f, 0x11, 0x15);
+        let classic = theme::theme("classic", 1_060_000);
+        let labelled_layout = fullscreen_layout(1.0);
+        let band = labelled_layout.label.expect("band");
+        let today = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Fullscreen);
+
+        let shown = render(&input(), &fonts, 1_060_000, None);
+        assert!(
+            ink_inside(&shown, band, background) > 0,
+            "the label is painted"
+        );
+        let shown_top = ink_top(&shown, labelled_layout.cost, background).expect("cost ink");
+
+        let mut hidden_input = input();
+        hidden_input.display.elements.label.visible = false;
+        let hidden = render(&hidden_input, &fonts, 1_060_000, None);
+
+        assert_eq!(
+            ink_inside(&hidden, band, background),
+            0,
+            "no label ink at all"
+        );
+        let hidden_top = ink_top(&hidden, today.cost, background).expect("cost ink");
+        assert!(
+            hidden_top < shown_top,
+            "the cost grew into the band and moved up: {hidden_top} px vs {shown_top} px"
+        );
+
+        // Hidden is exactly "no label": the band is gone and the stack fills the content.
+        let mut blank = input();
+        blank.labels.total_cost = String::new();
+        assert_eq!(hidden, render(&blank, &fonts, 1_060_000, None));
+
+        // The lines below keep their old boxes and their ink.
+        assert!(ink_inside(&hidden, today.time, background) > 0);
+        assert!(ink_inside(&hidden, today.footer, background) > 0);
+        assert!(has_colour(&hidden, today.cost, classic.accent));
+    }
+
+    #[test]
+    fn hiding_the_time_line_leaves_the_other_lines_alone() {
+        let fonts = fonts();
+        let background = (0x0f, 0x11, 0x15);
+        let layout = fullscreen_layout(1.0);
+        let shown = render(&input(), &fonts, 1_060_000, None);
+
+        let mut hidden_input = input();
+        hidden_input.display.elements.elapsed.visible = false;
+        let hidden = render(&hidden_input, &fonts, 1_060_000, None);
+
+        assert_only_this_line_disappeared(&shown, &hidden, layout.time, background);
+        assert!(
+            ink_inside(&hidden, layout.cost, background) > 0,
+            "the cost stays where it was"
+        );
+        assert!(
+            ink_inside(&hidden, layout.footer, background) > 0,
+            "the footer stays where it was"
+        );
+    }
+
+    #[test]
+    fn hiding_the_footer_leaves_the_other_lines_alone() {
+        let fonts = fonts();
+        let background = (0x0f, 0x11, 0x15);
+        let layout = fullscreen_layout(1.0);
+        let shown = render(&input(), &fonts, 1_060_000, None);
+
+        let mut hidden_input = input();
+        hidden_input.display.elements.cost_per_minute.visible = false;
+        let hidden = render(&hidden_input, &fonts, 1_060_000, None);
+
+        assert_only_this_line_disappeared(&shown, &hidden, layout.footer, background);
+        assert!(
+            ink_inside(&hidden, layout.cost, background) > 0,
+            "the cost stays where it was"
+        );
+        assert!(
+            ink_inside(&hidden, layout.time, background) > 0,
+            "the time stays where it was"
+        );
+    }
+
+    #[test]
+    fn a_hidden_cost_only_removes_the_cost_ink() {
+        let fonts = fonts();
+        let background = (0x0f, 0x11, 0x15);
+        let layout = fullscreen_layout(1.0);
+        let shown = render(&input(), &fonts, 1_060_000, None);
+
+        let mut hidden_input = input();
+        hidden_input.display.elements.cost.visible = false;
+        let hidden = render(&hidden_input, &fonts, 1_060_000, None);
+
+        assert_eq!(ink_inside(&hidden, layout.cost, background), 0);
+        assert!(ink_inside(&hidden, layout.time, background) > 0);
+        assert!(ink_inside(&hidden, layout.footer, background) > 0);
+        assert_eq!(
+            differing_outside(&shown, &hidden, layout.cost),
+            0,
+            "nothing else changes"
+        );
+    }
+
+    #[test]
+    fn a_full_turn_renders_exactly_like_no_turn() {
+        let fonts = fonts();
+        let upright = render(&input(), &fonts, 1_060_000, None);
+
+        let mut zero = input();
+        zero.display.rotation = 0.0;
+        assert_eq!(
+            render(&zero, &fonts, 1_060_000, None),
+            upright,
+            "0 is today"
+        );
+
+        let mut full = input();
+        full.display.rotation = 360.0;
+        assert_eq!(
+            render(&full, &fonts, 1_060_000, None),
+            upright,
+            "a full turn is upright"
+        );
+    }
+
+    #[test]
+    fn a_quarter_turn_stands_the_widget_card_around_its_own_centre() {
+        let fonts = fonts();
+        let mut input = input();
+        input.display.layout = Layout::Widget;
+        let webcam = (0x22, 0x44, 0x66);
+        let background = Frame::filled(FRAME_WIDTH, FRAME_HEIGHT, webcam);
+        let card = counter_layout(FRAME_WIDTH as f32, FRAME_HEIGHT as f32, Layout::Widget)
+            .card
+            .expect("card");
+        let centre = (
+            (card.x + card.w / 2.0) as u32,
+            (card.y + card.h / 2.0) as u32,
+        );
+        // Far from the centre sideways, so the turn moves it off this pixel; and a pixel
+        // above the card that only the turned card may reach.
+        let corner = ((card.x + card.w) as u32 - 20, (card.y + card.h) as u32 - 20);
+        let above = (centre.0, centre.1 - 200);
+
+        let upright = render(&input, &fonts, 1_060_000, Some(&background));
+        assert_eq!(
+            upright.pixel(corner.0, corner.1),
+            (0x0f, 0x11, 0x15),
+            "the card covers that pixel upright"
+        );
+        assert_eq!(upright.pixel(above.0, above.1), webcam);
+
+        input.display.rotation = 90.0;
+        let turned = render(&input, &fonts, 1_060_000, Some(&background));
+        assert_eq!(
+            turned.pixel(corner.0, corner.1),
+            webcam,
+            "the card left the old bottom-right corner"
+        );
+        assert_ne!(
+            turned.pixel(above.0, above.1),
+            webcam,
+            "the card stands above its centre after a quarter turn"
+        );
+
+        // Only the counter turns: the webcam stays exactly as captured.
+        let far_away = Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 200.0,
+            h: 200.0,
+        };
+        assert_eq!(
+            ink_inside(&turned, far_away, webcam),
+            0,
+            "the webcam outside the card is untouched by the rotation"
+        );
+
+        // The turn is clockwise, like `rotate(90deg)` on the web: the cost, which sits above
+        // the card centre, ends up to its right.
+        let accent = theme::theme("classic", 1_060_000).accent;
+        let upright_cost = colour_centre(&upright, accent).expect("the running cost");
+        assert!(
+            upright_cost.1 < centre.1 as f32,
+            "the cost sits above the card centre, at {:?}",
+            upright_cost
+        );
+        let turned_cost = colour_centre(&turned, accent).expect("the running cost");
+        assert!(
+            turned_cost.0 > centre.0 as f32,
+            "a quarter turn moves the cost to the right: {:?}",
+            turned_cost
+        );
+    }
+
+    #[test]
+    fn a_quarter_turn_turns_the_fullscreen_layer_around_the_frame_centre() {
+        let mut input = input();
+        input.display.rotation = 90.0;
+        let turned = render(&input, &fonts(), 1_060_000, None);
+        assert_eq!(
+            turned.pixel(0, 0),
+            (0, 0, 0),
+            "the black canvas shows where the turned panel ends"
+        );
+        assert_ne!(
+            turned.pixel(FRAME_WIDTH / 2, FRAME_HEIGHT / 2),
+            (0, 0, 0),
+            "the counter still covers the middle of the frame"
         );
     }
 }
