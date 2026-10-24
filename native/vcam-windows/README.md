@@ -12,7 +12,7 @@ mf/                          Media Foundation virtual camera ("MeetBurner Camera
 mf/mf_camera_api.h           MB_Mf* exports + CLSID + friendly name (mirrored in camera/mf.rs)
 mf/mfvirtualcamera_api.h     minimal Windows 11 API declaration (runtime loaded)
 mf/dll.cpp                  COM media source, per-user registration, MB_Mf* exports
-mf/frames.cpp                top-down -> bottom-up flip + aspect fit + placeholder
+mf/frames.cpp                top-down copy + aspect fit + placeholder
 scripts/                     register.ps1 / unregister.ps1 (HKCU, no UAC)
 tests/                       reader_test + frame_test + mf_frames_test (CTest), dshow_probe, graph_test
 ```
@@ -79,10 +79,18 @@ negotiated media type, keeping the aspect ratio (as `BlitFit` does).
 
 ### Row order
 
-RGB32 reaches consumers **bottom-up** (`biHeight > 0`): Media Foundation — Chrome, Meet, new Teams —
-ignores a negative height and shows a top-down buffer upside down, which made the counter look rotated 180°.
-The producer writes top-down, the filter flips while copying (`BlitFit`) and `RenderNotRunning` flips its
-GDI DIB too. `tests/frame_test.cpp` pins both.
+The two cameras disagree, so read this before touching either frame helper:
+
+- **DirectShow** (`BlitFit`, `dshow/frames.h`): an RGB32 DIB with `biHeight > 0` is
+  **bottom-up**, and it ignores a negative height, so the producer's top-down rows are flipped
+  while copying; `RenderNotRunning` flips its GDI DIB too. `tests/frame_test.cpp` pins it.
+  This is the ADR-0019 rule.
+- **Media Foundation** (`FitBgra`, `mf/frames.h`): `MF_MT_DEFAULT_STRIDE` is positive, which
+  means **top-down**, and a negative stride is not honoured, so the rows are copied in order
+  and nothing is flipped. Flipping here rotated the picture 180° in every consumer
+  (ADR-0031 amendment). `tests/mf_frames_test.cpp` pins the mapping.
+
+In both cases the producer writes top-down BGRA (ADR-0013).
 
 ## Which apps see the device
 
@@ -165,9 +173,9 @@ If the app lists the camera but a consumer cannot activate it, see the HKCU cave
 
 - `IMFMediaSourceEx` (with `IMFGetService` and `IKsControl`) + `IMFMediaStream2`, each with its
   own `IMFMediaEventQueue`; one `PINNAME_VIDEO_CAPTURE` stream marked frame-server shareable.
-- Media type `MFVideoFormat_RGB32`, 1280×720, 30 fps, positive stride. RGB32 is bottom-up and
-  MF ignores a negative stride, so the producer's top-down rows are flipped while the sample is
-  filled; a resolution change is letterboxed into the negotiated size (ADR-0019).
+- Media type `MFVideoFormat_RGB32`, 1280×720, 30 fps, positive stride (= top-down). The
+  producer's top-down rows are copied in order, never flipped; a resolution change is
+  letterboxed into the negotiated size (ADR-0019, ADR-0031 amendment).
 - Pull model: `RequestSample` reads the newest frame (or the "not running" placeholder) and
   queues `MEMediaSample`. Sample times are QPC based and anchored on the header timestamp.
 - No frame for 2 s or `state = 0` → the placeholder, never a blocked or torn preview.

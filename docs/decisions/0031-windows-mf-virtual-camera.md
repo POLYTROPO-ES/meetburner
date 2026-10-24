@@ -107,3 +107,22 @@ DLL is built for Windows 10 (`_WIN32_WINNT=0x0A00`) and never links the function
   activate it.
 - Windows appends "Windows Virtual Camera" to the friendly name in some pickers; the
   MeetBurner prefix still tells the cameras apart.
+
+## Amendment (2026-10-24)
+
+The first implementation got the row order wrong. It declared
+`MF_MT_DEFAULT_STRIDE = +5120` — a positive stride, which means **top-down** to Media
+Foundation — and then flipped every row to bottom-up while filling the sample. Live frames
+therefore reached consumers rotated 180°: the counter card that belongs bottom-right appeared
+top-left with the text upside down. The "not running" placeholder, generated from a top-down
+DIB and copied as-is, was upright; that difference is what made the bug obvious.
+
+The payload is top-down and stays top-down: `mf/frames.cpp` copies row `n` of the source to
+row `n` of the fitted band (only the aspect-fit bars and the centring move it), under the same
+positive stride. `FitFlipBgra` is now `FitBgra` so the name stops implying a flip, and
+`tests/mf_frames_test.cpp` asserts that the first source row lands in the first destination row
+and the last in the last, including when letterbox bars are present.
+
+ADR-0019's bottom-up rule applies to the **DirectShow filter only**: a DirectShow RGB32 DIB
+with a positive `biHeight` is bottom-up, so `BlitFit` must flip. Media Foundation is the
+opposite convention and must not. Do not copy the flip from one camera to the other.
