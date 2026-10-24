@@ -56,8 +56,6 @@ Everything you type stays in the browser's local storage on that device. There i
 
 ## The counter
 
-- **Layout** — *Fullscreen* fills the window; *Widget* draws a compact card, used when the
-  counter is overlaid on a webcam.
 - **Style** — seven presets (Classic, Modern, Formal, Halloween, Christmas, 4 seasons,
   Minimalist). Every preset remembers its own tweaks:
   - each text element (Title, Cost, Status, Elapsed, Person-time, Cost per minute) can have its
@@ -69,6 +67,15 @@ Everything you type stays in the browser's local storage on that device. There i
   - **Reset style** returns the selected preset to its original look.
 - **Large amounts** — abbreviate (K, M, B) or shrink the font when the cost outgrows the card.
 - The *4 seasons* style follows the northern hemisphere; there is no southern option yet.
+
+## Placing the card on the camera (desktop)
+
+The counter style section shows the camera frame with the counter card on it, and it is the only
+place the card is configured: drag it to move it, drag its corner to resize it, drag the round
+handle at its top to turn it. **Fill frame** makes the card cover the whole frame (the camera
+then shows the counter alone, without the webcam behind it) and **Reset position** puts it back
+in the bottom-right corner. The style controls right below the frame edit the same card, so what
+you see there is what the camera sends.
 
 ## Virtual camera (Windows)
 

@@ -78,8 +78,9 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
 }
 
 .checkbox { flex-direction: row; align-items: center; gap: 0.5rem; }
-.display-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start; }
-.preview { margin: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.display-settings { display: flex; flex-direction: column; gap: 1rem; align-items: flex-start; }
+.style-pick { min-width: 16rem; }
+.preview { margin: 0; display: flex; flex-direction: column; gap: 0.3rem; width: 100%; }
 
 /* Counter style controls: one row per text element, plus the background (ADR-0029) */
 .style-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; align-items: start; margin-top: 1rem; }
@@ -100,17 +101,16 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
 .style-color label.checkbox { gap: 0.25rem; }
 .style-color button { padding: 0.35rem 0.5rem; line-height: 1; }
 @media (max-width: 720px) {
-  .display-settings { grid-template-columns: 1fr; }
   .style-element { grid-template-columns: 1fr 1fr; }
   .style-element-name { grid-column: 1 / -1; }
 }
 
-/* Overlay editor: drag the card to move it, its corner to resize (ADR-0023) */
-.overlay-editor { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; }
+/* The one place to place the card: drag it to move, its corner to resize, the handle to turn */
+.overlay-editor { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; width: 100%; }
 .overlay-stage {
   position: relative;
   width: 100%;
-  max-width: 420px;
+  max-width: 640px;
   background: repeating-conic-gradient(#1a1d24 0% 25%, #14171d 0% 50%) 50% / 24px 24px;
   border: 1px solid #2b2f38;
   border-radius: 8px;
@@ -119,22 +119,37 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
 }
 .overlay-card {
   position: absolute;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2%;
   overflow: hidden;
   cursor: grab;
   user-select: none;
-  container-type: size;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  touch-action: none;
+  transform-origin: center;
 }
 .overlay-card:active { cursor: grabbing; }
 /* The stage clips its overflow, so the card carries its focus ring inside (2.4.7). */
 .overlay-card:focus-visible { outline-offset: -4px; }
-.overlay-cost { font-size: 34cqh; line-height: 1; font-weight: 700; white-space: nowrap; }
-.overlay-time { font-size: 14cqh; line-height: 1; opacity: 0.75; }
+/* The card is the counter: no second border or aspect ratio from the setup preview. */
+.overlay-card .counter-view.embedded { height: 100%; aspect-ratio: auto; border: 0; border-radius: inherit; }
+.overlay-turn {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgb(255 255 255 / 0.45);
+  border-radius: 50%;
+  background: rgb(15 17 21 / 0.75);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+}
+.overlay-turn:active { cursor: grabbing; }
+.overlay-turn:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
 .overlay-handle {
   position: absolute;
   right: 3%;
@@ -143,7 +158,8 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
   height: 16px;
   border-right: 3px solid currentColor;
   border-bottom: 3px solid currentColor;
-  opacity: 0.65;
+  color: #fff;
+  opacity: 0.8;
   cursor: nwse-resize;
   touch-action: none;
 }
@@ -244,21 +260,6 @@ button.counter-stop {
 .stats > div[data-el='costPerMinute'] dd { font-family: var(--el-costPerMinute-font); }
 .stats > div[data-el='costPerMinute'] dt { font-size: calc(3.5cqh * var(--el-costPerMinute-size)); color: var(--el-costPerMinute-color, var(--muted)); }
 .stats > div[data-el='costPerMinute'] dd { font-size: min(calc(3.5cqw * var(--el-costPerMinute-size)), calc(7cqh * var(--el-costPerMinute-size))); color: var(--el-costPerMinute-color, var(--text)); }
-
-/* Widget: small card meant to sit over a webcam image */
-.counter-view.widget { background: transparent; align-items: flex-end; justify-content: flex-end; padding: 3cqw; }
-.counter-view.widget .counter-card {
-  background: var(--bg-paint);
-  border-radius: var(--radius);
-  padding: 1.5cqw 2.5cqw;
-  gap: 0;
-  box-shadow: 0 0.5cqw 2cqw rgb(0 0 0 / 0.35);
-}
-.counter-view.widget .total { font-size: calc(6cqw * var(--el-cost-size) * var(--fit, 1)); }
-.counter-view.widget .time { margin: 0; font-size: calc(3cqw * var(--el-elapsed-size)); color: var(--el-elapsed-color, var(--muted)); }
-.counter-view.widget .status { font-size: calc(2cqw * var(--el-status-size)); }
-.counter-view.widget .decoration { font-size: 3cqw; }
-.counter-view.embedded.widget { background: repeating-conic-gradient(#2a2f3a 0 25%, #20242c 0 50%) 0 0 / 24px 24px; }
 
 /* 360 px phones: stack the form, keep every control full width, nothing overflows. */
 @media (max-width: 480px) {

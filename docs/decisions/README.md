@@ -47,3 +47,4 @@ Template:
 | [0029](0029-custom-counter-style.md) | Every style is customisable, and the customisation follows the style | accepted |
 | [0030](0030-linux-camera-v4l2loopback.md) | Linux camera: use v4l2loopback, never load it | accepted |
 | [0031](0031-windows-mf-virtual-camera.md) | Windows Media Foundation virtual camera alongside the DirectShow filter | accepted |
+| [0032](0032-one-counter-surface.md) | One place to configure the counter; Layout is derived from the card | accepted |

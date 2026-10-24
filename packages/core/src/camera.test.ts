@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { CAMERA_RATIOS, CAMERA_SIZES, cameraInput, DEFAULT_CAMERA, normalizeCamera } from './camera';
+import {
+  CAMERA_RATIOS,
+  CAMERA_SIZES,
+  cameraInput,
+  DEFAULT_CAMERA,
+  effectiveOverlay,
+  normalizeCamera,
+} from './camera';
 import { createMeeting, totalHourlyRate } from './cost';
-import { DEFAULT_DISPLAY, THEMES } from './themes';
+import { DEFAULT_DISPLAY, FULL_FRAME, THEMES } from './themes';
 
 function meeting() {
   return {
@@ -110,15 +117,15 @@ describe('camera input', () => {
     const display = {
       ...DEFAULT_DISPLAY,
       theme: 'halloween' as const,
-      layout: 'widget' as const,
       overflow: 'shrink' as const,
     };
     expect(cameraInput(meeting(), display, 'en', DEFAULT_CAMERA).display).toEqual({
       theme: 'halloween',
-      layout: 'widget',
+      // No webcam chosen, so the card covers the frame and the renderer goes fullscreen.
+      layout: 'fullscreen',
       overflow: 'shrink',
       mirror: { sourceH: false, sourceV: false, overlayH: false, overlayV: false },
-      overlay: null,
+      overlay: FULL_FRAME,
       rotation: 0,
       elements: {
         label: { font: 'theme', scale: 100, color: null, visible: true },
@@ -156,5 +163,40 @@ describe('camera input', () => {
     });
     expect(input.source).toBe('2');
     expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'en', DEFAULT_CAMERA).source).toBeNull();
+  });
+});
+
+describe('the card the camera draws', () => {
+  const webcam = { width: 1280, height: 720, source: '1' };
+
+  it('covers the frame when there is no webcam to sit on', () => {
+    expect(effectiveOverlay(DEFAULT_DISPLAY, DEFAULT_CAMERA)).toEqual(FULL_FRAME);
+    expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'en', DEFAULT_CAMERA).display.layout).toBe('fullscreen');
+  });
+
+  it('falls back to the built-in corner once a webcam is chosen', () => {
+    const card = effectiveOverlay(DEFAULT_DISPLAY, webcam);
+    expect(card.w).toBeCloseTo(0.42, 5);
+    expect(card.h).toBeCloseTo(0.3, 5);
+    expect(card.x + card.w).toBeCloseTo(1 - 32 / 1280, 5);
+    expect(card.y + card.h).toBeCloseTo(1 - 32 / 720, 5);
+    expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'en', webcam).display.layout).toBe('widget');
+    expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'en', webcam).display.overlay).toEqual(card);
+  });
+
+  it('turns the fullscreen layout on and off with the card size', () => {
+    const stored = (overlay: { x: number; y: number; w: number; h: number }) => ({
+      ...DEFAULT_DISPLAY,
+      overlay,
+    });
+    const full = cameraInput(meeting(), stored(FULL_FRAME), 'en', webcam);
+    expect(full.display.layout).toBe('fullscreen');
+    // A card that falls short of the frame by a visible margin is a card.
+    const card = cameraInput(meeting(), stored({ x: 0, y: 0, w: 0.9, h: 1 }), 'en', webcam);
+    expect(card.display.layout).toBe('widget');
+    expect(card.display.overlay).toEqual({ x: 0, y: 0, w: 0.9, h: 1 });
+    // Rounding from the drag gestures must not flip the mode.
+    const almost = cameraInput(meeting(), stored({ x: 0, y: 0, w: 0.999, h: 0.999 }), 'en', webcam);
+    expect(almost.display.layout).toBe('fullscreen');
   });
 });

@@ -26,6 +26,8 @@ interface Props {
   now: number;
   /** Rendered inside a box (setup preview) instead of a whole window. */
   embedded?: boolean;
+  /** false leaves the turn to the caller, which rotates the card box it places (ADR-0032). */
+  rotateCard?: boolean;
 }
 
 /**
@@ -49,7 +51,7 @@ function elementVars(
   };
 }
 
-export function CounterView({ meeting, snapshot: s, display, lang, now, embedded }: Props) {
+export function CounterView({ meeting, snapshot: s, display, lang, now, embedded, rotateCard = true }: Props) {
   const theme = resolveTheme(display.theme, new Date(now));
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
   const style = styleFor(display, theme);
@@ -61,7 +63,7 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
       style.background.mode === 'solid' ? '0deg' : style.background.direction === 'horizontal' ? '90deg' : '180deg',
     '--bg-opacity': String(style.background.opacity),
     '--radius': `${style.background.radius}px`,
-    '--rotation': `${style.rotation}deg`,
+    '--rotation': `${rotateCard ? style.rotation : 0}deg`,
     '--text': theme.text,
     '--muted': theme.muted,
     '--accent': theme.accent,
@@ -78,12 +80,11 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
           ? t(lang, 'stopped')
           : null;
 
-  const widget = display.layout === 'widget';
   // A hidden element is not rendered at all (ADR-0029): the card may end up empty.
   const shown = (element: CounterElement) => style.elements[element].visible;
   const costShown = shown('cost');
   const statsShown = shown('elapsed') || shown('personTime') || shown('costPerMinute');
-  const classes = ['counter-view', display.layout, s.running && 'running', embedded && 'embedded'].filter(Boolean).join(' ');
+  const classes = ['counter-view', s.running && 'running', embedded && 'embedded'].filter(Boolean).join(' ');
 
   const rootRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLParagraphElement>(null);
@@ -122,11 +123,10 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
   }, [embedded, costShown, meeting.startAt, meeting.endAt, s.running, spokenCost, spokenFinal]);
   const measure = useCallback(() => {
     if (!rootRef.current || !measureRef.current || !measureCompactRef.current) return;
-    // The widget must stay small so it does not cover the webcam image.
-    const available = rootRef.current.clientWidth * (widget ? 0.5 : 0.9);
+    const available = rootRef.current.clientWidth * 0.9;
     const next = fitCost(available, measureRef.current.offsetWidth, measureCompactRef.current.offsetWidth, display.overflow);
     setFit((prev) => (prev.compact === next.compact && prev.scale === next.scale ? prev : next));
-  }, [widget, display.overflow]);
+  }, [display.overflow]);
   useLayoutEffect(measure);
   useEffect(() => {
     const observer = new ResizeObserver(measure);
@@ -141,7 +141,7 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
       </p>
       <div className="counter-card">
         {theme.decoration && <span className="decoration" aria-hidden="true">{theme.decoration}</span>}
-        {!widget && shown('label') && <p className="label">{t(lang, 'totalCost')}</p>}
+        {shown('label') && <p className="label">{t(lang, 'totalCost')}</p>}
         {costShown && (
           <>
             <p className="total" title={fullCost} style={{ '--fit': fit.scale } as CSSProperties}>
@@ -156,38 +156,30 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
           </>
         )}
         {status && shown('status') && <p className="status">{status}</p>}
-        {widget ? (
-          shown('elapsed') && (
-            <p className="time" style={elementVars('elapsed', style, theme)}>
-              {formatDuration(s.elapsedMs)}
-            </p>
-          )
-        ) : (
-          // One control per row: the style applies to both the heading and the value.
-          statsShown && (
-            <dl className="stats" aria-label={t(lang, 'meetingSummary')}>
-              {shown('elapsed') && (
-                <div data-el="elapsed" style={elementVars('elapsed', style, theme)}>
-                  <dt>{t(lang, 'elapsed')}</dt>
-                  <dd>{formatDuration(s.elapsedMs)}</dd>
-                </div>
-              )}
-              {shown('personTime') && (
-                <div data-el="personTime" style={elementVars('personTime', style, theme)}>
-                  <dt>{t(lang, 'personTime')}</dt>
-                  <dd>
-                    {formatDuration(s.personTimeMs)} <small>({meeting.participants.length})</small>
-                  </dd>
-                </div>
-              )}
-              {shown('costPerMinute') && (
-                <div data-el="costPerMinute" style={elementVars('costPerMinute', style, theme)}>
-                  <dt>{t(lang, 'costPerMinute')}</dt>
-                  <dd>{formatMoney(s.costPerMinute, meeting.currency, locale)}</dd>
-                </div>
-              )}
-            </dl>
-          )
+        {/* One control per row: the style applies to both the heading and the value. */}
+        {statsShown && (
+          <dl className="stats" aria-label={t(lang, 'meetingSummary')}>
+            {shown('elapsed') && (
+              <div data-el="elapsed" style={elementVars('elapsed', style, theme)}>
+                <dt>{t(lang, 'elapsed')}</dt>
+                <dd>{formatDuration(s.elapsedMs)}</dd>
+              </div>
+            )}
+            {shown('personTime') && (
+              <div data-el="personTime" style={elementVars('personTime', style, theme)}>
+                <dt>{t(lang, 'personTime')}</dt>
+                <dd>
+                  {formatDuration(s.personTimeMs)} <small>({meeting.participants.length})</small>
+                </dd>
+              </div>
+            )}
+            {shown('costPerMinute') && (
+              <div data-el="costPerMinute" style={elementVars('costPerMinute', style, theme)}>
+                <dt>{t(lang, 'costPerMinute')}</dt>
+                <dd>{formatMoney(s.costPerMinute, meeting.currency, locale)}</dd>
+              </div>
+            )}
+          </dl>
         )}
       </div>
     </div>

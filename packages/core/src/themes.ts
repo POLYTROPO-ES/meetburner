@@ -54,6 +54,8 @@ export function resolveTheme(id: ThemeId, date: Date): Theme {
   return id === 'seasons' ? THEMES[seasonOf(date)] : THEMES[id];
 }
 
+/** What the camera draws: the counter over the whole frame, or as a card. Derived from the card
+ * rectangle (`cameraInput`), never stored (ADR-0032). */
 export type Layout = 'fullscreen' | 'widget';
 export type FontChoice = FontId | 'theme';
 /** What to do when the cost is too wide for the counter: abbreviate (K, M, B) or shrink the font. */
@@ -106,11 +108,11 @@ export interface StyleOverride {
 
 export interface DisplaySettings {
   theme: ThemeId;
-  /** Desktop camera: widget when overlaid on a webcam, fullscreen otherwise. */
-  layout: Layout;
+  /** Abbreviate or shrink a cost too wide for its box; one setting shared by every style. */
   overflow: Overflow;
   mirror: MirrorSettings;
-  /** Where the widget card sits on the camera frame; null keeps the built-in corner (ADR-0023). */
+  /** Where the counter card sits on the camera frame; null keeps the built-in corner (ADR-0023).
+   * A card that covers the frame is the fullscreen layout (ADR-0032). */
   overlay: OverlayRect | null;
   /** Customisation per style id, so each style keeps its own look; absent = the preset (ADR-0029). */
   styles: Partial<Record<ThemeId, StyleOverride>>;
@@ -133,6 +135,22 @@ export function defaultOverlayRect(width: number, height: number): OverlayRect {
   const w = 0.42;
   const h = 0.3;
   return { x: 1 - margin / width - w, y: 1 - margin / height - h, w, h };
+}
+
+/** A card that covers the whole frame: the camera then draws the counter fullscreen (ADR-0032). */
+export const FULL_FRAME: OverlayRect = { x: 0, y: 0, w: 1, h: 1 };
+
+/** A card this close to the frame edge still counts as covering it. */
+const FRAME_EPSILON = 0.005;
+
+/** True when the card covers the whole frame, so the renderer uses its fullscreen geometry. */
+export function fillsFrame(rect: OverlayRect): boolean {
+  return (
+    rect.x <= FRAME_EPSILON &&
+    rect.y <= FRAME_EPSILON &&
+    rect.x + rect.w >= 1 - FRAME_EPSILON &&
+    rect.y + rect.h >= 1 - FRAME_EPSILON
+  );
 }
 
 const within = (value: number, max: number): number => Math.min(max, Math.max(0, value));
@@ -196,7 +214,6 @@ const MAX_ELEMENT_SCALE = MAX_SCALE * 100;
 /** The radius comes from each preset: `styleDefaults(theme).background.radius`. */
 export const DEFAULT_DISPLAY: DisplaySettings = {
   theme: 'classic',
-  layout: 'fullscreen',
   overflow: 'compact',
   mirror: NO_MIRROR,
   overlay: null,
@@ -221,7 +238,6 @@ export function normalizeDisplay(raw: unknown): DisplaySettings {
   const flag = (value: unknown): boolean => value === true;
   return {
     theme: oneOf(r.theme, THEME_IDS, DEFAULT_DISPLAY.theme),
-    layout: oneOf<Layout>(r.layout, ['fullscreen', 'widget'], DEFAULT_DISPLAY.layout),
     overflow: oneOf(r.overflow, OVERFLOW_MODES, DEFAULT_DISPLAY.overflow),
     mirror: {
       sourceH: flag(mirror.sourceH),
