@@ -150,6 +150,32 @@ fn camera_unregister_driver(app: tauri::AppHandle) -> Result<DriverStatus, Strin
     driver_status(&app)
 }
 
+/// `MeetBurnerMfCamera.dll` next to the exe, in `resources/` or in the dev CMake build.
+fn mf_dll(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let exe = exe_dir().ok()?;
+    let resource_dir = app.path().resource_dir().ok();
+    camera::mf::find(&camera::mf::candidates(resource_dir.as_deref(), Some(&exe)))
+}
+
+/// Whether the Windows 11 Media Foundation camera can be used and is registered (ADR-0031).
+/// Always `supported: false` on Windows 10 and off Windows; the DirectShow camera still works.
+#[tauri::command]
+fn camera_mf_status(app: tauri::AppHandle) -> camera::mf::MfStatus {
+    camera::mf::status(mf_dll(&app).as_deref())
+}
+
+/// Registers "MeetBurner Camera (Windows 11)"; per user, no UAC (ADR-0031).
+#[tauri::command]
+fn camera_mf_register(app: tauri::AppHandle) -> Result<camera::mf::MfStatus, String> {
+    camera::mf::register(mf_dll(&app).as_deref())
+}
+
+/// Removes the MF camera and its per-user COM registration.
+#[tauri::command]
+fn camera_mf_unregister(app: tauri::AppHandle) -> Result<camera::mf::MfStatus, String> {
+    camera::mf::unregister(mf_dll(&app).as_deref())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -162,6 +188,9 @@ pub fn run() {
             camera_driver_ensure,
             camera_register_driver,
             camera_unregister_driver,
+            camera_mf_status,
+            camera_mf_register,
+            camera_mf_unregister,
             camera_list_sources,
             camera_v4l2_status
         ])
