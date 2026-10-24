@@ -46,3 +46,4 @@ Template:
 | [0028](0028-macos-without-virtual-camera.md) | macOS ships without the virtual camera until the Apple account exists | accepted |
 | [0029](0029-custom-counter-style.md) | Every style is customisable, and the customisation follows the style | accepted |
 | [0030](0030-linux-camera-v4l2loopback.md) | Linux camera: use v4l2loopback, never load it | accepted |
+| [0031](0031-windows-mf-virtual-camera.md) | Windows Media Foundation virtual camera alongside the DirectShow filter | accepted |

@@ -52,7 +52,7 @@ flowchart LR
 
 Web app: static build on Cloudflare Pages with security headers from `apps/web/public/_headers` ([ADR-0007](decisions/0007-cloudflare-hosting.md)).
 
-Desktop app: GitHub Releases built from `v*` tags by `.github/workflows/release.yml` — Windows NSIS/MSI plus two portable shapes, Linux `.deb`/AppImage, `SHA256SUMS.txt`, draft first ([ADR-0025](decisions/0025-github-releases.md), [ADR-0026](decisions/0026-portable-single-file.md)). The one-file portable embeds the DirectShow driver and writes it next to itself on the first registration, because `InprocServer32` needs a path.
+Desktop app: GitHub Releases built from `v*` tags by `.github/workflows/release.yml` — Windows NSIS/MSI plus two portable shapes, Linux `.deb`/AppImage, `SHA256SUMS.txt`, draft first ([ADR-0025](decisions/0025-github-releases.md), [ADR-0026](decisions/0026-portable-single-file.md)). The Windows bundles carry both camera drivers (`MeetBurnerCamera.dll` and `MeetBurnerMfCamera.dll`); the one-file portable embeds the DirectShow driver and writes it next to itself on the first registration, because `InprocServer32` needs a path, so the MF camera needs the installer or the zip.
 
 ## Virtual camera (desktop only)
 
@@ -83,6 +83,7 @@ camera_start/update/stop (Tauri commands)
 - The output size is part of the camera payload (`640×360`, `1280×720`, `1920×1080`); the setup page offers it in fullscreen mode. Unknown sizes fall back to 720p.
 - `camera_update` pushes every parameter change to the render thread, which applies it on the next frame. The shared mapping is created once with room for the largest size, so a resolution change never closes it (ADR-0019).
 - Frames are copied into the DirectShow sample bottom-up (`biHeight > 0`) and scaled to the negotiated media type keeping the aspect ratio: Media Foundation (Chrome, Meet, new Teams) ignores a negative height and would show a top-down buffer upside down (ADR-0019).
+- On Windows 11 (build 22000+) a second camera, **MeetBurner Camera (Windows 11)**, is an in-proc Media Foundation media source (`native/vcam-windows/mf`) that reads the **same mapping** and flips the rows itself: RGB32 is bottom-up and MF ignores a negative stride. `MFCreateVirtualCamera` is resolved at run time, so the app and the DLL still run on Windows 10, where the status reports `supported: false`. New Teams and the Windows Camera app need this one; Zoom, OBS, Chrome/Edge (Meet) and Teams classic keep using the DirectShow filter (ADR-0031).
 - Overlay mode keeps the webcam frame as the background and draws the themed card (`widget`) in the bottom-right corner; glyphs are clipped to their box so nothing is painted over the webcam.
 - The counter is drawn on its own transparent layer and composited last, so the webcam and the counter can be mirrored independently (`display.mirror`, ADR-0022).
 - The webcam is captured by `nokhwa` on its own thread (`camera/source.rs`), converted to BGRA, scaled to the output size and kept as the newest frame only; the render thread never blocks on it (ADR-0021). If the camera is busy or unplugged the counter is published on the themed background instead.
