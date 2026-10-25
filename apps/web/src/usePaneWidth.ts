@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react';
 
-const PANE_KEY = 'meetburner.pane';
+// Renamed when the default widened, so earlier narrow widths do not stick (ADR-0034).
+const PANE_KEY = 'meetburner.editorWidth';
 
 /** Share of the workspace the editor column takes (ADR-0034). */
-export const PANE_MIN = 0.22;
-export const PANE_MAX = 0.5;
-export const PANE_DEFAULT = 0.3;
+export const PANE_MIN = 0.3;
+export const PANE_MAX = 0.6;
+export const PANE_DEFAULT = 0.4;
 
 /** Keeps a dragged width usable: never so narrow that the controls break, never more than half. */
 export function clampPane(value: number): number {

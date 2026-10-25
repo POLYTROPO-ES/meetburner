@@ -14,8 +14,11 @@
       {
         "label": "main",
         "title": "MeetBurner",
-        "width": 1000,
-        "height": 720
+        "width": 1280,
+        "height": 720,
+        "minWidth": 960,
+        "minHeight": 600,
+        "center": true
       }
     ],
     "security": {

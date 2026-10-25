@@ -242,7 +242,7 @@ export function Setup() {
     <div className="app-shell">
       <header className="app-header">
         <div className="brand">
-          <img src="/favicon.svg" alt="" width={32} height={32} />
+          <img src="/favicon.svg" alt="" width={28} height={28} />
           <div>
             <h1>{t(lang, 'appTitle')}</h1>
             <p className="tagline">{t(lang, 'tagline')}</p>
@@ -274,12 +274,12 @@ export function Setup() {
       <div
         ref={workspace}
         className="workspace"
-        style={{ gridTemplateColumns: `minmax(300px, ${Math.round(pane * 100)}%) 10px minmax(0, 1fr)` }}
+        style={{ gridTemplateColumns: `minmax(380px, ${Math.round(pane * 100)}%) 10px minmax(0, 1fr)` }}
       >
         <aside className="side-pane">
           <details className="group" open>
             <summary>{t(lang, 'meeting')}</summary>
-            <div className="grid compact">
+            <div className="meeting-grid">
         <label>
           {t(lang, 'country')}
           <select value={meeting.country} onChange={(e) => setMeeting(applyCountry(meeting, e.target.value as CountryCode))}>
@@ -307,7 +307,7 @@ export function Setup() {
             onChange={(e) => setMeeting({ ...meeting, hoursPerYear: e.target.valueAsNumber || 0 })}
           />
         </label>
-        <label>
+        <label className="span-2">
           {t(lang, 'startTime')}
           <span className="row">
             <input
@@ -320,32 +320,39 @@ export function Setup() {
             </button>
           </span>
         </label>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={meeting.includeEmployerCost}
-            onChange={(e) => setMeeting({ ...meeting, includeEmployerCost: e.target.checked })}
-          />
-          {t(lang, 'includeEmployerCost')}
-        </label>
-        <label>
-          {t(lang, 'employerCostRate')}
-          <input
-            type="number"
-            min={0}
-            max={100}
-            step={0.5}
-            disabled={!meeting.includeEmployerCost}
-            value={Math.round(meeting.employerCostRate * 1000) / 10}
-            onChange={(e) => setMeeting({ ...meeting, employerCostRate: (e.target.valueAsNumber || 0) / 100 })}
-          />
-        </label>
+        <div className="field">
+          <span>{t(lang, 'employerCostRate')}</span>
+          <span className="row">
+            <input
+              type="checkbox"
+              aria-label={t(lang, 'includeEmployerCost')}
+              title={t(lang, 'includeEmployerCost')}
+              checked={meeting.includeEmployerCost}
+              onChange={(e) => setMeeting({ ...meeting, includeEmployerCost: e.target.checked })}
+            />
+            <input
+              type="number"
+              aria-label={t(lang, 'employerCostRate')}
+              min={0}
+              max={100}
+              step={0.5}
+              disabled={!meeting.includeEmployerCost}
+              value={Math.round(meeting.employerCostRate * 1000) / 10}
+              onChange={(e) => setMeeting({ ...meeting, employerCostRate: (e.target.valueAsNumber || 0) / 100 })}
+            />
+          </span>
+        </div>
             </div>
           </details>
 
           <details className="group" open>
             <summary>{t(lang, 'participants')}</summary>
-            <p className="muted">{t(lang, 'salariesAreEstimates')}</p>
+            <div className="group-head">
+              <p className="muted">{t(lang, 'salariesAreEstimates')}</p>
+              <button type="button" className="ghost" onClick={addParticipant}>
+                + {t(lang, 'addParticipant')}
+              </button>
+            </div>
         <ul className="participants">
           {meeting.participants.map((p) => (
             <li key={p.id} className="participant">
@@ -397,102 +404,113 @@ export function Setup() {
             </li>
           ))}
         </ul>
-        <button type="button" onClick={addParticipant}>
-          + {t(lang, 'addParticipant')}
-        </button>
           </details>
 
           <details className="group" open>
             <summary>{t(lang, 'display')}</summary>
-            <label className="style-pick">
-              {t(lang, 'style')}
-              <select value={display.theme} onChange={(e) => updateDisplay({ theme: e.target.value as ThemeId })}>
-                {THEME_IDS.map((id) => (
-                  <option key={id} value={id}>
-                    {t(lang, `theme.${id}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="style-groups">
-          <div>
-            <h3>{t(lang, 'styleElements')}</h3>
-            <div className="style-elements">
-              {COUNTER_ELEMENTS.map((element) => {
-                const elementStyle = style.elements[element];
-                // The colour input cannot be empty: show the preset colour until one is picked.
-                const presetColor = element === 'cost' ? theme.accent : theme.muted;
-                return (
-                  <div key={element} className="style-element">
-                    <div className="style-element-name">
-                      <span>{t(lang, `element.${element}`)}</span>
-                      <label className="checkbox">
-                        <input
-                          type="checkbox"
-                          aria-label={`${t(lang, 'styleVisible')}: ${t(lang, `element.${element}`)}`}
-                          checked={elementStyle.visible}
-                          onChange={(e) => updateElement(element, { visible: e.target.checked })}
-                        />
-                        {t(lang, 'styleVisible')}
-                      </label>
-                    </div>
-                    <label>
-                      {t(lang, 'styleFont')}
-                      <select
-                        aria-label={`${t(lang, 'styleFont')}: ${t(lang, `element.${element}`)}`}
-                        value={elementStyle.font}
-                        onChange={(e) => updateElement(element, { font: e.target.value as FontChoice })}
-                      >
-                        {FONT_CHOICES.map((f) => (
-                          <option key={f} value={f}>
-                            {t(lang, `font.${f}`)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      {t(lang, 'styleSize')} ({elementStyle.scale}%)
-                      <input
-                        type="range"
-                        aria-label={`${t(lang, 'styleSize')}: ${t(lang, `element.${element}`)}`}
-                        min={ELEMENT_SCALE_MIN}
-                        max={ELEMENT_SCALE_MAX}
-                        step={ELEMENT_SCALE_STEP}
-                        value={elementStyle.scale}
-                        onChange={(e) => updateElement(element, { scale: e.target.valueAsNumber })}
-                      />
-                    </label>
-                    <span className="style-color">
-                      <label className="checkbox">
-                        {t(lang, 'styleColor')}
-                        <input
-                          type="color"
-                          aria-label={`${t(lang, 'styleColor')}: ${t(lang, `element.${element}`)}`}
-                          value={elementStyle.color ?? presetColor}
-                          onChange={(e) => updateElement(element, { color: e.target.value })}
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        className="ghost"
-                        aria-label={`${t(lang, 'styleReset')}: ${t(lang, `element.${element}`)}`}
-                        title={`${t(lang, 'styleReset')}: ${t(lang, `element.${element}`)}`}
-                        disabled={elementStyle.color === null}
-                        onClick={() => updateElement(element, { color: null })}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  </div>
-                );
-              })}
+            <div className="style-pick-row">
+              <label>
+                {t(lang, 'style')}
+                <select value={display.theme} onChange={(e) => updateDisplay({ theme: e.target.value as ThemeId })}>
+                  {THEME_IDS.map((id) => (
+                    <option key={id} value={id}>
+                      {t(lang, `theme.${id}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t(lang, 'overflow')}
+                <select value={display.overflow} onChange={(e) => updateDisplay({ overflow: e.target.value as Overflow })}>
+                  {OVERFLOW_MODES.map((m) => (
+                    <option key={m} value={m}>
+                      {t(lang, `overflow.${m}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => setDisplay(resetStyle(display))}
+                disabled={display.styles[display.theme] === undefined}
+              >
+                {t(lang, 'styleReset')}
+              </button>
             </div>
+            <div className="style-groups">
+          <div className="style-table">
+            <div className="style-row style-head" aria-hidden="true">
+              <span>{t(lang, 'styleElements')}</span>
+              <span>{t(lang, 'styleVisible')}</span>
+              <span>{t(lang, 'styleFont')}</span>
+              <span>{t(lang, 'styleSize')}</span>
+              <span>{t(lang, 'styleColor')}</span>
+            </div>
+            {COUNTER_ELEMENTS.map((element) => {
+              const elementStyle = style.elements[element];
+              const name = t(lang, `element.${element}`);
+              // The colour input cannot be empty: show the preset colour until one is picked.
+              const presetColor = element === 'cost' ? theme.accent : theme.muted;
+              return (
+                <div key={element} className="style-row">
+                  <span className="style-name">{name}</span>
+                  <input
+                    type="checkbox"
+                    aria-label={`${t(lang, 'styleVisible')}: ${name}`}
+                    checked={elementStyle.visible}
+                    onChange={(e) => updateElement(element, { visible: e.target.checked })}
+                  />
+                  <select
+                    aria-label={`${t(lang, 'styleFont')}: ${name}`}
+                    value={elementStyle.font}
+                    onChange={(e) => updateElement(element, { font: e.target.value as FontChoice })}
+                  >
+                    {FONT_CHOICES.map((f) => (
+                      <option key={f} value={f}>
+                        {t(lang, `font.${f}`)}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="style-size">
+                    <input
+                      type="range"
+                      aria-label={`${t(lang, 'styleSize')}: ${name}`}
+                      aria-valuetext={`${elementStyle.scale}%`}
+                      min={ELEMENT_SCALE_MIN}
+                      max={ELEMENT_SCALE_MAX}
+                      step={ELEMENT_SCALE_STEP}
+                      value={elementStyle.scale}
+                      onChange={(e) => updateElement(element, { scale: e.target.valueAsNumber })}
+                    />
+                    <span className="style-value">{elementStyle.scale}%</span>
+                  </span>
+                  <span className="style-color">
+                    <input
+                      type="color"
+                      aria-label={`${t(lang, 'styleColor')}: ${name}`}
+                      value={elementStyle.color ?? presetColor}
+                      onChange={(e) => updateElement(element, { color: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      className="ghost"
+                      aria-label={`${t(lang, 'styleReset')}: ${name}`}
+                      title={`${t(lang, 'styleReset')}: ${name}`}
+                      disabled={elementStyle.color === null}
+                      onClick={() => updateElement(element, { color: null })}
+                    >
+                      ×
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
           </div>
-          <div>
-            <h3>{t(lang, 'styleBackground')}</h3>
-            <div className="grid">
+          <div className="style-table">
+            <div className="style-row style-bg">
+              <span className="style-name">{t(lang, 'styleBackground')}</span>
               <select
-                className="style-mode"
+                className="bg-mode"
                 aria-label={t(lang, 'styleBackground')}
                 value={style.background.mode}
                 onChange={(e) => updateBackground({ mode: e.target.value as BackgroundMode })}
@@ -503,41 +521,42 @@ export function Setup() {
                   </option>
                 ))}
               </select>
-              <div className="style-bg-colors">
-                <label>
-                  {t(lang, 'bg.color')}
+              {style.background.mode === 'gradient' ? (
+                <select
+                  aria-label={t(lang, 'bg.direction')}
+                  title={t(lang, 'bg.direction')}
+                  value={style.background.direction}
+                  onChange={(e) => updateBackground({ direction: e.target.value as GradientDirection })}
+                >
+                  {GRADIENT_DIRECTIONS.map((direction) => (
+                    <option key={direction} value={direction}>
+                      {t(lang, `bg.${direction}`)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span />
+              )}
+              <span className="style-color">
+                <input
+                  type="color"
+                  aria-label={t(lang, 'bg.color')}
+                  title={t(lang, 'bg.color')}
+                  value={style.background.color}
+                  onChange={(e) => updateBackground({ color: e.target.value })}
+                />
+                {style.background.mode === 'gradient' && (
                   <input
                     type="color"
-                    value={style.background.color}
-                    onChange={(e) => updateBackground({ color: e.target.value })}
+                    aria-label={t(lang, 'bg.colorAlt')}
+                    title={t(lang, 'bg.colorAlt')}
+                    value={style.background.colorAlt}
+                    onChange={(e) => updateBackground({ colorAlt: e.target.value })}
                   />
-                </label>
-                {style.background.mode === 'gradient' && (
-                  <label>
-                    {t(lang, 'bg.colorAlt')}
-                    <input
-                      type="color"
-                      value={style.background.colorAlt}
-                      onChange={(e) => updateBackground({ colorAlt: e.target.value })}
-                    />
-                  </label>
                 )}
-              </div>
-              {style.background.mode === 'gradient' && (
-                <label>
-                  {t(lang, 'bg.direction')}
-                  <select
-                    value={style.background.direction}
-                    onChange={(e) => updateBackground({ direction: e.target.value as GradientDirection })}
-                  >
-                    {GRADIENT_DIRECTIONS.map((direction) => (
-                      <option key={direction} value={direction}>
-                        {t(lang, `bg.${direction}`)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              </span>
+            </div>
+            <div className="style-sliders">
               <label>
                 {t(lang, 'bg.opacity')} ({style.background.opacity}%)
                 <input
@@ -572,160 +591,10 @@ export function Setup() {
                   onChange={(e) => saveStyle({ ...style, rotation: e.target.valueAsNumber })}
                 />
               </label>
-              <label>
-                {t(lang, 'overflow')}
-                <select value={display.overflow} onChange={(e) => updateDisplay({ overflow: e.target.value as Overflow })}>
-                  {OVERFLOW_MODES.map((m) => (
-                    <option key={m} value={m}>
-                      {t(lang, `overflow.${m}`)}
-                    </option>
-                  ))}
-                </select>
-              </label>
             </div>
           </div>
         </div>
-            <div className="row">
-              <button
-                type="button"
-                onClick={() => setDisplay(resetStyle(display))}
-                disabled={display.styles[display.theme] === undefined}
-              >
-                {t(lang, 'styleReset')}
-              </button>
-            </div>
           </details>
-
-          {hasVirtualCamera() && (
-            <details className="group" open={camera.video}>
-              <summary>{t(lang, 'camera')}</summary>
-              <div className="camera-options">
-                <div className="grid compact">
-                  <label>
-                    {t(lang, 'cameraSource')}
-                    <select
-                      value={camera.source ?? ''}
-                      onChange={(e) => {
-                        const source = e.target.value === '' ? null : e.target.value;
-                        setCamera({ ...camera, source });
-                      }}
-                    >
-                      <option value="">{t(lang, 'cameraSourceNone')}</option>
-                      {sources.map((source) => (
-                        <option key={source.id} value={source.id}>
-                          {source.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    {t(lang, 'cameraResolution')}
-                    <select
-                      value={`${camera.width}x${camera.height}`}
-                      onChange={(e) => {
-                        const [width, height] = e.target.value.split('x').map(Number);
-                        setCamera({ ...camera, width, height });
-                      }}
-                    >
-                      {CAMERA_RATIOS.map((ratio) => (
-                        <optgroup key={ratio} label={ratio}>
-                          {CAMERA_SIZES.filter((size) => size.ratio === ratio).map((size) => (
-                            <option key={`${size.width}x${size.height}`} value={`${size.width}x${size.height}`}>
-                              {size.width}×{size.height}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                {camera.source !== null && <p className="muted">{t(lang, 'cameraSourceHint')}</p>}
-                <p className="muted">{t(lang, 'mirrorSource')}</p>
-                <div className="row">
-                  <label className="checkbox">
-                    <input
-                      type="checkbox"
-                      checked={display.mirror.sourceH}
-                      onChange={(e) => updateMirror({ sourceH: e.target.checked })}
-                    />
-                    {t(lang, 'mirrorHorizontal')}
-                  </label>
-                  <label className="checkbox">
-                    <input
-                      type="checkbox"
-                      checked={display.mirror.sourceV}
-                      onChange={(e) => updateMirror({ sourceV: e.target.checked })}
-                    />
-                    {t(lang, 'mirrorVertical')}
-                  </label>
-                </div>
-                <p className="muted">{t(lang, 'mirrorOverlay')}</p>
-                <div className="row">
-                  <label className="checkbox">
-                    <input
-                      type="checkbox"
-                      checked={display.mirror.overlayH}
-                      onChange={(e) => updateMirror({ overlayH: e.target.checked })}
-                    />
-                    {t(lang, 'mirrorHorizontal')}
-                  </label>
-                  <label className="checkbox">
-                    <input
-                      type="checkbox"
-                      checked={display.mirror.overlayV}
-                      onChange={(e) => updateMirror({ overlayV: e.target.checked })}
-                    />
-                    {t(lang, 'mirrorVertical')}
-                  </label>
-                </div>
-                <p className="muted">{t(lang, 'cameraResolutionHint')}</p>
-                <p className="muted">{t(lang, 'cameraLiveHint')}</p>
-                {isWindows() && (
-                  <>
-                    {driver?.registered && <p className="muted">{t(lang, 'cameraAlwaysOn')}</p>}
-                    <div className="row">
-                      <button
-                        type="button"
-                        onClick={registerDriver}
-                        disabled={driver === null || driver.registered || !driver.available}
-                      >
-                        {t(lang, 'cameraRegister')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={unregisterDriver}
-                        disabled={driver === null || !driver.registered}
-                      >
-                        {t(lang, 'cameraUnregister')}
-                      </button>
-                    </div>
-                    {driverMessage && <p className="muted">{driverMessage}</p>}
-                    {driverUpdated && <p className="muted">{t(lang, 'cameraDriverUpdated')}</p>}
-                    {driverError && <p className="muted">{driverError}</p>}
-                  </>
-                )}
-                {isLinux() && (
-                  <>
-                    {v4l2 !== null && !v4l2.available && (
-                      <>
-                        <p>{t(lang, 'cameraLinuxMissing')}</p>
-                        <code className="camera-command">
-                          sudo modprobe v4l2loopback exclusive_caps=1 card_label="MeetBurner Camera"
-                        </code>
-                      </>
-                    )}
-                    {v4l2?.available && (
-                      <>
-                        <p>{t(lang, 'cameraLinuxReady')}</p>
-                        <code className="camera-command">{v4l2.device}</code>
-                      </>
-                    )}
-                    <p className="muted">{t(lang, 'cameraLinuxSetup')}</p>
-                  </>
-                )}
-              </div>
-            </details>
-          )}
         </aside>
 
         <div
@@ -784,17 +653,154 @@ export function Setup() {
           ) : (
             <figure className="preview">
               <figcaption className="muted">{t(lang, 'preview')}</figcaption>
-              <CounterView
-                meeting={meeting}
-                snapshot={meetingSnapshot(meeting, now)}
-                display={display}
-                lang={lang}
-                now={now}
-                embedded
-              />
+              <div className="stage-fit">
+                <CounterView
+                  meeting={meeting}
+                  snapshot={meetingSnapshot(meeting, now)}
+                  display={display}
+                  lang={lang}
+                  now={now}
+                  embedded
+                />
+              </div>
             </figure>
           )}
-          {cameraError && <p className="muted">{cameraError}</p>}
+          {hasVirtualCamera() && (
+            <div className="camera-panel">
+              <div className="camera-fields">
+                {camera.video && (
+                  <label>
+                    {t(lang, 'cameraSource')}
+                    <select
+                      value={camera.source ?? ''}
+                      onChange={(e) => {
+                        const source = e.target.value === '' ? null : e.target.value;
+                        setCamera({ ...camera, source });
+                      }}
+                    >
+                      <option value="">{t(lang, 'cameraSourceNone')}</option>
+                      {sources.map((source) => (
+                        <option key={source.id} value={source.id}>
+                          {source.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <label>
+                  {t(lang, 'cameraResolution')}
+                  <select
+                    value={`${camera.width}x${camera.height}`}
+                    onChange={(e) => {
+                      const [width, height] = e.target.value.split('x').map(Number);
+                      setCamera({ ...camera, width, height });
+                    }}
+                  >
+                    {CAMERA_RATIOS.map((ratio) => (
+                      <optgroup key={ratio} label={ratio}>
+                        {CAMERA_SIZES.filter((size) => size.ratio === ratio).map((size) => (
+                          <option key={`${size.width}x${size.height}`} value={`${size.width}x${size.height}`}>
+                            {size.width}×{size.height}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </label>
+                {camera.video && (
+                  <div className="field" role="group" aria-label={t(lang, 'mirrorCameraTitle')}>
+                    <span>{t(lang, 'mirrorCameraTitle')}</span>
+                    <span className="row">
+                      <label className="checkbox">
+                        <input
+                          type="checkbox"
+                          aria-label={`${t(lang, 'mirrorHorizontal')}: ${t(lang, 'mirrorSource')}`}
+                          checked={display.mirror.sourceH}
+                          onChange={(e) => updateMirror({ sourceH: e.target.checked })}
+                        />
+                        {t(lang, 'axisHorizontal')}
+                      </label>
+                      <label className="checkbox">
+                        <input
+                          type="checkbox"
+                          aria-label={`${t(lang, 'mirrorVertical')}: ${t(lang, 'mirrorSource')}`}
+                          checked={display.mirror.sourceV}
+                          onChange={(e) => updateMirror({ sourceV: e.target.checked })}
+                        />
+                        {t(lang, 'axisVertical')}
+                      </label>
+                    </span>
+                  </div>
+                )}
+                <div className="field" role="group" aria-label={t(lang, 'mirrorCardTitle')}>
+                  <span>{t(lang, 'mirrorCardTitle')}</span>
+                  <span className="row">
+                    <label className="checkbox">
+                      <input
+                        type="checkbox"
+                        aria-label={`${t(lang, 'mirrorHorizontal')}: ${t(lang, 'mirrorOverlay')}`}
+                        checked={display.mirror.overlayH}
+                        onChange={(e) => updateMirror({ overlayH: e.target.checked })}
+                      />
+                      {t(lang, 'axisHorizontal')}
+                    </label>
+                    <label className="checkbox">
+                      <input
+                        type="checkbox"
+                        aria-label={`${t(lang, 'mirrorVertical')}: ${t(lang, 'mirrorOverlay')}`}
+                        checked={display.mirror.overlayV}
+                        onChange={(e) => updateMirror({ overlayV: e.target.checked })}
+                      />
+                      {t(lang, 'axisVertical')}
+                    </label>
+                  </span>
+                </div>
+              </div>
+              {isWindows() && (
+                <div className="row camera-driver">
+                  <button
+                    type="button"
+                    onClick={registerDriver}
+                    disabled={driver === null || driver.registered || !driver.available}
+                  >
+                    {t(lang, 'cameraRegister')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={unregisterDriver}
+                    disabled={driver === null || !driver.registered}
+                  >
+                    {t(lang, 'cameraUnregister')}
+                  </button>
+                  {driverMessage && <span className="muted">{driverMessage}</span>}
+                  {driverUpdated && <span className="muted">{t(lang, 'cameraDriverUpdated')}</span>}
+                  {driverError && <span className="camera-error">{driverError}</span>}
+                </div>
+              )}
+              {isLinux() && v4l2 !== null && !v4l2.available && (
+                <>
+                  <p>{t(lang, 'cameraLinuxMissing')}</p>
+                  <code className="camera-command">
+                    sudo modprobe v4l2loopback exclusive_caps=1 card_label="MeetBurner Camera"
+                  </code>
+                </>
+              )}
+              {isLinux() && v4l2?.available && (
+                <p className="muted">
+                  {t(lang, 'cameraLinuxReady')} <code>{v4l2.device}</code>
+                </p>
+              )}
+              {cameraError && <p className="camera-error">{cameraError}</p>}
+              <details className="camera-help">
+                <summary>{t(lang, 'cameraHelp')}</summary>
+                {camera.video && <p className="muted">{t(lang, 'cameraSourceHint')}</p>}
+                <p className="muted">{t(lang, 'cameraResolutionHint')}</p>
+                <p className="muted">{t(lang, 'cameraLiveHint')}</p>
+                {isWindows() && driver?.registered && <p className="muted">{t(lang, 'cameraAlwaysOn')}</p>}
+                {isLinux() && <p className="muted">{t(lang, 'cameraLinuxSetup')}</p>}
+              </details>
+            </div>
+          )}
         </section>
       </div>
 
@@ -834,7 +840,7 @@ export function Setup() {
           </p>
         )}
         {!isTauri() && (
-          <>
+          <div className="footer-links">
             <p className="muted">
               <a href={REPO_URL} target="_blank" rel="noreferrer">
                 {t(lang, 'sourceCode')}
@@ -849,7 +855,7 @@ export function Setup() {
               </a>
             </p>
             <p className="muted">{t(lang, 'codeSigningPolicyNote')}</p>
-          </>
+          </div>
         )}
       </footer>
     </div>
