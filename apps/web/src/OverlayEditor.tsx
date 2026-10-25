@@ -1,6 +1,8 @@
 import { useRef, type KeyboardEvent, type PointerEvent } from 'react';
 import {
+  defaultOverlayRect,
   effectiveOverlay,
+  fillsFrame,
   FULL_FRAME,
   moveOverlay,
   resizeOverlay,
@@ -65,6 +67,8 @@ export function OverlayEditor({
   const drag = useRef<Drag | null>(null);
   const turn = useRef<Turn | null>(null);
   const rect = effectiveOverlay(display, camera);
+  // One button for the two states: cover the frame, or go back to a card on it.
+  const full = fillsFrame(rect);
   const radius = styleFor(display, resolveTheme(display.theme, new Date(now))).background.radius;
 
   const start = (mode: Drag['mode']) => (event: PointerEvent<HTMLElement>) => {
@@ -217,13 +221,25 @@ export function OverlayEditor({
         </div>
       </div>
       <div className="row">
-        <button type="button" onClick={() => onRect(FULL_FRAME)}>
-          {t(lang, 'overlayFill')}
+        <button
+          type="button"
+          onClick={() => onRect(full ? defaultOverlayRect(camera.width, camera.height) : FULL_FRAME)}
+        >
+          {full ? t(lang, 'overlayToCard') : t(lang, 'overlayFill')}
         </button>
-        <button type="button" onClick={() => onRect(null)}>
-          {t(lang, 'overlayReset')}
-        </button>
+        {display.overlay !== null && (
+          <button type="button" className="ghost" onClick={() => onRect(null)}>
+            {t(lang, 'overlayReset')}
+          </button>
+        )}
       </div>
+      <p className="muted">
+        {full
+          ? camera.source === null
+            ? t(lang, 'overlayNoWebcam')
+            : t(lang, 'overlayStateFull')
+          : `${t(lang, 'overlayStateCard')} ${Math.round(rect.w * 100)}% × ${Math.round(rect.h * 100)}%`}
+      </p>
     </div>
   );
 }

@@ -166,7 +166,8 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
 
 /* Counter (themed through CSS variables set by CounterView) */
 .counter-page { height: 100vh; position: relative; }
-/* The theme behind the control may be light or dark, so the stop button brings its own contrast. */
+/* The theme behind the control may be light or dark, so the stop button brings its own contrast.
+   It stays out of the way until the pointer is over the counter (or it has keyboard focus). */
 button.counter-stop {
   position: absolute;
   right: 0.75rem;
@@ -174,8 +175,19 @@ button.counter-stop {
   background: rgb(0 0 0 / 0.6);
   border-color: rgb(255 255 255 / 0.4);
   color: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.counter-page:hover button.counter-stop,
+button.counter-stop:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 .counter-stop:hover { background: rgb(0 0 0 / 0.8); }
+@media (prefers-reduced-motion: reduce) {
+  button.counter-stop { transition: none; }
+}
 
 .counter-view {
   container-type: size;
