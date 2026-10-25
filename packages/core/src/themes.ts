@@ -1,4 +1,13 @@
-export const THEME_IDS = ['classic', 'modern', 'formal', 'halloween', 'christmas', 'seasons', 'minimalist'] as const;
+export const THEME_IDS = [
+  'classic',
+  'modern',
+  'formal',
+  'halloween',
+  'christmas',
+  'seasons',
+  'minimalist',
+  'splitflap',
+] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 
@@ -15,6 +24,9 @@ export const FONTS: Record<FontId, { stack: string }> = {
   display: { stack: "Impact, Haettenschweiler, 'Arial Black', sans-serif" },
 };
 
+/** How values are drawn: plain glyphs, or one split-flap plate per character (ADR-0036). */
+export type PlateStyle = 'none' | 'flap';
+
 /** Plain data (hex colours, font ids) so the Rust camera renderer can use the same themes. */
 export interface Theme {
   background: string;
@@ -26,19 +38,22 @@ export interface Theme {
   weight: number;
   radius: number;
   decoration: string;
+  /** Values on split-flap plates (`flap`) or plain glyphs (`none`); both renderers obey it (ADR-0036). */
+  plates: PlateStyle;
 }
 
 export const THEMES: Record<Exclude<ThemeId, 'seasons'> | Season, Theme> = {
-  classic: { background: '#0f1115', backgroundAlt: '#181b22', text: '#e8eaf0', muted: '#8b93a7', accent: '#ff5d5d', font: 'system', weight: 700, radius: 12, decoration: '' },
-  modern: { background: '#0b1020', backgroundAlt: '#1d2b64', text: '#f5f7ff', muted: '#9aa6d1', accent: '#4ade80', font: 'rounded', weight: 800, radius: 20, decoration: '' },
-  formal: { background: '#f7f5f0', backgroundAlt: '#e9e4d8', text: '#1c1c1c', muted: '#6b6457', accent: '#1f3a5f', font: 'serif', weight: 600, radius: 4, decoration: '' },
-  halloween: { background: '#1a0f05', backgroundAlt: '#3d1d00', text: '#ffedd5', muted: '#c2a383', accent: '#ff7518', font: 'display', weight: 700, radius: 16, decoration: '🎃🦇' },
-  christmas: { background: '#0b3d20', backgroundAlt: '#7a0f1a', text: '#fffaf0', muted: '#c9dcc8', accent: '#ffd34e', font: 'serif', weight: 700, radius: 16, decoration: '' },
-  minimalist: { background: '#ffffff', backgroundAlt: '#ffffff', text: '#111111', muted: '#767676', accent: '#111111', font: 'system', weight: 300, radius: 0, decoration: '' },
-  spring: { background: '#f0fdf4', backgroundAlt: '#fce7f3', text: '#14532d', muted: '#4c7055', accent: '#db2777', font: 'rounded', weight: 700, radius: 20, decoration: '' },
-  summer: { background: '#fff7d6', backgroundAlt: '#7dd3fc', text: '#0c4a6e', muted: '#34566a', accent: '#c2410c', font: 'rounded', weight: 800, radius: 20, decoration: '' },
-  autumn: { background: '#2b1a0e', backgroundAlt: '#7c2d12', text: '#fef3c7', muted: '#d6b98c', accent: '#f59e0b', font: 'serif', weight: 700, radius: 16, decoration: '' },
-  winter: { background: '#e0f2fe', backgroundAlt: '#f8fafc', text: '#0f172a', muted: '#5a6b83', accent: '#0284c7', font: 'system', weight: 700, radius: 16, decoration: '' },
+  classic: { background: '#0f1115', backgroundAlt: '#181b22', text: '#e8eaf0', muted: '#8b93a7', accent: '#ff5d5d', font: 'system', weight: 700, radius: 12, decoration: '', plates: 'none' },
+  modern: { background: '#0b1020', backgroundAlt: '#1d2b64', text: '#f5f7ff', muted: '#9aa6d1', accent: '#4ade80', font: 'rounded', weight: 800, radius: 20, decoration: '', plates: 'none' },
+  formal: { background: '#f7f5f0', backgroundAlt: '#e9e4d8', text: '#1c1c1c', muted: '#6b6457', accent: '#1f3a5f', font: 'serif', weight: 600, radius: 4, decoration: '', plates: 'none' },
+  halloween: { background: '#1a0f05', backgroundAlt: '#3d1d00', text: '#ffedd5', muted: '#c2a383', accent: '#ff7518', font: 'display', weight: 700, radius: 16, decoration: '🎃🦇', plates: 'none' },
+  christmas: { background: '#0b3d20', backgroundAlt: '#7a0f1a', text: '#fffaf0', muted: '#c9dcc8', accent: '#ffd34e', font: 'serif', weight: 700, radius: 16, decoration: '', plates: 'none' },
+  minimalist: { background: '#ffffff', backgroundAlt: '#ffffff', text: '#111111', muted: '#767676', accent: '#111111', font: 'system', weight: 300, radius: 0, decoration: '', plates: 'none' },
+  spring: { background: '#f0fdf4', backgroundAlt: '#fce7f3', text: '#14532d', muted: '#4c7055', accent: '#db2777', font: 'rounded', weight: 700, radius: 20, decoration: '', plates: 'none' },
+  summer: { background: '#fff7d6', backgroundAlt: '#7dd3fc', text: '#0c4a6e', muted: '#34566a', accent: '#c2410c', font: 'rounded', weight: 800, radius: 20, decoration: '', plates: 'none' },
+  autumn: { background: '#2b1a0e', backgroundAlt: '#7c2d12', text: '#fef3c7', muted: '#d6b98c', accent: '#f59e0b', font: 'serif', weight: 700, radius: 16, decoration: '', plates: 'none' },
+  winter: { background: '#e0f2fe', backgroundAlt: '#f8fafc', text: '#0f172a', muted: '#5a6b83', accent: '#0284c7', font: 'system', weight: 700, radius: 16, decoration: '', plates: 'none' },
+  splitflap: { background: '#0b0c0f', backgroundAlt: '#1e2126', text: '#f7f3e8', muted: '#a7a294', accent: '#ffb020', font: 'condensed', weight: 700, radius: 4, decoration: '', plates: 'flap' },
 };
 
 /** Meteorological seasons, northern hemisphere. */
@@ -71,6 +86,79 @@ export const COUNTER_ELEMENTS: readonly CounterElement[] = [
   'personTime',
   'costPerMinute',
 ];
+
+/** Width of one split-flap plate, in ems of the element font size (ADR-0036). */
+export const PLATE_WIDTH_EM = 0.72;
+/** Gap between two plates, also used against the row's own trailing edge (ADR-0036). */
+export const PLATE_GAP_EM = 0.08;
+/** Height of one plate; taller than the glyph line, so the cost fit caps the font to it (ADR-0036). */
+export const PLATE_HEIGHT_EM = 1.15;
+/** Corner radius of a plate (ADR-0036). */
+export const PLATE_RADIUS_EM = 0.08;
+/** Thickness of the horizontal seam across the middle of a plate (ADR-0036). */
+export const PLATE_SEAM_EM = 0.04;
+/** Advance of a space, which gets no plate (ADR-0036). */
+export const PLATE_SPACE_EM = 0.4;
+
+/** The elements drawn one plate per character; captions stay plain text (ADR-0036). */
+export const PLATED_ELEMENTS: readonly CounterElement[] = ['cost', 'elapsed', 'personTime', 'costPerMinute'];
+
+export function isPlated(theme: Theme, element: CounterElement): boolean {
+  return theme.plates === 'flap' && PLATED_ELEMENTS.includes(element);
+}
+
+/** Width of `text` drawn on plates at `fontPx`: one plate per character, no plate for spaces, minus the trailing gap. */
+export function platedWidth(text: string, fontPx: number): number {
+  let width = 0;
+  let lastChar = '';
+  for (const char of text) {
+    width += char === ' ' ? PLATE_SPACE_EM * fontPx : (PLATE_WIDTH_EM + PLATE_GAP_EM) * fontPx;
+    lastChar = char;
+  }
+  if (lastChar !== '' && lastChar !== ' ') width -= PLATE_GAP_EM * fontPx;
+  return Math.max(0, width);
+}
+
+/** One plate's fall in a split-flap board, in ms (ADR-0037). */
+export const FLIP_MS = 160;
+/** How dark the falling flap gets at the end of its arc, 0..1 (ADR-0037). */
+export const FLIP_SHADE = 0.35;
+
+/** One half of a flipping plate. */
+export interface FlapHalf {
+  /** Which glyph this half shows while the flap moves. */
+  glyph: 'from' | 'to';
+  /** Vertical scale of the falling flap: 1 = the full half, 0 = flat on the seam. */
+  scale: number;
+  /** How much darker than a settled plate the falling flap is, 0..FLIP_SHADE. */
+  shade: number;
+}
+
+/** The two halves of a plate during a flip. */
+export interface FlapFrame {
+  top: FlapHalf;
+  bottom: FlapHalf;
+}
+
+/** `0..1` progress of a flip that started at `startedMs` (ADR-0037). */
+export function flapProgress(startedMs: number, nowMs: number): number {
+  const elapsed = nowMs - startedMs;
+  if (elapsed <= 0) return 0;
+  return Math.min(1, elapsed / FLIP_MS);
+}
+
+/** The two halves of a plate `progress` (0..1) through its flip (ADR-0037). */
+export function flapFrame(progress: number): FlapFrame {
+  const p = Math.min(1, Math.max(0, progress));
+  const settled = (glyph: FlapHalf['glyph']): FlapHalf => ({ glyph, scale: 1, shade: 0 });
+  if (p >= 1) return { top: settled('to'), bottom: settled('to') };
+  if (p < 0.5) {
+    const scale = Math.cos(Math.PI * p);
+    return { top: { glyph: 'from', scale, shade: FLIP_SHADE * (1 - scale) }, bottom: settled('from') };
+  }
+  const scale = Math.cos(Math.PI * (p - 0.5));
+  return { top: settled('to'), bottom: { glyph: 'from', scale, shade: FLIP_SHADE * (1 - scale) } };
+}
 
 /** Per-element tweaks. `null` / 'theme' keep whatever the preset defines. */
 export interface ElementStyle {
@@ -328,7 +416,8 @@ export function styleDefaults(theme: Theme): StyleOverride {
   return {
     elements,
     background: {
-      mode: 'gradient',
+      // A gradient behind flat plates reads as a mistake, so the board gets a solid background (ADR-0036).
+      mode: theme.plates === 'flap' ? 'solid' : 'gradient',
       color: theme.background,
       colorAlt: theme.backgroundAlt,
       direction: 'vertical',
