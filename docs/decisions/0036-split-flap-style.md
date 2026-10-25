@@ -1,6 +1,6 @@
 # 0036. Split-flap style: values on airport plates
 
-- Status: accepted
+- Status: accepted (the animation is added by [ADR-0037](0037-split-flap-animation.md))
 - Date: 2026-10-25
 
 ## Context

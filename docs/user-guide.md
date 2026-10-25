@@ -57,7 +57,11 @@ Everything you type stays in the browser's local storage on that device. There i
 ## The counter
 
 - **Style** — seven presets (Classic, Modern, Formal, Halloween, Christmas, 4 seasons,
-  Minimalist). Every preset remembers its own tweaks:
+  Minimalist) plus **Split-flap**, the airport board look: every digit, separator and currency
+  symbol sits on its own plate with a seam across the middle, and each plate flips when its
+  character changes. Captions stay plain so they remain readable at small sizes. The flip runs in
+  the counter window and on the virtual camera alike; the browser honours the system's *reduce
+  motion* setting and shows the new character straight away. Every preset remembers its own tweaks:
   - each text element (Title, Cost, Status, Elapsed, Person-time, Cost per minute) can have its
     own font, size and colour, and can be hidden with **Show** when a meeting does not need it;
   - the counter card can be rotated from 0° to 360° — the webcam image is never rotated, only

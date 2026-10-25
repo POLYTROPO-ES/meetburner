@@ -51,3 +51,5 @@ Template:
 | [0033](0033-only-counter-or-video.md) | Only counter or video with a live preview; camera options appear with video | accepted (preview capture superseded by 0035) |
 | [0034](0034-studio-shell.md) | The setup page is a shell: editor on the left, the counter always in view | accepted (camera options moved under the preview) |
 | [0035](0035-preview-from-the-pipeline.md) | The setup preview shows the webcam the camera pipeline captures | accepted |
+| [0036](0036-split-flap-style.md) | Split-flap style: values on airport plates | accepted (animation added by 0037) |
+| [0037](0037-split-flap-animation.md) | Split-flap plates actually flip | accepted |
