@@ -1,6 +1,6 @@
 # 0002. Virtual camera per OS
 
-- Status: accepted
+- Status: accepted (Windows registration superseded by [0016](0016-dshow-filter-and-per-user-registration.md)/[0017](0017-app-registers-the-driver.md), Linux setup by [0030](0030-linux-camera-v4l2loopback.md))
 - Date: 2026-10-22
 
 ## Context
