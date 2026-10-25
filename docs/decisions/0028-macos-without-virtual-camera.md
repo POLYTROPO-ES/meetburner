@@ -1,6 +1,6 @@
 # 0028. macOS ships without the virtual camera until the Apple account exists
 
-- Status: accepted
+- Status: accepted (the camera section returns on Linux with [ADR-0030](0030-linux-camera-v4l2loopback.md))
 - Date: 2026-10-23
 
 ## Context
