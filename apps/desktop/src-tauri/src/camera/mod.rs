@@ -23,8 +23,9 @@ pub use layout::{
     CounterLayout, FitCost, Rect, LABEL_HEIGHT_RATIO, LABEL_LINE_HEIGHT,
 };
 pub use renderer::{
-    fit_font_px, render, BackgroundMode, BackgroundStyle, CounterInput, CounterValues,
-    DisplayConfig, ElementStyle, Elements, GradientDirection, Labels, Mirror,
+    fit_font_px, render, render_animated, BackgroundMode, BackgroundStyle, CounterInput,
+    CounterValues, DisplayConfig, ElementStyle, Elements, FlapState, GradientDirection, Labels,
+    Mirror, FLIP_MS,
 };
 pub use source::{list_sources, CameraSource, FrameSource, WebcamSource};
-pub use theme::{theme, FontChoice, FontId, Layout, Overflow, Theme};
+pub use theme::{theme, FontChoice, FontId, Layout, Overflow, PlateStyle, Theme};

@@ -117,7 +117,8 @@ describe('styleDefaults', () => {
         expect(style.elements[element]).toEqual(INHERIT);
       }
       expect(style.background).toEqual({
-        mode: 'gradient',
+        // Only the split-flap board asks for a solid background (ADR-0036).
+        mode: theme.plates === 'flap' ? 'solid' : 'gradient',
         color: theme.background,
         colorAlt: theme.backgroundAlt,
         direction: 'vertical',

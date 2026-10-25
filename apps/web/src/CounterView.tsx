@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   COUNTER_ELEMENTS,
+  FLIP_MS,
+  FLIP_SHADE,
   fitCost,
   formatDuration,
   formatMoney,
   formatMoneyCompact,
+  isPlated,
   resolveFont,
   resolveTheme,
   styleFor,
@@ -51,6 +54,90 @@ function elementVars(
   };
 }
 
+/**
+ * Created once: the counter re-renders every animation frame, so the media query is read at render
+ * time instead of allocating a new one per plate per frame (ADR-0037).
+ */
+const REDUCED_MOTION =
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)')
+    : null;
+
+function prefersReducedMotion(): boolean {
+  return REDUCED_MOTION?.matches ?? false;
+}
+
+/**
+ * One split-flap plate (ADR-0036, ADR-0037). The plate always settles on the new glyph; when the
+ * character changes, the old glyph falls away in two halves, the top turning down around the seam
+ * and then the bottom turning away from it. The stylesheet owns the motion; this component only
+ * decides when a flap exists and drops it once both phases are done.
+ */
+function Plate({ char, animate }: { char: string; animate: boolean }) {
+  const previous = useRef(char);
+  const [flap, setFlap] = useState<string | null>(null);
+  // Read at render time: a settled plate is plain markup, with no flap left on top.
+  const reduced = !animate || prefersReducedMotion();
+
+  useLayoutEffect(() => {
+    const from = previous.current;
+    previous.current = char;
+    if (!animate || from === char) return;
+    // Re-read inside the effect, so a preference changed since the last render is honoured too.
+    setFlap(prefersReducedMotion() ? null : from);
+  }, [char, animate]);
+
+  // Both phases (the bottom one delayed) are over after one FLIP_MS fall: drop the flap.
+  useEffect(() => {
+    if (flap === null) return;
+    const timer = window.setTimeout(() => setFlap(null), FLIP_MS);
+    return () => window.clearTimeout(timer);
+  }, [flap]);
+
+  return (
+    <span className="plate" aria-hidden="true">
+      <span className="plate-half plate-half-top">
+        <span>{char}</span>
+      </span>
+      <span className="plate-half plate-half-bottom">
+        <span>{char}</span>
+      </span>
+      {!reduced && flap !== null && (
+        <>
+          <span key={`top-${flap}`} className="plate-half plate-half-top plate-flap plate-flap-top">
+            <span>{flap}</span>
+          </span>
+          <span key={`bottom-${flap}`} className="plate-half plate-half-bottom plate-flap plate-flap-bottom">
+            <span>{flap}</span>
+          </span>
+        </>
+      )}
+    </span>
+  );
+}
+
+/**
+ * One split-flap plate per character; spaces advance without one (ADR-0036). Plates are keyed by
+ * their position from the right, so adding a digit at the left keeps every plate to its right.
+ * `animate={false}` renders settled plates for the hidden measurement rows (ADR-0037).
+ */
+function PlateRow({ text, animate = true }: { text: string; animate?: boolean }) {
+  return (
+    <>
+      <span className="plates" aria-hidden="true">
+        {[...text].map((char, i) =>
+          char === ' ' ? (
+            <span key={text.length - i} className="plate-space" />
+          ) : (
+            <Plate key={text.length - i} char={char} animate={animate} />
+          ),
+        )}
+      </span>
+      <span className="sr-only">{text}</span>
+    </>
+  );
+}
+
 export function CounterView({ meeting, snapshot: s, display, lang, now, embedded, rotateCard = true }: Props) {
   const theme = resolveTheme(display.theme, new Date(now));
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
@@ -68,6 +155,9 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
     '--muted': theme.muted,
     '--accent': theme.accent,
     '--weight': theme.weight,
+    // One plate's fall and its shade, shared with the model in core (ADR-0037).
+    '--flip': `${FLIP_MS}ms`,
+    '--flip-shade': String(FLIP_SHADE),
   };
   for (const element of COUNTER_ELEMENTS) Object.assign(vars, elementVars(element, style, theme));
 
@@ -82,6 +172,8 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
 
   // A hidden element is not rendered at all (ADR-0029): the card may end up empty.
   const shown = (element: CounterElement) => style.elements[element].visible;
+  // Values on plates, captions plain (ADR-0036).
+  const plated = (element: CounterElement) => isPlated(theme, element);
   const costShown = shown('cost');
   const statsShown = shown('elapsed') || shown('personTime') || shown('costPerMinute');
   const classes = ['counter-view', s.running && 'running', embedded && 'embedded'].filter(Boolean).join(' ');
@@ -145,13 +237,15 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
         {costShown && (
           <>
             <p className="total" title={fullCost} style={{ '--fit': fit.scale } as CSSProperties}>
-              {fit.compact ? compactCost : fullCost}
+              {plated('cost') ? <PlateRow text={fit.compact ? compactCost : fullCost} /> : fit.compact ? compactCost : fullCost}
             </p>
+            {/* The measurements must be plated too, or the fit compares a plate row with plain text;
+                they never animate, they only exist to be measured (ADR-0037). */}
             <p ref={measureRef} className="total measure" aria-hidden="true">
-              {fullCost}
+              {plated('cost') ? <PlateRow text={fullCost} animate={false} /> : fullCost}
             </p>
             <p ref={measureCompactRef} className="total measure" aria-hidden="true">
-              {compactCost}
+              {plated('cost') ? <PlateRow text={compactCost} animate={false} /> : compactCost}
             </p>
           </>
         )}
@@ -162,21 +256,26 @@ export function CounterView({ meeting, snapshot: s, display, lang, now, embedded
             {shown('elapsed') && (
               <div data-el="elapsed" style={elementVars('elapsed', style, theme)}>
                 <dt>{t(lang, 'elapsed')}</dt>
-                <dd>{formatDuration(s.elapsedMs)}</dd>
+                <dd>{plated('elapsed') ? <PlateRow text={formatDuration(s.elapsedMs)} /> : formatDuration(s.elapsedMs)}</dd>
               </div>
             )}
             {shown('personTime') && (
               <div data-el="personTime" style={elementVars('personTime', style, theme)}>
                 <dt>{t(lang, 'personTime')}</dt>
                 <dd>
-                  {formatDuration(s.personTimeMs)} <small>({meeting.participants.length})</small>
+                  {plated('personTime') ? <PlateRow text={formatDuration(s.personTimeMs)} /> : formatDuration(s.personTimeMs)}{' '}
+                  <small>({meeting.participants.length})</small>
                 </dd>
               </div>
             )}
             {shown('costPerMinute') && (
               <div data-el="costPerMinute" style={elementVars('costPerMinute', style, theme)}>
                 <dt>{t(lang, 'costPerMinute')}</dt>
-                <dd>{formatMoney(s.costPerMinute, meeting.currency, locale)}</dd>
+                <dd>
+                  {plated('costPerMinute')
+                    ? <PlateRow text={formatMoney(s.costPerMinute, meeting.currency, locale)} />
+                    : formatMoney(s.costPerMinute, meeting.currency, locale)}
+                </dd>
               </div>
             )}
           </dl>

@@ -1,25 +1,46 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampOverlay,
+  COUNTER_ELEMENTS,
   DEFAULT_DISPLAY,
   defaultOverlayRect,
+  FLIP_MS,
+  FLIP_SHADE,
+  flapFrame,
+  flapProgress,
   FONTS,
+  isPlated,
   MESSAGES,
   moveOverlay,
   NO_MIRROR,
   normalizeDisplay,
   OVERLAY_MIN,
+  PLATED_ELEMENTS,
+  PLATE_GAP_EM,
+  PLATE_SPACE_EM,
+  PLATE_WIDTH_EM,
+  platedWidth,
   resizeOverlay,
   resolveFont,
   resolveTheme,
   seasonOf,
+  styleDefaults,
   THEME_IDS,
   THEMES,
 } from './index';
 
 describe('themes', () => {
-  it('offer the seven selectable styles', () => {
-    expect(THEME_IDS).toEqual(['classic', 'modern', 'formal', 'halloween', 'christmas', 'seasons', 'minimalist']);
+  it('offer the eight selectable styles', () => {
+    expect(THEME_IDS).toEqual([
+      'classic',
+      'modern',
+      'formal',
+      'halloween',
+      'christmas',
+      'seasons',
+      'minimalist',
+      'splitflap',
+    ]);
   });
 
   it('have a translated name for every style', () => {
@@ -74,6 +95,53 @@ describe('theme contrast (WCAG AA)', () => {
     for (const background of backgrounds(theme)) {
       expect(contrast(theme.accent, background)).toBeGreaterThanOrEqual(3);
     }
+  });
+});
+
+describe('split-flap plates (ADR-0036)', () => {
+  it('declare plates on every preset, with splitflap as the only flap style', () => {
+    for (const theme of Object.values(THEMES)) expect(['none', 'flap']).toContain(theme.plates);
+    const date = new Date(2026, 9, 25);
+    expect(THEME_IDS.filter((id) => resolveTheme(id, date).plates === 'flap')).toEqual(['splitflap']);
+  });
+
+  it('resolve splitflap to the airport-board preset', () => {
+    expect(resolveTheme('splitflap', new Date(2026, 9, 25))).toEqual({
+      background: '#0b0c0f',
+      backgroundAlt: '#1e2126',
+      text: '#f7f3e8',
+      muted: '#a7a294',
+      accent: '#ffb020',
+      font: 'condensed',
+      weight: 700,
+      radius: 4,
+      decoration: '',
+      plates: 'flap',
+    });
+  });
+
+  it('put a solid background behind the board and keep the gradient elsewhere', () => {
+    expect(styleDefaults(THEMES.splitflap).background.mode).toBe('solid');
+    expect(styleDefaults(THEMES.classic).background.mode).toBe('gradient');
+  });
+
+  it('plate the value elements and leave the captions plain', () => {
+    expect(PLATED_ELEMENTS).toEqual(['cost', 'elapsed', 'personTime', 'costPerMinute']);
+    for (const element of PLATED_ELEMENTS) expect(isPlated(THEMES.splitflap, element)).toBe(true);
+    for (const element of ['label', 'status'] as const) expect(isPlated(THEMES.splitflap, element)).toBe(false);
+    for (const element of COUNTER_ELEMENTS) expect(isPlated(THEMES.classic, element)).toBe(false);
+  });
+
+  it('measure a plated row exactly as wide as it looks', () => {
+    const plate = (PLATE_WIDTH_EM + PLATE_GAP_EM) * 100;
+    const gap = PLATE_GAP_EM * 100;
+    expect(plate).toBe(80);
+    expect(PLATE_SPACE_EM * 100).toBe(40);
+    expect(platedWidth('1234', 100)).toBe(4 * plate - gap);
+    expect(platedWidth('12:34', 100)).toBe(5 * plate - gap);
+    expect(platedWidth('1 2', 100)).toBe(plate + 40 + plate - gap);
+    expect(platedWidth('', 100)).toBe(0);
+    expect(platedWidth('  ', 100)).toBe(80);
   });
 });
 
@@ -196,5 +264,58 @@ describe('overlay card geometry', () => {
     const tiny = resizeOverlay(rect, -0.9, -0.9);
     expect(tiny.w).toBe(OVERLAY_MIN);
     expect(tiny.h).toBe(OVERLAY_MIN);
+  });
+});
+
+describe('split-flap flip (ADR-0037)', () => {
+  const settled = (glyph: 'from' | 'to') => ({ glyph, scale: 1, shade: 0 });
+
+  it('starts on the old glyph with both halves settled', () => {
+    expect(flapFrame(0)).toEqual({ top: settled('from'), bottom: settled('from') });
+  });
+
+  it('drops the old glyph in the top half during the first half of the flip', () => {
+    const frame = flapFrame(0.25);
+    expect(frame.top.glyph).toBe('from');
+    expect(frame.top.scale).toBeCloseTo(Math.SQRT1_2, 4);
+    expect(frame.top.shade).toBeCloseTo(FLIP_SHADE * (1 - Math.SQRT1_2), 4);
+    expect(frame.bottom).toEqual(settled('from'));
+  });
+
+  it('shows the new glyph settled once the flap passes the seam', () => {
+    expect(flapFrame(0.5)).toEqual({ top: settled('to'), bottom: settled('from') });
+  });
+
+  it('drops the old glyph in the bottom half during the second half of the flip', () => {
+    const frame = flapFrame(0.75);
+    expect(frame.top).toEqual(settled('to'));
+    expect(frame.bottom.glyph).toBe('from');
+    expect(frame.bottom.scale).toBeCloseTo(Math.SQRT1_2, 4);
+    expect(frame.bottom.shade).toBeCloseTo(FLIP_SHADE * (1 - Math.SQRT1_2), 4);
+  });
+
+  it('ends with both halves on the new glyph', () => {
+    expect(flapFrame(1)).toEqual({ top: settled('to'), bottom: settled('to') });
+  });
+
+  it('clamps out-of-range progress to the ends of the flip', () => {
+    expect(flapFrame(-1)).toEqual(flapFrame(0));
+    expect(flapFrame(2)).toEqual(flapFrame(1));
+  });
+
+  it('keeps every shade within 0..FLIP_SHADE', () => {
+    for (let i = -5; i <= 105; i++) {
+      const frame = flapFrame(i / 100);
+      for (const half of [frame.top, frame.bottom]) {
+        expect(half.shade).toBeGreaterThanOrEqual(0);
+        expect(half.shade).toBeLessThanOrEqual(FLIP_SHADE);
+      }
+    }
+  });
+
+  it('turns elapsed time into 0..1 progress of one FLIP_MS fall', () => {
+    expect(flapProgress(1000, 1000 + FLIP_MS / 2)).toBe(0.5);
+    expect(flapProgress(1000, 900)).toBe(0);
+    expect(flapProgress(1000, 5000)).toBe(1);
   });
 });

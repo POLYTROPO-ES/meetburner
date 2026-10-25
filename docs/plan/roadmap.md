@@ -23,6 +23,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Unit tests (Vitest)
 - [ ] Replace rough salary estimates with official sources (INE, Eurostat, ONS, BLS, INEGI…), keeping source and date per value
 - [ ] Southern-hemisphere option for the "4 seasons" style
+- [x] Split-flap style data: `Theme.plates`, the `splitflap` preset, `PLATED_ELEMENTS` and the plate geometry shared with Rust (ADR-0036)
 - **Done when:** 100% of core functions covered, no runtime dependencies.
 
 ### M2. Web app — `web`
@@ -33,6 +34,8 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Layouts fullscreen/widget; user picks font and size for the cost and the time; live preview
 - [x] "Share the cost" link with a meeting summary: total time, total cost, cost/min (ADR-0009)
 - [x] Large amounts that do not fit: abbreviate (K, M, B) or shrink the font, user selectable (ADR-0010)
+- [x] Split-flap style in the counter window and the setup preview: one plate per character, seam and gap, fit and screen-reader text (ADR-0036)
+- [x] Split-flap plates flip in the browser and on the camera: shared `FLIP_MS`/`flapFrame` model, per-character state, reduced motion on the web (ADR-0037)
 - [x] Polish: responsive down to 360 px, accessibility (names, contrast, keyboard, live region), popup-blocked fallback
 - [x] Deploy to Cloudflare Pages (`npm run deploy:web`, `_headers`), served at https://meetburner.com
 - **Done when:** a non-technical user can run a meeting counter in < 30 s.
@@ -55,6 +58,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] Large amounts: apply `fitCost` / `formatMoneyCompact` with the renderer's text metrics (ADR-0010)
 - [x] Tauri commands: `camera_start(config)`, `camera_update(meeting)`, `camera_stop()`
 - [x] Fullscreen output resolution selector: 16:9, 9:16, 4:3, 3:4 and 1:1 sizes, applied live (ADR-0015)
+- [x] Split-flap plates in the camera renderer: cost, elapsed time and cost per minute on plates; label and status stay plain (ADR-0036)
 - [x] Cost font fills 90 % of the width by default; the size slider multiplies that fit (ADR-0015)
 - [x] Live updates: every parameter change reaches the camera on the next frame; only a resolution change re-creates the mapping
 - [x] One fixed-capacity mapping for the whole session: a resolution change only changes the header, so meeting apps never lose the device (ADR-0019)

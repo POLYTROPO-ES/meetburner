@@ -1,11 +1,13 @@
 //! Draws the counter into a 1280x720 BGRA frame at 30 fps (ADR-0002, ADR-0006, ADR-0014).
 //! Pure: no OS calls here, so the whole renderer is unit-testable with injected fonts.
 
+use std::f32::consts::PI;
+
 use ab_glyph::{point, Font, PxScale, ScaleFont};
 use serde::Deserialize;
 use tiny_skia::{
-    Color, FillRule, FilterQuality, GradientStop, LinearGradient, Paint, Path, PathBuilder, Pixmap,
-    PixmapPaint, Point, SpreadMode, Transform,
+    Color, FillRule, FilterQuality, GradientStop, LinearGradient, Mask, Paint, Path, PathBuilder,
+    Pixmap, PixmapPaint, Point, SpreadMode, Transform,
 };
 
 use crate::camera::fonts::Fonts;
@@ -15,7 +17,7 @@ use crate::camera::frame::{normalize_size, Frame, FRAME_HEIGHT, FRAME_WIDTH};
 use crate::camera::layout::counter_layout;
 use crate::camera::layout::{counter_layout_with_label, fit_cost, label_font_px, Rect};
 
-use crate::camera::theme::{self, FontChoice, Layout, Overflow, Theme};
+use crate::camera::theme::{self, FontChoice, Layout, Overflow, PlateStyle, Theme};
 
 /// Translated strings supplied by the web UI (`packages/core/src/i18n.ts`).
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
@@ -513,15 +515,255 @@ const LABEL_TRACKING_EM: f32 = 0.1;
 /// the currency symbol, whose ink is about 0.7 em tall, so 1.0 still fits the box.
 pub const COST_MAX_HEIGHT_RATIO: f32 = 1.0;
 
+// Split-flap plate geometry, in ems of the element font size. Same numbers as
+// `packages/core/src/themes.ts` (ADR-0036): the web and the camera must agree.
+/// Width of one plate.
+const PLATE_WIDTH_EM: f32 = 0.72;
+/// Gap between two plates.
+const PLATE_GAP_EM: f32 = 0.08;
+/// Height of one plate; taller than the glyph line, so the cost fit caps the font to it.
+const PLATE_HEIGHT_EM: f32 = 1.15;
+/// Corner radius of a plate.
+const PLATE_RADIUS_EM: f32 = 0.08;
+/// Thickness of the seam across the middle of a plate.
+const PLATE_SEAM_EM: f32 = 0.04;
+/// Advance of a space, which gets no plate.
+const PLATE_SPACE_EM: f32 = 0.4;
+
+// Split-flap flip, defined once in `packages/core/src/themes.ts` and mirrored here with pinned
+// tests (ADR-0037): the web and the camera must fall alike.
+/// One plate's fall, in ms.
+pub const FLIP_MS: i64 = 160;
+/// How dark the falling flap gets at the end of its arc.
+pub const FLIP_SHADE: f32 = 0.35;
+
+/// Which glyph a half of a plate shows while it falls.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FlapGlyph {
+    /// The glyph the plate showed before the change.
+    From,
+    /// The glyph it turns to.
+    To,
+}
+
+/// One half of a flipping plate.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FlapHalf {
+    pub glyph: FlapGlyph,
+    /// Vertical scale of the falling flap: 1 = the full half, 0 = flat on the seam.
+    pub scale: f32,
+    /// How much darker than a settled plate the falling flap is, `0..=FLIP_SHADE`.
+    pub shade: f32,
+}
+
+impl FlapHalf {
+    /// Full size and unshaded: this half is not moving.
+    fn is_settled(self) -> bool {
+        self.scale >= 1.0 && self.shade == 0.0
+    }
+}
+
+/// The two halves of a plate during a flip.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FlapFrame {
+    pub top: FlapHalf,
+    pub bottom: FlapHalf,
+}
+
+/// `0..1` progress of a flip that started at `started_ms` (ADR-0037).
+pub fn flap_progress(started_ms: i64, now_ms: i64) -> f32 {
+    let elapsed = now_ms - started_ms;
+    if elapsed <= 0 {
+        return 0.0;
+    }
+    (elapsed as f32 / FLIP_MS as f32).min(1.0)
+}
+
+/// The two halves of a plate `progress` (0..1) through its flip (ADR-0037). Mirror of
+/// `flapFrame` in `packages/core/src/themes.ts`.
+pub fn flap_frame(progress: f32) -> FlapFrame {
+    let settled = |glyph| FlapHalf {
+        glyph,
+        scale: 1.0,
+        shade: 0.0,
+    };
+    let progress = if progress.is_finite() {
+        progress.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    if progress >= 1.0 {
+        return FlapFrame {
+            top: settled(FlapGlyph::To),
+            bottom: settled(FlapGlyph::To),
+        };
+    }
+    if progress < 0.5 {
+        // First half: the old glyph's top half compresses towards the seam.
+        let scale = (PI * progress).cos();
+        return FlapFrame {
+            top: FlapHalf {
+                glyph: FlapGlyph::From,
+                scale,
+                shade: FLIP_SHADE * (1.0 - scale),
+            },
+            bottom: settled(FlapGlyph::From),
+        };
+    }
+    // Second half: the old glyph's bottom half compresses away from the seam.
+    let scale = (PI * (progress - 0.5)).cos();
+    FlapFrame {
+        top: settled(FlapGlyph::To),
+        bottom: FlapHalf {
+            glyph: FlapGlyph::From,
+            scale,
+            shade: FLIP_SHADE * (1.0 - scale),
+        },
+    }
+}
+
+/// The plated counter lines, each with its own row of plates (ADR-0037).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FlapElement {
+    Cost,
+    Elapsed,
+    Footer,
+}
+
+/// One plate: the glyph it showed, the glyph it turns to and when the fall started.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Flap {
+    pub from: char,
+    pub to: char,
+    pub started_ms: i64,
+}
+
+impl Flap {
+    fn progress(self, now_ms: i64) -> f32 {
+        flap_progress(self.started_ms, now_ms)
+    }
+
+    /// Glyph on the plate now: the old one until the flap passes the seam.
+    fn shown(self, now_ms: i64) -> char {
+        if self.progress(now_ms) >= 0.5 {
+            self.to
+        } else {
+            self.from
+        }
+    }
+}
+
+/// Every plate's fall, kept across frames by `RenderLoop`. An empty state paints settled
+/// plates, so a non-plated theme and every existing test never see the flip (ADR-0037).
+#[derive(Clone, Debug, Default)]
+pub struct FlapState {
+    cost: Vec<Flap>,
+    elapsed: Vec<Flap>,
+    footer: Vec<Flap>,
+}
+
+impl FlapState {
+    fn plates(&self, element: FlapElement) -> &[Flap] {
+        match element {
+            FlapElement::Cost => &self.cost,
+            FlapElement::Elapsed => &self.elapsed,
+            FlapElement::Footer => &self.footer,
+        }
+    }
+
+    fn plates_mut(&mut self, element: FlapElement) -> &mut Vec<Flap> {
+        match element {
+            FlapElement::Cost => &mut self.cost,
+            FlapElement::Elapsed => &mut self.elapsed,
+            FlapElement::Footer => &mut self.footer,
+        }
+    }
+
+    /// Advances one element with the text about to be drawn (ADR-0037): a character whose
+    /// glyph changed starts a fall from the glyph on the plate, one that changes again mid-fall
+    /// restarts from the glyph it shows by then (plates never queue), and an unchanged
+    /// character keeps its state.
+    fn advance(&mut self, element: FlapElement, text: &str, now_ms: i64) {
+        let count = text.chars().count();
+        let plates = self.plates_mut(element);
+        // A shorter value leaves no plates behind that a later one could fall from.
+        plates.truncate(count);
+        for (index, ch) in text.chars().enumerate() {
+            match plates.get_mut(index) {
+                Some(flap) => {
+                    let shown = flap.shown(now_ms);
+                    if shown != ch {
+                        *flap = Flap {
+                            from: shown,
+                            to: ch,
+                            started_ms: now_ms,
+                        };
+                    }
+                }
+                // A plate that was not there before does not fall: it starts settled.
+                None => plates.push(Flap {
+                    from: ch,
+                    to: ch,
+                    started_ms: now_ms - FLIP_MS,
+                }),
+            }
+        }
+    }
+
+    /// The plate at `(element, index)` while it is still falling at `now_ms`.
+    fn flipping(&self, element: FlapElement, index: usize, now_ms: i64) -> Option<Flap> {
+        let flap = *self.plates(element).get(index)?;
+        (flap.progress(now_ms) < 1.0).then_some(flap)
+    }
+
+    /// The state kept for one plate; the restart rules are pinned with it.
+    #[cfg(test)]
+    fn plate(&self, element: FlapElement, index: usize) -> Option<Flap> {
+        self.plates(element).get(index).copied()
+    }
+}
+
 /// Font size whose glyphs span `target_width`, capped at `max_px` so the text stays
 /// inside its box. This is what makes the cost fill most of the width (ADR-0015).
 pub fn fit_font_px(text: &str, font: &ab_glyph::FontVec, target_width: f32, max_px: f32) -> f32 {
-    const REFERENCE_PX: f32 = 100.0;
-    let measured = measure(text, font, REFERENCE_PX);
+    fit_px(measure(text, font, REFERENCE_PX), target_width, max_px)
+}
+
+/// Reference size every `*_EM` constant and every fit is measured at.
+const REFERENCE_PX: f32 = 100.0;
+
+/// Font size whose measured width spans `target_width`, capped at `max_px`.
+fn fit_px(measured: f32, target_width: f32, max_px: f32) -> f32 {
     if measured <= 0.0 || target_width <= 0.0 {
         return max_px.clamp(8.0, REFERENCE_PX.max(8.0));
     }
     (REFERENCE_PX * target_width / measured).clamp(8.0, max_px.max(8.0))
+}
+
+/// Width of `text` drawn on plates at `font_px`: one plate per character, no plate for a
+/// space, minus the trailing gap so the row is exactly as wide as it looks. Mirror of
+/// `platedWidth` in `packages/core/src/themes.ts` (ADR-0036).
+fn plated_width(text: &str, font_px: f32) -> f32 {
+    let mut width = 0.0;
+    let mut last = None;
+    for ch in text.chars() {
+        width += if ch == ' ' {
+            PLATE_SPACE_EM * font_px
+        } else {
+            (PLATE_WIDTH_EM + PLATE_GAP_EM) * font_px
+        };
+        last = Some(ch);
+    }
+    if matches!(last, Some(ch) if ch != ' ') {
+        width -= PLATE_GAP_EM * font_px;
+    }
+    width.max(0.0)
+}
+
+/// Same as [`fit_font_px`], but the width is the plated one: a row of plates ignores the
+/// glyph metrics, so the fit stops depending on the font (ADR-0036).
+fn fit_plated_font_px(text: &str, target_width: f32, max_px: f32) -> f32 {
+    fit_px(plated_width(text, REFERENCE_PX), target_width, max_px)
 }
 
 /// Chooses between the full and the abbreviated cost so it fits in `available_px`.
@@ -537,10 +779,15 @@ pub fn cost_text(
     let cost = counter_values(input, now_ms).cost;
     let full = format_money(cost, &input.currency, &input.locale);
     let compact = format_money_compact(cost, &input.currency, &input.locale);
+    // Plated values are as wide as their plates, not as their glyphs (ADR-0036).
+    let cost_width = |text: &str| match theme.plates {
+        PlateStyle::Flap => plated_width(text, font_px),
+        PlateStyle::None => measure(text, font, font_px),
+    };
     let fit = fit_cost(
         available_px,
-        measure(&full, font, font_px),
-        measure(&compact, font, font_px),
+        cost_width(&full),
+        cost_width(&compact),
         input.display.overflow,
     );
     CostText {
@@ -550,17 +797,33 @@ pub fn cost_text(
     }
 }
 
-/// Renders one frame. `background` is the captured webcam frame in overlay mode; `None`
-/// leaves the black canvas of a counter-only frame visible behind the painted background.
-///
-/// The counter is painted on its own transparent layer and then composited, so the webcam
-/// and the counter can be mirrored independently (ADR-0022) and the counter can turn without
-/// dragging the webcam with it.
+/// Renders one frame with settled plates: every split-flap character is drawn where it is,
+/// exactly what ADR-0036 paints (ADR-0037 keeps this entry point for stateless callers).
 pub fn render(
     input: &CounterInput,
     fonts: &Fonts,
     now_ms: i64,
     background: Option<&Frame>,
+) -> Frame {
+    render_animated(input, fonts, now_ms, background, &mut FlapState::default())
+}
+
+/// Renders one frame, falling the split-flap plates that changed since the last tick
+/// (ADR-0037). `flaps` is kept across frames by `RenderLoop`; a fresh state paints settled
+/// plates, so a non-flap theme and every stateless render stay byte-identical.
+///
+/// `background` is the captured webcam frame in overlay mode; `None` leaves the black canvas
+/// of a counter-only frame visible behind the painted background.
+///
+/// The counter is painted on its own transparent layer and then composited, so the webcam
+/// and the counter can be mirrored independently (ADR-0022) and the counter can turn without
+/// dragging the webcam with it.
+pub fn render_animated(
+    input: &CounterInput,
+    fonts: &Fonts,
+    now_ms: i64,
+    background: Option<&Frame>,
+    flaps: &mut FlapState,
 ) -> Frame {
     let theme = theme::theme(&input.display.theme, now_ms);
     let mirror = input.display.mirror;
@@ -622,6 +885,17 @@ pub fn render(
     };
     paint_background(&mut overlay, card, radius, &background_style, &theme);
 
+    // The split-flap style draws values on plates coloured by the card background, with the
+    // card's opacity, so restyling the background restyles the plates too (ADR-0036).
+    let plated = theme.plates == PlateStyle::Flap;
+    let plate_colors = PlateColors {
+        face: with_alpha(
+            background_style.color_alt_or(&theme),
+            background_style.alpha(),
+        ),
+        seam: with_alpha(background_style.color_or(&theme), background_style.alpha()),
+    };
+
     let values = counter_values(input, now_ms);
     // Same rule as `meetingSnapshot` in the web (`running`): the cost glows while counting.
     let running = input.end_at.is_none() && now_ms >= input.start_at;
@@ -644,12 +918,23 @@ pub fn render(
     if cost_style.visible {
         let cost_font_ref = fonts.get(cost_style.font.resolve(&theme));
         let cost_full = format_money(values.cost, &input.currency, &input.locale);
-        let base_px = fit_font_px(
-            &cost_full,
-            cost_font_ref,
-            layout.cost.w * COST_FILL_RATIO,
-            layout.cost.h * COST_MAX_HEIGHT_RATIO,
-        );
+        // A plated row is as wide as its plates and taller than its glyph line, so the fit
+        // measures `plated_width` and caps the font to the plate height instead of the
+        // glyph metrics (ADR-0036).
+        let base_px = if plated {
+            fit_plated_font_px(
+                &cost_full,
+                layout.cost.w * COST_FILL_RATIO,
+                layout.cost.h * COST_MAX_HEIGHT_RATIO / PLATE_HEIGHT_EM,
+            )
+        } else {
+            fit_font_px(
+                &cost_full,
+                cost_font_ref,
+                layout.cost.w * COST_FILL_RATIO,
+                layout.cost.h * COST_MAX_HEIGHT_RATIO,
+            )
+        };
         let cost_px = (base_px * cost_style.scale).max(12.0);
         let cost = cost_text(input, fonts, now_ms, layout.cost.w, cost_px);
         let cost_value = if values.starts_in_ms > 0 {
@@ -657,17 +942,35 @@ pub fn render(
         } else {
             cost.text
         };
-        draw_centered(
-            &mut overlay,
-            &cost_value,
-            cost_font_ref,
-            cost_px * cost.scale,
-            element_color(
-                cost_style.color,
-                if running { theme.accent } else { theme.text },
-            ),
-            layout.cost,
+        let cost_color = element_color(
+            cost_style.color,
+            if running { theme.accent } else { theme.text },
         );
+        if plated {
+            draw_plated_animated(
+                &mut overlay,
+                FlapElement::Cost,
+                &cost_value,
+                PlatePaint {
+                    font: cost_font_ref,
+                    font_px: cost_px * cost.scale,
+                    glyph: cost_color,
+                    colors: plate_colors,
+                },
+                layout.cost,
+                flaps,
+                now_ms,
+            );
+        } else {
+            draw_centered(
+                &mut overlay,
+                &cost_value,
+                cost_font_ref,
+                cost_px * cost.scale,
+                cost_color,
+                layout.cost,
+            );
+        }
     }
 
     let elapsed_style = elements.elapsed;
@@ -682,14 +985,33 @@ pub fn render(
         } else {
             format_duration(values.elapsed_ms)
         };
-        draw_centered(
-            &mut overlay,
-            &time_value,
-            fonts.get(elapsed_style.font.resolve(&theme)),
-            time_px,
-            element_color(elapsed_style.color, theme.muted),
-            layout.time,
-        );
+        let time_font = fonts.get(elapsed_style.font.resolve(&theme));
+        let time_color = element_color(elapsed_style.color, theme.muted);
+        if plated {
+            draw_plated_animated(
+                &mut overlay,
+                FlapElement::Elapsed,
+                &time_value,
+                PlatePaint {
+                    font: time_font,
+                    font_px: time_px,
+                    glyph: time_color,
+                    colors: plate_colors,
+                },
+                layout.time,
+                flaps,
+                now_ms,
+            );
+        } else {
+            draw_centered(
+                &mut overlay,
+                &time_value,
+                time_font,
+                time_px,
+                time_color,
+                layout.time,
+            );
+        }
     }
 
     let footer_style = elements.cost_per_minute;
@@ -700,14 +1022,33 @@ pub fn render(
             input.labels.cost_per_minute,
             format_money(values.cost_per_minute, &input.currency, &input.locale)
         );
-        draw_centered(
-            &mut overlay,
-            &footer,
-            fonts.get(footer_style.font.resolve(&theme)),
-            footer_px,
-            element_color(footer_style.color, theme.muted),
-            layout.footer,
-        );
+        let footer_font = fonts.get(footer_style.font.resolve(&theme));
+        let footer_color = element_color(footer_style.color, theme.muted);
+        if plated {
+            draw_plated_animated(
+                &mut overlay,
+                FlapElement::Footer,
+                &footer,
+                PlatePaint {
+                    font: footer_font,
+                    font_px: footer_px,
+                    glyph: footer_color,
+                    colors: plate_colors,
+                },
+                layout.footer,
+                flaps,
+                now_ms,
+            );
+        } else {
+            draw_centered(
+                &mut overlay,
+                &footer,
+                footer_font,
+                footer_px,
+                footer_color,
+                layout.footer,
+            );
+        }
     }
 
     draw_decoration(&mut overlay, &theme, fonts, layout.content);
@@ -986,6 +1327,418 @@ fn draw_centered_tracked(
         tracking,
     };
     draw_text(pixmap, text, &style, x, baseline);
+}
+
+/// Plate face and seam colours: they follow the card background, not the glyph (ADR-0036).
+#[derive(Clone, Copy)]
+struct PlateColors {
+    face: Color,
+    seam: Color,
+}
+
+/// How a plated row is painted: the font, its size, the glyph colour and the plate colours
+/// (ADR-0036).
+#[derive(Clone, Copy)]
+struct PlatePaint<'a> {
+    font: &'a ab_glyph::FontVec,
+    font_px: f32,
+    glyph: Color,
+    colors: PlateColors,
+}
+
+/// One half of a plate while it falls (ADR-0037): the glyph it shows, the half it is clipped
+/// to, the footprint it covers and the seam it turns around.
+struct FallingFlap {
+    /// The whole plate, for the centred glyph and the footprint width.
+    plate: Rect,
+    ch: char,
+    clip: Rect,
+    half: FlapHalf,
+    footprint: Rect,
+    pivot: f32,
+}
+
+/// Draws `text` one split-flap plate per character, centred in `area`, falling the plates that
+/// changed since the previous frame (ADR-0036, ADR-0037). Spaces advance without a plate,
+/// exactly like `plated_width` counts them; an unchanged character costs nothing extra.
+fn draw_plated_animated(
+    pixmap: &mut Pixmap,
+    element: FlapElement,
+    text: &str,
+    paint: PlatePaint<'_>,
+    area: Rect,
+    flaps: &mut FlapState,
+    now_ms: i64,
+) {
+    flaps.advance(element, text, now_ms);
+    let plate_w = PLATE_WIDTH_EM * paint.font_px;
+    let plate_h = PLATE_HEIGHT_EM * paint.font_px;
+    let gap = PLATE_GAP_EM * paint.font_px;
+    let mut pen_x = area.x + (area.w - plated_width(text, paint.font_px)) / 2.0;
+    let top = area.y + (area.h - plate_h) / 2.0;
+    for (index, ch) in text.chars().enumerate() {
+        if ch == ' ' {
+            pen_x += PLATE_SPACE_EM * paint.font_px;
+            continue;
+        }
+        let plate = Rect {
+            x: pen_x,
+            y: top,
+            w: plate_w,
+            h: plate_h,
+        };
+        match flaps.flipping(element, index, now_ms) {
+            Some(flap) => draw_flipping_plate(
+                pixmap,
+                plate,
+                area,
+                flap.from,
+                ch,
+                flap.progress(now_ms),
+                paint,
+            ),
+            None => draw_settled_plate(pixmap, plate, area, ch, paint),
+        }
+        pen_x += plate_w + gap;
+    }
+}
+
+/// One settled plate exactly as ADR-0036 draws it: a rounded face, the glyph on top of it and
+/// the seam across its middle. The row is clipped to its layout box.
+fn draw_settled_plate(
+    pixmap: &mut Pixmap,
+    plate: Rect,
+    area: Rect,
+    ch: char,
+    paint: PlatePaint<'_>,
+) {
+    // A row wider than its box is cut at the box edges, like plain text is clipped.
+    if let Some(face) = clipped(plate, area) {
+        fill_panel(
+            pixmap,
+            face,
+            PLATE_RADIUS_EM * paint.font_px,
+            paint.colors.face,
+        );
+    }
+    let baseline = plate_baseline(plate, paint.font, paint.font_px);
+    draw_plate_glyph(pixmap, plate, ch, paint, area, baseline);
+    draw_plate_seam(pixmap, plate, paint, area);
+}
+
+/// One plate mid-flip (ADR-0037). The plate is painted into a scratch buffer the size of its
+/// bounding box and composited exactly once, so a translucent face is never blended twice.
+fn draw_flipping_plate(
+    pixmap: &mut Pixmap,
+    plate: Rect,
+    area: Rect,
+    from: char,
+    to: char,
+    progress: f32,
+    paint: PlatePaint<'_>,
+) {
+    // A plate cut by its layout box keeps the settled painting: compositing a scratch would
+    // need a full-frame mask, and the fit keeps a row inside its box anyway.
+    if !inside(plate, area) {
+        draw_settled_plate(pixmap, plate, area, to, paint);
+        return;
+    }
+    let frame = flap_frame(progress);
+    let origin_x = plate.x.floor();
+    let origin_y = plate.y.floor();
+    let width = ((plate.x + plate.w).ceil() - origin_x).max(1.0) as u32;
+    let height = ((plate.y + plate.h).ceil() - origin_y).max(1.0) as u32;
+    let Some(mut buffer) = Pixmap::new(width, height) else {
+        return;
+    };
+    // Local space: the settled geometry, shifted by the integer origin, so the face and the
+    // glyphs rasterise exactly like a settled plate draws them.
+    let local = Rect {
+        x: plate.x - origin_x,
+        y: plate.y - origin_y,
+        w: plate.w,
+        h: plate.h,
+    };
+    let seam = local.y + local.h / 2.0;
+    let half = local.h / 2.0;
+    let top_half = Rect {
+        x: local.x,
+        y: local.y,
+        w: local.w,
+        h: half,
+    };
+    let bottom_half = Rect {
+        x: local.x,
+        y: seam,
+        w: local.w,
+        h: half,
+    };
+    let baseline = plate_baseline(local, paint.font, paint.font_px);
+
+    fill_panel(
+        &mut buffer,
+        local,
+        PLATE_RADIUS_EM * paint.font_px,
+        paint.colors.face,
+    );
+
+    // A settled half shows its glyph straight away. The half that falls reveals the new glyph
+    // only behind the flap, and never above it in the first phase (ADR-0037).
+    if frame.top.is_settled() {
+        let shown = glyph_of(frame.top, from, to);
+        draw_plate_glyph(&mut buffer, local, shown, paint, top_half, baseline);
+    }
+    if frame.bottom.is_settled() {
+        let shown = glyph_of(frame.bottom, from, to);
+        draw_plate_glyph(&mut buffer, local, shown, paint, bottom_half, baseline);
+    } else {
+        // The flap has passed part of the bottom half: the new glyph shows below it.
+        let covered = half * frame.bottom.scale;
+        let revealed = Rect {
+            x: local.x,
+            y: seam + covered,
+            w: local.w,
+            h: half - covered,
+        };
+        if revealed.h > 0.0 {
+            draw_plate_glyph(&mut buffer, local, to, paint, revealed, baseline);
+        }
+    }
+
+    let mask = plate_mask(local, PLATE_RADIUS_EM * paint.font_px, width, height);
+    if !frame.top.is_settled() {
+        let covered = half * frame.top.scale;
+        draw_falling_half(
+            &mut buffer,
+            &FallingFlap {
+                plate: local,
+                ch: glyph_of(frame.top, from, to),
+                clip: top_half,
+                half: frame.top,
+                footprint: Rect {
+                    x: local.x,
+                    y: seam - covered,
+                    w: local.w,
+                    h: covered,
+                },
+                pivot: seam,
+            },
+            paint,
+            mask.as_ref(),
+            baseline,
+        );
+    }
+    if !frame.bottom.is_settled() {
+        let covered = half * frame.bottom.scale;
+        draw_falling_half(
+            &mut buffer,
+            &FallingFlap {
+                plate: local,
+                ch: glyph_of(frame.bottom, from, to),
+                clip: bottom_half,
+                half: frame.bottom,
+                footprint: Rect {
+                    x: local.x,
+                    y: seam,
+                    w: local.w,
+                    h: covered,
+                },
+                pivot: seam,
+            },
+            paint,
+            mask.as_ref(),
+            baseline,
+        );
+    }
+    draw_plate_seam(&mut buffer, local, paint, local);
+
+    // One exact blit at the integer origin: no resampling of the plate, no second blend.
+    pixmap.draw_pixmap(
+        origin_x as i32,
+        origin_y as i32,
+        buffer.as_ref(),
+        &PixmapPaint::default(),
+        Transform::identity(),
+        None,
+    );
+}
+
+/// The falling half of a plate (ADR-0037): its old glyph rendered into a scratch pixmap,
+/// compressed vertically about the seam, then shaded towards black inside its footprint.
+fn draw_falling_half(
+    buffer: &mut Pixmap,
+    flap: &FallingFlap,
+    paint: PlatePaint<'_>,
+    mask: Option<&Mask>,
+    baseline: f32,
+) {
+    // Flat on the seam: the flap has nothing left to show.
+    if flap.half.scale <= 0.0 {
+        return;
+    }
+    let Some(mut falling) = Pixmap::new(buffer.width(), buffer.height()) else {
+        return;
+    };
+    // Only the falling half travels; everything else in the scratch stays transparent.
+    draw_plate_glyph(
+        &mut falling,
+        flap.plate,
+        flap.ch,
+        paint,
+        flap.clip,
+        baseline,
+    );
+    let transform = Transform::from_row(
+        1.0,
+        0.0,
+        0.0,
+        flap.half.scale,
+        0.0,
+        flap.pivot * (1.0 - flap.half.scale),
+    );
+    buffer.draw_pixmap(
+        0,
+        0,
+        falling.as_ref(),
+        &PixmapPaint {
+            // Bilinear keeps the compressed glyph halves from breaking up as they shrink.
+            quality: FilterQuality::Bilinear,
+            ..PixmapPaint::default()
+        },
+        transform,
+        mask,
+    );
+    let alpha = (flap.half.shade * 255.0).round().clamp(0.0, 255.0) as u8;
+    if alpha == 0 {
+        return;
+    }
+    let Some(footprint) = tiny_skia::Rect::from_xywh(
+        flap.footprint.x,
+        flap.footprint.y,
+        flap.footprint.w,
+        flap.footprint.h,
+    ) else {
+        return;
+    };
+    let mut shadow = Paint::default();
+    shadow.set_color(Color::from_rgba8(0, 0, 0, alpha));
+    buffer.fill_path(
+        &PathBuilder::from_rect(footprint),
+        &shadow,
+        FillRule::Winding,
+        Transform::identity(),
+        mask,
+    );
+}
+
+/// The rounded silhouette of a plate in the scratch buffer: the falling flap and its shadow
+/// stay clipped to the plate, seam included (ADR-0037).
+fn plate_mask(rect: Rect, radius: f32, width: u32, height: u32) -> Option<Mask> {
+    let mut mask = Mask::new(width, height)?;
+    let rect = tiny_skia::Rect::from_xywh(rect.x, rect.y, rect.w, rect.h)?;
+    let path = rounded_rect(rect, radius)?;
+    mask.fill_path(&path, FillRule::Winding, true, Transform::identity());
+    Some(mask)
+}
+
+/// Draws one plate glyph centred in `plate`, clipped to `clip`.
+fn draw_plate_glyph(
+    pixmap: &mut Pixmap,
+    plate: Rect,
+    ch: char,
+    paint: PlatePaint<'_>,
+    clip: Rect,
+    baseline: f32,
+) {
+    let mut utf8 = [0u8; 4];
+    let character = ch.encode_utf8(&mut utf8);
+    let style = TextStyle {
+        font: paint.font,
+        px: paint.font_px,
+        color: paint.glyph,
+        clip,
+        tracking: 0.0,
+    };
+    let advance = measure(character, paint.font, paint.font_px);
+    draw_text(
+        pixmap,
+        character,
+        &style,
+        plate.x + plate.w / 2.0 - advance / 2.0,
+        baseline,
+    );
+}
+
+/// The seam across the middle of a plate, painted over the glyph like the gap between the two
+/// flaps of a plate (ADR-0036).
+fn draw_plate_seam(pixmap: &mut Pixmap, plate: Rect, paint: PlatePaint<'_>, bounds: Rect) {
+    let seam_h = PLATE_SEAM_EM * paint.font_px;
+    let seam = Rect {
+        x: plate.x,
+        y: plate.y + plate.h / 2.0 - seam_h / 2.0,
+        w: plate.w,
+        h: seam_h,
+    };
+    if let Some(seam) = clipped(seam, bounds) {
+        fill_panel(pixmap, seam, 0.0, paint.colors.seam);
+    }
+}
+
+/// Baseline of the glyph centred on a plate: the same one ADR-0036 draws.
+fn plate_baseline(plate: Rect, font: &ab_glyph::FontVec, font_px: f32) -> f32 {
+    let scaled = font.as_scaled(PxScale::from(font_px));
+    plate.y + plate.h / 2.0 + (scaled.ascent() + scaled.descent()) / 2.0
+}
+
+/// The character a half of a plate shows (ADR-0037).
+fn glyph_of(half: FlapHalf, from: char, to: char) -> char {
+    match half.glyph {
+        FlapGlyph::From => from,
+        FlapGlyph::To => to,
+    }
+}
+
+/// Fills a rounded rectangle with a solid colour.
+fn fill_panel(pixmap: &mut Pixmap, rect: Rect, radius: f32, color: Color) {
+    let Some(rect) = tiny_skia::Rect::from_xywh(rect.x, rect.y, rect.w, rect.h) else {
+        return;
+    };
+    let Some(path) = rounded_rect(rect, radius) else {
+        return;
+    };
+    let mut paint = Paint::default();
+    paint.set_color(color);
+    pixmap.fill_path(
+        &path,
+        &paint,
+        FillRule::Winding,
+        Transform::identity(),
+        None,
+    );
+}
+
+/// Whether `rect` paints entirely inside `bounds`, so it needs no clipping. Compares the
+/// edges instead of re-deriving a rectangle: `clipped` reconstructs one and the last bit of
+/// `w` would not always match.
+fn inside(rect: Rect, bounds: Rect) -> bool {
+    rect.x >= bounds.x
+        && rect.y >= bounds.y
+        && rect.x + rect.w <= bounds.x + bounds.w
+        && rect.y + rect.h <= bounds.y + bounds.h
+}
+
+/// Intersection of `rect` with `bounds`; `None` when nothing is left to paint.
+fn clipped(rect: Rect, bounds: Rect) -> Option<Rect> {
+    let x = rect.x.max(bounds.x);
+    let y = rect.y.max(bounds.y);
+    let right = (rect.x + rect.w).min(bounds.x + bounds.w);
+    let bottom = (rect.y + rect.h).min(bounds.y + bounds.h);
+    (right > x && bottom > y).then_some(Rect {
+        x,
+        y,
+        w: right - x,
+        h: bottom - y,
+    })
 }
 
 fn draw_text(pixmap: &mut Pixmap, text: &str, style: &TextStyle<'_>, start_x: f32, baseline: f32) {
@@ -2559,6 +3312,278 @@ mod tests {
             turned.pixel(FRAME_WIDTH / 2, FRAME_HEIGHT / 2),
             (0, 0, 0),
             "the counter still covers the middle of the frame"
+        );
+    }
+
+    /// The split-flap preset with the solid background the web sends for it (ADR-0036).
+    fn splitflap_input() -> CounterInput {
+        let mut input = input();
+        input.display.theme = "splitflap".into();
+        input.display.background = BackgroundStyle {
+            mode: BackgroundMode::Solid,
+            ..BackgroundStyle::default()
+        };
+        input
+    }
+
+    /// Plate face of the split-flap preset (`backgroundAlt`).
+    const FLAP_FACE: (u8, u8, u8) = (0x1e, 0x21, 0x26);
+    /// Board behind the plates, also the seam and the gap (`background`).
+    const FLAP_BOARD: (u8, u8, u8) = (0x0b, 0x0c, 0x0f);
+
+    /// Sum of the channels of one pixel row inside `rect`: the seam is darker than a plate.
+    fn row_brightness(frame: &Frame, y: u32, rect: Rect) -> u64 {
+        let mut total = 0;
+        for x in rect.x as u32..(rect.x + rect.w) as u32 {
+            let (r, g, b) = frame.pixel(x, y);
+            total += u64::from(r) + u64::from(g) + u64::from(b);
+        }
+        total
+    }
+
+    #[test]
+    fn plated_width_matches_the_core_geometry() {
+        // Same numbers as `platedWidth` in `packages/core/src/themes.ts` (ADR-0036).
+        assert!((plated_width("1234", 100.0) - 312.0).abs() < 0.01);
+        assert!((plated_width("12:34", 100.0) - 392.0).abs() < 0.01);
+        assert!((plated_width("1 2", 100.0) - 192.0).abs() < 0.01);
+        assert_eq!(plated_width("", 100.0), 0.0);
+        assert!((plated_width(" ", 100.0) - 40.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_split_flap_frame_draws_plates_with_a_seam() {
+        let frame = render(&splitflap_input(), &fonts(), 1_060_000, None);
+        let layout = fullscreen_layout(1.0);
+        assert!(
+            has_colour(&frame, layout.cost, FLAP_FACE),
+            "the cost letters sit on plate faces"
+        );
+
+        // Vertical extent of the plate faces in the cost row; the seam splits them in half.
+        let mut top = u32::MAX;
+        let mut bottom = 0;
+        for y in layout.cost.y as u32..(layout.cost.y + layout.cost.h) as u32 {
+            let has_face = (layout.cost.x as u32..(layout.cost.x + layout.cost.w) as u32)
+                .any(|x| frame.pixel(x, y) == FLAP_FACE);
+            if has_face {
+                top = top.min(y);
+                bottom = bottom.max(y);
+            }
+        }
+        assert!(bottom > top, "no plate rows in the cost box");
+        let middle = (top + bottom) / 2;
+        let quarter = (bottom - top) / 4;
+        let seam = row_brightness(&frame, middle, layout.cost);
+        assert!(
+            seam < row_brightness(&frame, middle - quarter, layout.cost),
+            "the seam at {middle} is darker than the plate above it"
+        );
+        assert!(
+            seam < row_brightness(&frame, middle + quarter, layout.cost),
+            "the seam at {middle} is darker than the plate below it"
+        );
+    }
+
+    #[test]
+    fn a_split_flap_label_stays_plain_text() {
+        let frame = render(&splitflap_input(), &fonts(), 1_060_000, None);
+        let band = fullscreen_layout(1.0).label.expect("the label band");
+        assert!(
+            ink_inside(&frame, band, FLAP_BOARD) > 0,
+            "the label is drawn"
+        );
+        assert!(
+            !has_colour(&frame, band, FLAP_FACE),
+            "captions are never plated (ADR-0036)"
+        );
+    }
+
+    #[test]
+    fn the_split_flap_cost_stays_inside_its_box() {
+        let fonts = fonts();
+        let shown = render(&splitflap_input(), &fonts, 1_060_000, None);
+        let layout = fullscreen_layout(1.0);
+        assert!(
+            has_colour(&shown, layout.cost, FLAP_FACE),
+            "the cost is drawn on plates"
+        );
+
+        // Everything the cost paints — plates, glyphs and seam — must stay in its box.
+        let mut hidden_input = splitflap_input();
+        hidden_input.display.elements.cost.visible = false;
+        let hidden = render(&hidden_input, &fonts, 1_060_000, None);
+        assert_eq!(
+            differing_outside(&shown, &hidden, layout.cost),
+            0,
+            "the cost plates overflow their layout box"
+        );
+    }
+
+    /// The split-flap preset, stopped: the cost text only depends on `rate`, so the frames of a
+    /// fall are comparable at any `now_ms` (ADR-0037).
+    fn stopped_splitflap(rate_per_ms: f64) -> CounterInput {
+        let mut input = splitflap_input();
+        input.rate_per_ms = rate_per_ms;
+        input.end_at = Some(1_060_000);
+        input
+    }
+
+    #[test]
+    fn flap_frame_matches_the_shared_model() {
+        // Same numbers as `flapFrame` in `packages/core/src/themes.ts` (ADR-0037).
+        let settled = |glyph| FlapHalf {
+            glyph,
+            scale: 1.0,
+            shade: 0.0,
+        };
+        let diagonal = std::f32::consts::FRAC_1_SQRT_2;
+        let shaded = FLIP_SHADE * (1.0 - diagonal);
+
+        assert_eq!(
+            flap_frame(0.0),
+            FlapFrame {
+                top: settled(FlapGlyph::From),
+                bottom: settled(FlapGlyph::From),
+            }
+        );
+        let first = flap_frame(0.25);
+        assert_eq!(first.top.glyph, FlapGlyph::From);
+        assert!(
+            (first.top.scale - diagonal).abs() < 1e-4,
+            "top scale {}",
+            first.top.scale
+        );
+        assert!(
+            (first.top.shade - shaded).abs() < 1e-4,
+            "top shade {}",
+            first.top.shade
+        );
+        assert_eq!(first.bottom, settled(FlapGlyph::From));
+
+        assert_eq!(
+            flap_frame(0.5),
+            FlapFrame {
+                top: settled(FlapGlyph::To),
+                bottom: settled(FlapGlyph::From),
+            }
+        );
+        let second = flap_frame(0.75);
+        assert_eq!(second.top, settled(FlapGlyph::To));
+        assert_eq!(second.bottom.glyph, FlapGlyph::From);
+        assert!((second.bottom.scale - diagonal).abs() < 1e-4);
+        assert!((second.bottom.shade - shaded).abs() < 1e-4);
+        assert_eq!(
+            flap_frame(1.0),
+            FlapFrame {
+                top: settled(FlapGlyph::To),
+                bottom: settled(FlapGlyph::To),
+            }
+        );
+
+        // Out-of-range progress clamps to the ends of the fall.
+        assert_eq!(flap_frame(-1.0), flap_frame(0.0));
+        assert_eq!(flap_frame(2.0), flap_frame(1.0));
+
+        // One fall lasts FLIP_MS.
+        assert_eq!(flap_progress(1_000, 1_000 + FLIP_MS / 2), 0.5);
+        assert_eq!(flap_progress(1_000, 900), 0.0);
+        assert_eq!(flap_progress(1_000, 5_000), 1.0);
+    }
+
+    #[test]
+    fn a_second_change_restarts_the_fall_from_the_glyph_on_the_plate() {
+        let mut flaps = FlapState::default();
+        flaps.advance(FlapElement::Cost, "12", 1_000);
+        let settled = flaps.plate(FlapElement::Cost, 1).expect("a plate");
+        assert_eq!(
+            (settled.from, settled.to),
+            ('2', '2'),
+            "a plate that was not there before starts settled"
+        );
+
+        flaps.advance(FlapElement::Cost, "13", 2_000);
+        // Still in the first half of the fall: the plate shows '2', so the new fall starts
+        // there instead of queueing behind the one in flight.
+        flaps.advance(FlapElement::Cost, "14", 2_050);
+        let restart = flaps.plate(FlapElement::Cost, 1).expect("a plate");
+        assert_eq!((restart.from, restart.to), ('2', '4'));
+        assert_eq!(restart.started_ms, 2_050, "plates never queue");
+
+        // Past the seam the plate already shows '4': the next change starts from there.
+        flaps.advance(FlapElement::Cost, "15", 2_200);
+        let later = flaps.plate(FlapElement::Cost, 1).expect("a plate");
+        assert_eq!((later.from, later.to), ('4', '5'));
+        assert_eq!(later.started_ms, 2_200);
+
+        // A shorter value leaves no stale plate behind.
+        flaps.advance(FlapElement::Cost, "1", 2_300);
+        assert_eq!(flaps.plate(FlapElement::Cost, 1), None);
+    }
+
+    #[test]
+    fn a_changed_character_flips_and_settles() {
+        let fonts = fonts();
+        let at = 1_060_000;
+        let before = stopped_splitflap(0.01);
+        let after = stopped_splitflap(0.011);
+        let mut flaps = FlapState::default();
+
+        render_animated(&before, &fonts, at, None, &mut flaps);
+        // The new value at the same instant starts the fall on the plates that changed.
+        render_animated(&after, &fonts, at, None, &mut flaps);
+        let mid = render_animated(&after, &fonts, at + FLIP_MS / 2, None, &mut flaps);
+        let flipped = render_animated(&after, &fonts, at + FLIP_MS, None, &mut flaps);
+        let settled = render(&after, &fonts, at + FLIP_MS, None);
+
+        let layout = fullscreen_layout(1.0);
+        assert!(
+            differing_pixels(&mid, &settled, layout.cost) > 0,
+            "the changed plate is mid-fall inside the cost box"
+        );
+        assert_eq!(
+            flipped, settled,
+            "the fall settles on a frame identical to a stateless render of the new value"
+        );
+    }
+
+    #[test]
+    fn an_unchanged_character_does_not_flip() {
+        let fonts = fonts();
+        let input = stopped_splitflap(0.01);
+        let mut flaps = FlapState::default();
+        let first = render_animated(&input, &fonts, 1_060_000, None, &mut flaps);
+        let second = render_animated(&input, &fonts, 1_060_040, None, &mut flaps);
+        assert_eq!(first, second, "a settled row is left untouched");
+    }
+
+    #[test]
+    fn a_mid_flip_plate_stays_inside_its_box() {
+        let fonts = fonts();
+        let at = 1_060_000;
+        let changed = stopped_splitflap(0.011);
+        let mut flaps = FlapState::default();
+        render_animated(&stopped_splitflap(0.01), &fonts, at, None, &mut flaps);
+        // A second state with the same history paints the same fall without the cost row.
+        let mut hidden_flaps = flaps.clone();
+        render_animated(&changed, &fonts, at, None, &mut flaps);
+        render_animated(&changed, &fonts, at, None, &mut hidden_flaps);
+
+        let mid = render_animated(&changed, &fonts, at + FLIP_MS / 2, None, &mut flaps);
+        let mut hidden = changed.clone();
+        hidden.display.elements.cost.visible = false;
+        let hidden_mid =
+            render_animated(&hidden, &fonts, at + FLIP_MS / 2, None, &mut hidden_flaps);
+
+        let layout = fullscreen_layout(1.0);
+        assert!(
+            has_colour(&mid, layout.cost, FLAP_FACE),
+            "the falling plate is still drawn on its face"
+        );
+        assert_eq!(
+            differing_outside(&mid, &hidden_mid, layout.cost),
+            0,
+            "the falling plate overflows its layout box"
         );
     }
 }

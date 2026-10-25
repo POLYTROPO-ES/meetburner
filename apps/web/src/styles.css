@@ -357,6 +357,84 @@ button.counter-stop:focus-visible {
   color: var(--el-cost-color, var(--text));
 }
 .counter-view .total.measure { position: absolute; visibility: hidden; pointer-events: none; }
+/* Split-flap values (ADR-0036): one plate per character, sized in ems of the element font size. */
+.counter-view .plates {
+  display: inline-flex;
+  gap: 0.08em;
+  align-items: center;
+  vertical-align: middle;
+}
+.counter-view .plate {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 0.72em;
+  height: 1.15em;
+  border-radius: 0.08em;
+  background: color-mix(in srgb, var(--bg-alt) calc(var(--bg-opacity) * 1%), transparent);
+  perspective: 5em;
+}
+/* Each half clips the full glyph, so either half can turn around the seam on its own (ADR-0037). */
+.counter-view .plate-half {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+.counter-view .plate-half > span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 200%;
+  display: grid;
+  place-items: center;
+}
+.counter-view .plate-half-top { top: 0; }
+.counter-view .plate-half-top > span { top: 0; }
+.counter-view .plate-half-bottom { bottom: 0; }
+.counter-view .plate-half-bottom > span { bottom: 0; }
+/* The falling flap is the old glyph on its own half-face, shaded as it turns. */
+.counter-view .plate-flap {
+  z-index: 2;
+  background: color-mix(in srgb, var(--bg-alt) calc(var(--bg-opacity) * 1%), transparent);
+  backface-visibility: hidden;
+}
+.counter-view .plate-flap-top {
+  border-radius: 0.08em 0.08em 0 0;
+  transform-origin: bottom;
+  animation: plate-flap-top calc(var(--flip) / 2) ease-in forwards;
+}
+.counter-view .plate-flap-bottom {
+  border-radius: 0 0 0.08em 0.08em;
+  transform-origin: top;
+  animation: plate-flap-bottom calc(var(--flip) / 2) ease-in calc(var(--flip) / 2) forwards;
+}
+@keyframes plate-flap-top {
+  from { transform: rotateX(0deg); filter: brightness(1); }
+  to { transform: rotateX(-90deg); filter: brightness(calc(1 - var(--flip-shade, 0.35))); }
+}
+@keyframes plate-flap-bottom {
+  from { transform: rotateX(0deg); filter: brightness(1); }
+  to { transform: rotateX(90deg); filter: brightness(calc(1 - var(--flip-shade, 0.35))); }
+}
+/* The seam across the middle, painted with the board colour so it reads as a hinge; it stays on
+   top of both settled and flipping halves. */
+.counter-view .plate::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(50% - 0.02em);
+  height: 0.04em;
+  pointer-events: none;
+  z-index: 3;
+  background: color-mix(in srgb, var(--bg) calc(var(--bg-opacity) * 1%), transparent);
+}
+.counter-view .plate-space { flex: none; width: 0.4em; }
 .counter-view.running .total { color: var(--el-cost-color, var(--accent)); }
 .counter-view .status {
   margin: 0;

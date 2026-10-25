@@ -12,7 +12,7 @@ describe('Rust theme mirror', () => {
     expect(normalize(generated)).toBe(normalize(renderRustThemes(THEMES)));
   });
 
-  it('renders every theme with its colours, font, weight and radius', () => {
+  it('renders every theme with its colours, font, weight, radius and plates', () => {
     const rust = renderRustThemes({
       classic: {
         background: '#0f1115',
@@ -24,6 +24,19 @@ describe('Rust theme mirror', () => {
         weight: 700,
         radius: 12,
         decoration: '',
+        plates: 'none',
+      },
+      splitflap: {
+        background: '#0b0c0f',
+        backgroundAlt: '#1e2126',
+        text: '#f7f3e8',
+        muted: '#a7a294',
+        accent: '#ffb020',
+        font: 'condensed',
+        weight: 700,
+        radius: 4,
+        decoration: '',
+        plates: 'flap',
       },
     });
     expect(rust).toContain('"classic"');
@@ -31,5 +44,8 @@ describe('Rust theme mirror', () => {
     expect(rust).toContain('FontId::System');
     expect(rust).toContain('weight: 700.0');
     expect(rust).toContain('radius: 12.0');
+    expect(rust).toContain('use super::{FontId, PlateStyle, Theme};');
+    expect(rust).toContain('plates: PlateStyle::None');
+    expect(rust).toContain('plates: PlateStyle::Flap');
   });
 });
