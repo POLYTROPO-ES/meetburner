@@ -5,6 +5,7 @@ import {
   cameraInput,
   DEFAULT_CAMERA,
   effectiveOverlay,
+  hasVideoBackground,
   normalizeCamera,
 } from './camera';
 import { createMeeting, totalHourlyRate } from './cost';
@@ -28,6 +29,7 @@ describe('camera settings', () => {
         width: size.width,
         height: size.height,
         source: null,
+        video: false,
       });
     }
     expect(normalizeCamera({ width: 500, height: 500 })).toEqual(DEFAULT_CAMERA);
@@ -39,6 +41,15 @@ describe('camera settings', () => {
     expect(normalizeCamera({ width: 1280, height: 720, source: '1' }).source).toBe('1');
     expect(normalizeCamera({ width: 1280, height: 720, source: '' }).source).toBeNull();
     expect(normalizeCamera({ width: 1280, height: 720, source: 7 }).source).toBeNull();
+  });
+
+  it('keeps the video background on or off, and reads old settings from the source', () => {
+    expect(normalizeCamera({ source: '1', video: false })).toMatchObject({ source: '1', video: false });
+    expect(normalizeCamera({ source: null, video: true })).toMatchObject({ source: null, video: true });
+    // Settings stored before the switch existed had a webcam exactly when video was on.
+    expect(normalizeCamera({ source: '1' }).video).toBe(true);
+    expect(normalizeCamera({}).video).toBe(false);
+    expect(normalizeCamera({ source: '1', video: 'yes' }).video).toBe(true);
   });
 
   it('offers a default size from the supported list', () => {
@@ -75,6 +86,7 @@ describe('camera settings', () => {
         width: size.width,
         height: size.height,
         source: null,
+        video: false,
       });
     }
   });
@@ -151,6 +163,7 @@ describe('camera input', () => {
       width: 1920,
       height: 1080,
       source: null,
+      video: false,
     });
     expect({ width: input.width, height: input.height }).toEqual({ width: 1920, height: 1080 });
   });
@@ -160,18 +173,31 @@ describe('camera input', () => {
       width: 1280,
       height: 720,
       source: '2',
+      video: true,
     });
     expect(input.source).toBe('2');
     expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'en', DEFAULT_CAMERA).source).toBeNull();
   });
+
+  it('never opens the webcam for a counter-only camera', () => {
+    // "Only counter" keeps the remembered webcam but must not capture it.
+    const remembered = { width: 1280, height: 720, source: '2', video: false };
+    expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'en', remembered).source).toBeNull();
+    expect(effectiveOverlay(DEFAULT_DISPLAY, remembered)).toEqual(FULL_FRAME);
+    expect(hasVideoBackground(remembered)).toBe(false);
+  });
 });
 
 describe('the card the camera draws', () => {
-  const webcam = { width: 1280, height: 720, source: '1' };
+  const webcam = { width: 1280, height: 720, source: '1', video: true };
 
-  it('covers the frame when there is no webcam to sit on', () => {
+  it('covers the frame when there is no video behind it', () => {
     expect(effectiveOverlay(DEFAULT_DISPLAY, DEFAULT_CAMERA)).toEqual(FULL_FRAME);
     expect(cameraInput(meeting(), DEFAULT_DISPLAY, 'en', DEFAULT_CAMERA).display.layout).toBe('fullscreen');
+    // "Add video background" with no webcam picked yet is still counter only.
+    const choosing = { ...DEFAULT_CAMERA, video: true };
+    expect(hasVideoBackground(choosing)).toBe(false);
+    expect(effectiveOverlay(DEFAULT_DISPLAY, choosing)).toEqual(FULL_FRAME);
   });
 
   it('falls back to the built-in corner once a webcam is chosen', () => {

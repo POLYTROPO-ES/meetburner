@@ -70,12 +70,21 @@ Everything you type stays in the browser's local storage on that device. There i
 
 ## Placing the card on the camera (desktop)
 
-The counter style section shows the camera frame with the counter card on it, and it is the only
-place the card is configured: drag it to move it, drag its corner to resize it, drag the round
-handle at its top to turn it. **Fill frame** makes the card cover the whole frame (the camera
-then shows the counter alone, without the webcam behind it) and **Reset position** puts it back
-in the bottom-right corner. The style controls right below the frame edit the same card, so what
-you see there is what the camera sends.
+Above the preview pick **Only counter** or **Add video background**:
+
+- **Only counter** publishes the counter alone; the webcam never opens, even if one is
+  remembered.
+- **Add video background** shows the camera options (webcam, resolution, mirrors) and the
+  chosen webcam as the video behind the card.
+
+The preview is the only place the card is configured: drag it to move it, drag its corner to
+resize it, drag the round handle at its top to turn it. **Fill frame** makes the card cover the
+whole frame (the camera then shows the counter alone) and **Back to card** returns it to a
+corner card; **Reset position** appears once you have placed it by hand.
+
+If the preview cannot open the webcam — another app is using it, or the system denies access —
+a message appears over the frame. The counter and the virtual camera keep working: pick another
+webcam or switch back to **Only counter**.
 
 ## Virtual camera (Windows)
 
