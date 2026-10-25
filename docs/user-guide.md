@@ -89,7 +89,8 @@ corner to resize it, drag the round handle at its top to turn it. **Fill frame**
 cover the whole frame and **Back to card** returns it to a corner card; **Reset position**
 appears once you have placed it by hand.
 
-If the preview cannot open the webcam — another app is using it, or the system denies access —
+If the webcam cannot be opened — usually because another app (Teams, Zoom, the Camera app) is
+using it —
 a message appears over the frame. The counter and the virtual camera keep working: pick another
 webcam or switch back to **Only counter**.
 

@@ -18,6 +18,7 @@ import {
   type OverlayRect,
 } from '@meetburner/core';
 import { CounterView } from './CounterView';
+import { useCameraPreview } from './cameraPreview';
 
 interface Props {
   display: DisplaySettings;
@@ -26,10 +27,6 @@ interface Props {
   snapshot: MeetingSnapshot;
   lang: Lang;
   now: number;
-  /** Live webcam for the background, or null when there is no video (ADR-0033). */
-  stream: MediaStream | null;
-  /** Why the preview has no video; the counter keeps working regardless. */
-  previewError: string | null;
   /** Rotation in force for the selected style, in degrees. */
   rotation: number;
   /** New card rectangle; `null` restores the built-in corner. */
@@ -63,14 +60,13 @@ export function OverlayEditor({
   snapshot,
   lang,
   now,
-  stream,
-  previewError,
   rotation,
   onRect,
   onRotation,
 }: Props) {
   const stage = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
+  const video = useRef<HTMLCanvasElement>(null);
   const drag = useRef<Drag | null>(null);
   const turn = useRef<Turn | null>(null);
   const rect = effectiveOverlay(display, camera);
@@ -78,6 +74,7 @@ export function OverlayEditor({
   const full = fillsFrame(rect);
   // Without video the counter always fills the frame, so there is nothing to move or resize.
   const placeable = hasVideoBackground(camera);
+  const preview = useCameraPreview(placeable, video);
   const radius = styleFor(display, resolveTheme(display.theme, new Date(now))).background.radius;
   const state = !camera.video
     ? t(lang, 'overlayOnlyCounter')
@@ -192,25 +189,26 @@ export function OverlayEditor({
           width: `min(100cqw, calc(100cqh * ${camera.width / camera.height}))`,
         }}
       >
-        {stream && (
-          <video
+        {placeable && (
+          <canvas
+            ref={video}
             className="overlay-video"
-            autoPlay
-            muted
-            playsInline
-            ref={(element) => {
-              // The stream outlives re-renders; assigning it once per stream is enough.
-              if (element && element.srcObject !== stream) element.srcObject = stream;
-            }}
+            aria-hidden="true"
+            hidden={preview.status !== 'live'}
             style={{
               transform: `scaleX(${display.mirror.sourceH ? -1 : 1}) scaleY(${display.mirror.sourceV ? -1 : 1})`,
             }}
           />
         )}
-        {previewError && (
+        {preview.status === 'waiting' && (
+          <p className="overlay-note" role="status">
+            {t(lang, 'videoPreviewWaiting')}
+          </p>
+        )}
+        {preview.status === 'error' && (
           <p className="overlay-error" role="status">
             {t(lang, 'videoPreviewFailed')}
-            <span className="muted"> — {previewError}</span>
+            <span className="muted"> — {preview.error}</span>
           </p>
         )}
         <div

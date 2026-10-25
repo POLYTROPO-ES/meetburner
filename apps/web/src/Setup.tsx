@@ -14,6 +14,7 @@ import {
   formatMoney,
   fromLocalInputValue,
   GRADIENT_DIRECTIONS,
+  hasVideoBackground,
   LANGS,
   MAX_OPACITY,
   MAX_RADIUS,
@@ -49,7 +50,6 @@ import {
   type ThemeId,
 } from '@meetburner/core';
 import { CounterView } from './CounterView';
-import { useCameraPreview } from './cameraPreview';
 import { OverlayEditor } from './OverlayEditor';
 import {
   cameraDriverEnsure,
@@ -140,11 +140,12 @@ export function Setup() {
   const [sources, setSources] = useState<CameraSource[]>([]);
   // Windows is live once the driver is registered; Linux once the loopback device exists.
   const cameraReady = isWindows() ? driver?.registered === true : v4l2?.available === true;
-  // The camera is live while the app is open, as soon as the backend can publish.
-  const cameraError = useCameraSync(cameraInput(meeting, display, lang, camera), hasVirtualCamera() && cameraReady);
-  // "Add video background" shows the chosen webcam in the setup preview (ADR-0033).
-  const sourceName = sources.find((source) => source.id === camera.source)?.name ?? null;
-  const preview = useCameraPreview(hasVirtualCamera() && camera.video && sourceName !== null, sourceName);
+  // The camera is live while the app is open, as soon as the backend can publish. With a video
+  // background it also runs before that: the setup preview shows the webcam it captures (ADR-0035).
+  const cameraError = useCameraSync(
+    cameraInput(meeting, display, lang, camera),
+    hasVirtualCamera() && (cameraReady || hasVideoBackground(camera)),
+  );
 
   useEffect(() => {
     if (!hasVirtualCamera()) return;
@@ -644,8 +645,6 @@ export function Setup() {
               snapshot={meetingSnapshot(meeting, now)}
               lang={lang}
               now={now}
-              stream={preview.stream}
-              previewError={preview.error}
               rotation={style.rotation}
               onRect={(overlay) => updateDisplay({ overlay })}
               onRotation={(rotation) => saveStyle({ ...style, rotation })}
