@@ -44,6 +44,12 @@ export async function cameraStop(): Promise<void> {
   await invoke('camera_stop');
 }
 
+/** Newest webcam frame the camera captured, for the setup preview; empty while there is none (ADR-0035). */
+export async function cameraPreviewFrame(): Promise<ArrayBuffer | number[]> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<ArrayBuffer | number[]>('camera_preview_frame');
+}
+
 export interface DriverStatus {
   registered: boolean;
   available: boolean;

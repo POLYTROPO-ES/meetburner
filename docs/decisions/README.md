@@ -50,3 +50,4 @@ Template:
 | [0032](0032-one-counter-surface.md) | One place to configure the counter; Layout is derived from the card | accepted (mode amended by 0033) |
 | [0033](0033-only-counter-or-video.md) | Only counter or video with a live preview; camera options appear with video | accepted |
 | [0034](0034-studio-shell.md) | The setup page is a shell: editor on the left, the counter always in view | accepted |
+| [0035](0035-preview-from-the-pipeline.md) | The setup preview shows the webcam the camera pipeline captures | accepted |

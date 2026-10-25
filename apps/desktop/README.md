@@ -26,7 +26,7 @@ End-user instructions live in the [user guide](../../docs/user-guide.md).
 | `sink` | `VirtualCameraSink` trait, `NullSink`, `RecordingSink`, `WinSharedMemSink` |
 | `engine` | 30 fps render thread, never on the Tauri main thread |
 
-Tauri commands: `camera_start(config)`, `camera_update(config)`, `camera_stop()`.
+Tauri commands: `camera_start(config)`, `camera_update(config)`, `camera_stop()`, and `camera_preview_frame()`, which returns the newest webcam frame the pipeline captured for the setup preview (`[width u32 LE][height u32 LE]` then RGBA, empty while there is none; ADR-0035).
 
 The camera is live while the app is open: the UI starts it as soon as the driver is registered and stops it when the driver is cleaned (ADR-0018). Before the meeting starts the renderer publishes an idle frame (`00:00:00` / `0,00 €`), so meeting apps can preview the device. Camera errors are returned to the UI and shown in the setup page; they never stop the app.
 

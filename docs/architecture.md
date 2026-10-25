@@ -48,7 +48,7 @@ flowchart LR
 
 - Themes (classic, modern, formal, halloween, christmas, 4 seasons, minimalist) are plain data in `packages/core/src/themes.ts`, shared by the web UI (CSS variables) and the Rust camera renderer.
 - Layout `fullscreen` (the card covers the frame) or `widget` (a card over the source webcam). It is **derived** from the card rectangle by `cameraInput`, never stored, and the setup page no longer asks for it ([ADR-0032](decisions/0032-one-counter-surface.md)).
-- The setup page asks one explicit question instead: **Only counter** or **Add video background** (`CameraSettings.video`). Video mode reveals the camera options under the preview and shows the chosen webcam live behind the card; a preview that cannot open the camera only shows a message ([ADR-0033](decisions/0033-only-counter-or-video.md)).
+- The setup page asks one explicit question instead: **Only counter** or **Add video background** (`CameraSettings.video`). Video mode reveals the camera options under the preview and shows the chosen webcam behind the card ([ADR-0033](decisions/0033-only-counter-or-video.md)). Those frames come from the camera pipeline through `camera_preview_frame`, never from a second capture in the webview, because most webcam drivers accept one consumer ([ADR-0035](decisions/0035-preview-from-the-pipeline.md)).
 - User picks the font and size of the cost and of the time. `CounterView` renders the setup preview and the counter window; the desktop setup page renders the same component inside the card it places on the frame, so preview and output cannot drift ([ADR-0032](decisions/0032-one-counter-surface.md)).
 
 ## Hosting

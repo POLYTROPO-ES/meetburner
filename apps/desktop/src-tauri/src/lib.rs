@@ -98,6 +98,29 @@ fn camera_stop(state: State<'_, CameraState>) -> Result<(), String> {
     Ok(())
 }
 
+/// Longest side of a setup preview frame: sharp enough for the stage, small over IPC.
+const PREVIEW_LONGEST: u32 = 480;
+
+/// Newest webcam frame for the setup preview (ADR-0035): `[width u32 LE][height u32 LE]` then
+/// RGBA, empty while there is none. The webview never opens the webcam itself: Windows and most
+/// Linux drivers allow one consumer, and the camera pipeline already is it.
+#[tauri::command]
+fn camera_preview_frame(state: State<'_, CameraState>) -> Result<tauri::ipc::Response, String> {
+    let engine = state
+        .0
+        .lock()
+        .map_err(|_| "camera state is poisoned".to_string())?;
+    let frame = match engine.as_ref() {
+        Some(running) => running.preview(PREVIEW_LONGEST)?,
+        None => None,
+    };
+    Ok(tauri::ipc::Response::new(
+        frame
+            .map(|frame| frame.to_rgba_payload())
+            .unwrap_or_default(),
+    ))
+}
+
 /// Physical cameras the overlay can composite the counter over (M7).
 #[tauri::command]
 fn camera_list_sources() -> Vec<camera::CameraSource> {
@@ -180,16 +203,11 @@ fn camera_mf_unregister(app: tauri::AppHandle) -> Result<camera::mf::MfStatus, S
 pub fn run() {
     tauri::Builder::default()
         .manage(CameraState::default())
-        // The setup page shows the chosen webcam as the card's background (ADR-0033). WebView2
-        // denies media capture unless the host allows it; the app only ever loads its own UI.
-        .on_permission_request(|_webview, kind| match kind {
-            tauri::webview::PermissionKind::Camera => tauri::webview::PermissionResponse::Allow,
-            _ => tauri::webview::PermissionResponse::Default,
-        })
         .invoke_handler(tauri::generate_handler![
             camera_start,
             camera_update,
             camera_stop,
+            camera_preview_frame,
             camera_driver_status,
             camera_driver_ensure,
             camera_register_driver,

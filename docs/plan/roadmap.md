@@ -43,6 +43,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [~] Camera settings page: output resolution done (ADR-0015); Register/Clean webcam buttons done (ADR-0017); camera live while the app is open, errors shown without stopping the app (ADR-0018); source webcam and card placement done (ADR-0021, ADR-0023)
 - [x] One configuration surface: the card is placed, resized and turned on the camera frame and the style block edits that same card, so Layout is derived instead of chosen (ADR-0032)
 - [x] Only counter or video with a live preview: the mode is an explicit switch, the camera options appear with video, and a preview that cannot open the webcam only shows a message (ADR-0033)
+- [x] The preview shows the frames the camera pipeline captures instead of opening the webcam twice, which failed with "Device in use" (ADR-0035)
 - [x] Studio shell for the setup page: fixed header and footer, collapsible editor column, draggable splitter, the counter always in view (ADR-0034)
 - [x] Compact editor and camera options under the preview, so 1280×720 needs (almost) no scrolling (ADR-0034 amendment)
 - [~] Packaging in CI: Windows NSIS + MSI, portable one-file exe and zip, Linux `.deb` + AppImage (`.github/workflows/release.yml`, ADR-0025, ADR-0026); pending the first green dry run

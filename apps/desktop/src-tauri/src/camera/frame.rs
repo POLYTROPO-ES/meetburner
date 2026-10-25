@@ -38,6 +38,18 @@ pub fn normalize_size(width: u32, height: u32) -> (u32, u32) {
     }
 }
 
+/// `width` × `height` shrunk so its longer side is at most `longest`; never enlarged.
+pub fn preview_size(width: u32, height: u32, longest: u32) -> (u32, u32) {
+    let side = width.max(height);
+    if side <= longest {
+        return (width, height);
+    }
+    let scale = |value: u32| {
+        ((value as u64 * longest as u64 + side as u64 / 2) / side as u64).max(1) as u32
+    };
+    (scale(width), scale(height))
+}
+
 /// Tightly packed 32-bit BGRA pixels, top-down.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Frame {
@@ -149,6 +161,17 @@ impl Frame {
 
     pub fn pixels_mut(&mut self) -> &mut [u8] {
         &mut self.pixels
+    }
+
+    /// `[width u32 LE][height u32 LE]` then RGBA pixels: what the setup preview draws (ADR-0035).
+    pub fn to_rgba_payload(&self) -> Vec<u8> {
+        let mut payload = Vec::with_capacity(8 + self.pixels.len());
+        payload.extend_from_slice(&self.width.to_le_bytes());
+        payload.extend_from_slice(&self.height.to_le_bytes());
+        for pixel in self.pixels.as_chunks::<4>().0 {
+            payload.extend_from_slice(&[pixel[2], pixel[1], pixel[0], pixel[3]]);
+        }
+        payload
     }
 
     pub fn set_pixel(&mut self, x: u32, y: u32, rgb: (u8, u8, u8)) {
@@ -278,5 +301,25 @@ mod tests {
         let both = source.flipped(true, true);
         assert_eq!(both.pixel(0, 0), (4, 4, 4));
         assert_eq!(both.pixel(1, 1), (1, 1, 1));
+    }
+
+    #[test]
+    fn the_preview_payload_is_a_size_header_then_rgba() {
+        let mut frame = Frame::new(2, 1);
+        frame.set_pixel(0, 0, (0x11, 0x22, 0x33));
+        frame.set_pixel(1, 0, (0x44, 0x55, 0x66));
+        assert_eq!(
+            frame.to_rgba_payload(),
+            vec![2, 0, 0, 0, 1, 0, 0, 0, 0x11, 0x22, 0x33, 0xff, 0x44, 0x55, 0x66, 0xff]
+        );
+    }
+
+    #[test]
+    fn the_preview_fits_its_longest_side_and_never_grows() {
+        assert_eq!(preview_size(1280, 720, 480), (480, 270));
+        assert_eq!(preview_size(720, 1280, 480), (270, 480));
+        assert_eq!(preview_size(1440, 1080, 480), (480, 360));
+        assert_eq!(preview_size(1080, 1080, 480), (480, 480));
+        assert_eq!(preview_size(320, 180, 480), (320, 180));
     }
 }

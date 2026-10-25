@@ -75,7 +75,8 @@ const en = {
   modeOnlyCounter: 'Only counter',
   modeVideo: 'Add video background',
   videoPreviewFailed:
-    'The preview camera could not be opened. Pick another webcam or switch to Only counter; the counter keeps working.',
+    'The webcam could not be opened (another app may be using it). Pick another webcam or switch to Only counter; the counter keeps working.',
+  videoPreviewWaiting: 'Starting the webcam…',
   overlayHint: 'Drag to move · corner to resize · top handle to turn',
   overlayTurnHint: 'Drag the top handle to turn the counter',
   overlayRotate: 'Turn the card',
@@ -223,7 +224,8 @@ const es: Record<MessageKey, string> = {
   modeOnlyCounter: 'Solo contador',
   modeVideo: 'Añadir vídeo de fondo',
   videoPreviewFailed:
-    'No se pudo abrir la cámara de la vista previa. Elige otra webcam o cambia a Solo contador; el contador sigue funcionando.',
+    'No se pudo abrir la webcam (puede que otra app la esté usando). Elige otra webcam o cambia a Solo contador; el contador sigue funcionando.',
+  videoPreviewWaiting: 'Iniciando la webcam…',
   overlayHint: 'Arrastra para mover · esquina para cambiar el tamaño · tirador superior para girar',
   overlayTurnHint: 'Arrastra el tirador superior para girar el contador',
   overlayRotate: 'Girar la tarjeta',

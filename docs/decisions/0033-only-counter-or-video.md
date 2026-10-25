@@ -1,6 +1,6 @@
 # 0033. The camera frame is a choice: only counter, or video with a live preview
 
-- Status: accepted
+- Status: accepted (the preview capture is superseded by [ADR-0035](0035-preview-from-the-pipeline.md))
 - Date: 2026-10-25
 - Amends [ADR-0032](0032-one-counter-surface.md)
 

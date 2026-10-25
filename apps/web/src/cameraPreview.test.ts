@@ -1,37 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import { matchDeviceId, type PreviewDevice } from './cameraPreview';
+import { parsePreviewFrame, toArrayBuffer } from './cameraPreview';
 
-const camera = (deviceId: string, label: string): PreviewDevice => ({ kind: 'videoinput', deviceId, label });
+/** `[width u32 LE][height u32 LE]` then RGBA, as `camera_preview_frame` sends it. */
+function payload(width: number, height: number, pixels: number[]): ArrayBuffer {
+  const bytes = new Uint8Array(8 + pixels.length);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, width, true);
+  view.setUint32(4, height, true);
+  bytes.set(pixels, 8);
+  return bytes.buffer;
+}
 
-describe('finding the webview camera that matches the app list', () => {
-  const devices: PreviewDevice[] = [
-    { kind: 'audioinput', deviceId: 'mic', label: 'Desk microphone' },
-    camera('cam1', 'HD Pro Webcam C920'),
-    camera('cam2', 'Integrated Camera'),
-    camera('cam3', 'MeetBurner Camera'),
-  ];
-
-  it('matches the label exactly', () => {
-    expect(matchDeviceId(devices, 'Integrated Camera')).toBe('cam2');
+describe('reading a preview frame from the camera pipeline', () => {
+  it('reads the size header and keeps the RGBA pixels', () => {
+    const frame = parsePreviewFrame(payload(2, 1, [1, 2, 3, 255, 4, 5, 6, 255]));
+    expect(frame).not.toBeNull();
+    expect(frame?.width).toBe(2);
+    expect(frame?.height).toBe(1);
+    expect(Array.from(frame?.rgba ?? [])).toEqual([1, 2, 3, 255, 4, 5, 6, 255]);
   });
 
-  it('ignores case and extra spaces', () => {
-    expect(matchDeviceId(devices, '  integrated   camera ')).toBe('cam2');
+  it('treats an empty answer as no frame yet', () => {
+    expect(parsePreviewFrame(new ArrayBuffer(0))).toBeNull();
   });
 
-  it('falls back to a partial match, which is what drivers add suffixes for', () => {
-    expect(matchDeviceId(devices, 'HD Pro Webcam C920 (1)')).toBe('cam1');
-    expect(matchDeviceId(devices, 'c920')).toBe('cam1');
+  it('rejects a payload whose size and pixels disagree', () => {
+    expect(parsePreviewFrame(payload(2, 2, [1, 2, 3, 255]))).toBeNull();
+    expect(parsePreviewFrame(payload(0, 1, []))).toBeNull();
+    expect(parsePreviewFrame(new ArrayBuffer(5))).toBeNull();
   });
 
-  it('never returns an audio device or an empty id', () => {
-    expect(matchDeviceId(devices, 'Desk microphone')).toBeNull();
-    expect(matchDeviceId([camera('', 'Integrated Camera')], 'Integrated Camera')).toBeNull();
-  });
-
-  it('returns nothing when no camera matches, so the caller keeps the default one', () => {
-    expect(matchDeviceId(devices, 'Front Camera')).toBeNull();
-    expect(matchDeviceId(devices, '   ')).toBeNull();
-    expect(matchDeviceId([], 'Integrated Camera')).toBeNull();
+  it('accepts the number array an IPC fallback may deliver', () => {
+    const buffer = toArrayBuffer([2, 0, 0, 0, 1, 0, 0, 0, 9, 9, 9, 255, 8, 8, 8, 255]);
+    expect(parsePreviewFrame(buffer)?.width).toBe(2);
+    const raw = payload(1, 1, [1, 1, 1, 255]);
+    expect(toArrayBuffer(raw)).toBe(raw);
   });
 });

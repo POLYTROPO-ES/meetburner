@@ -6,10 +6,10 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::camera::fonts::Fonts;
-use crate::camera::frame::FPS;
+use crate::camera::frame::{Frame, FPS};
 use crate::camera::renderer::{render, CounterInput};
 use crate::camera::sink::{SinkError, VirtualCameraSink};
-use crate::camera::source::{FrameSource, NoSource, WebcamSource};
+use crate::camera::source::{self, Capture, FrameSource, NoSource, SharedCapture, WebcamSource};
 use crate::camera::theme::Layout;
 
 /// One renderer tick: draws a frame and hands it to the sink.
@@ -17,6 +17,8 @@ pub struct RenderLoop {
     fonts: Fonts,
     sink: Box<dyn VirtualCameraSink>,
     source: Box<dyn FrameSource>,
+    /// What the webcam produces, also read by the setup preview (ADR-0035).
+    capture: SharedCapture,
     size: Option<(u32, u32)>,
     /// Webcam the current `source` was opened for, and the size it was asked to fill.
     source_key: Option<(String, (u32, u32))>,
@@ -24,13 +26,26 @@ pub struct RenderLoop {
 
 impl RenderLoop {
     pub fn new(fonts: Fonts, sink: Box<dyn VirtualCameraSink>) -> RenderLoop {
+        RenderLoop::with_capture(fonts, sink, SharedCapture::default())
+    }
+
+    pub fn with_capture(
+        fonts: Fonts,
+        sink: Box<dyn VirtualCameraSink>,
+        capture: SharedCapture,
+    ) -> RenderLoop {
         RenderLoop {
             fonts,
             sink,
             source: Box::new(NoSource),
+            capture,
             size: None,
             source_key: None,
         }
+    }
+
+    pub fn capture(&self) -> SharedCapture {
+        Arc::clone(&self.capture)
     }
 
     /// Applies the latest input for one frame. The mapping is created on the first tick and
@@ -62,14 +77,18 @@ impl RenderLoop {
             return;
         }
         self.source.stop();
+        *self.capture.lock().expect("webcam frame lock") = Capture::default();
         self.source = match wanted.as_ref() {
-            Some((id, (width, height))) => match WebcamSource::start(id, *width, *height) {
-                Ok(source) => Box::new(source),
-                Err(error) => {
-                    eprintln!("meetburner: {error}");
-                    Box::new(NoSource)
+            Some((id, (width, height))) => {
+                match WebcamSource::start(id, *width, *height, Arc::clone(&self.capture)) {
+                    Ok(source) => Box::new(source),
+                    Err(error) => {
+                        eprintln!("meetburner: {error}");
+                        self.capture.lock().expect("webcam frame lock").error = Some(error);
+                        Box::new(NoSource)
+                    }
                 }
-            },
+            }
             None => Box::new(NoSource),
         };
         self.source_key = wanted;
@@ -93,6 +112,7 @@ impl RenderLoop {
 /// Owns the render thread. `camera_start` creates it, `camera_update` swaps the input.
 pub struct CameraEngine {
     input: Arc<RwLock<CounterInput>>,
+    capture: SharedCapture,
     running: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
@@ -101,13 +121,16 @@ impl CameraEngine {
     pub fn start(input: CounterInput) -> Result<CameraEngine, SinkError> {
         let fonts = Fonts::load_system().map_err(|error| SinkError::Io(error.to_string()))?;
         let input = Arc::new(RwLock::new(input));
+        let capture = SharedCapture::default();
         let running = Arc::new(AtomicBool::new(true));
         let thread_input = Arc::clone(&input);
+        let thread_capture = Arc::clone(&capture);
         let thread_running = Arc::clone(&running);
         let thread = std::thread::Builder::new()
             .name("meetburner-camera".into())
             .spawn(move || {
-                let mut render_loop = RenderLoop::new(fonts, create_sink());
+                let mut render_loop =
+                    RenderLoop::with_capture(fonts, create_sink(), thread_capture);
                 let period = Duration::from_millis(1000 / FPS as u64);
                 let mut last_error: Option<String> = None;
                 while thread_running.load(Ordering::Relaxed) {
@@ -130,6 +153,7 @@ impl CameraEngine {
             .map_err(|error| SinkError::Io(error.to_string()))?;
         Ok(CameraEngine {
             input,
+            capture,
             running,
             thread: Some(thread),
         })
@@ -137,6 +161,11 @@ impl CameraEngine {
 
     pub fn update(&self, input: CounterInput) {
         *self.input.write().expect("camera input lock") = input;
+    }
+
+    /// The webcam as the camera captures it, shrunk for the setup preview (ADR-0035).
+    pub fn preview(&self, longest: u32) -> Result<Option<Frame>, String> {
+        source::preview(&self.capture, longest)
     }
 
     pub fn stop(&mut self) {
@@ -340,6 +369,10 @@ mod tests {
             frame.pixel(750, 480),
             (0x0f, 0x11, 0x15),
             "the card is still painted"
+        );
+        assert!(
+            render_loop.capture().lock().unwrap().error.is_some(),
+            "the preview learns why there is no video"
         );
     }
 }
