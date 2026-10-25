@@ -44,6 +44,8 @@ flowchart LR
 
 ## Counter styles ([ADR-0006](decisions/0006-counter-styles-and-layouts.md))
 
+- The setup page is an app shell ([ADR-0034](decisions/0034-studio-shell.md)): fixed header with the live rate, an editor column of collapsible groups that scrolls on its own, a draggable splitter (width remembered per device), and a preview pane that never leaves the screen. Below 1100 px the workspace stacks.
+
 - Themes (classic, modern, formal, halloween, christmas, 4 seasons, minimalist) are plain data in `packages/core/src/themes.ts`, shared by the web UI (CSS variables) and the Rust camera renderer.
 - Layout `fullscreen` (the card covers the frame) or `widget` (a card over the source webcam). It is **derived** from the card rectangle by `cameraInput`, never stored, and the setup page no longer asks for it ([ADR-0032](decisions/0032-one-counter-surface.md)).
 - The setup page asks one explicit question instead: **Only counter** or **Add video background** (`CameraSettings.video`). Video mode reveals the camera options under the preview and shows the chosen webcam live behind the card; a preview that cannot open the camera only shows a message ([ADR-0033](decisions/0033-only-counter-or-video.md)).
