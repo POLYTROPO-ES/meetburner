@@ -124,3 +124,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 ### M12. macOS overlay + release — `desktop` + `vcam-macos`
 - [ ] AVFoundation capture via `nokhwa`, camera permission prompts
 - [ ] DMG release
+
+## Maintenance
+
+- [ ] Raise the Linux GTK stack to gtk 0.19+ / glib 0.20+ once `tao`/`wry` requires it, which clears RUSTSEC-2024-0429 (ADR-0038); watch `tao`'s `gtk ^0.18` requirement
