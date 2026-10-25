@@ -7,7 +7,7 @@
     "apps/desktop"
   ],
   "scripts": {
-    "test": "npm test -w @meetburner/core",
+    "test": "npm test -w @meetburner/core && npm test -w @meetburner/web",
     "typecheck": "npm run typecheck -w @meetburner/core",
     "gen:themes": "node tools/gen-themes.mts",
     "dev:web": "npm run dev -w @meetburner/web",

@@ -1,10 +1,22 @@
 import type { CameraInput } from '@meetburner/core';
 
-export const isTauri = () => '__TAURI_INTERNALS__' in window;
+/** The object Tauri 2 injects into its webview; only `invoke` matters here. */
+interface TauriInternals {
+  invoke?: unknown;
+}
+
+const internals = (): TauriInternals | undefined =>
+  (globalThis as { __TAURI_INTERNALS__?: TauriInternals }).__TAURI_INTERNALS__;
+
+/**
+ * A real webview, not merely a shell that defines the global: some browser extensions and
+ * IDE previews create an empty `__TAURI_INTERNALS__`, and calling `invoke` on that throws
+ * `invoke is not a function`. Every command would fail, so the section must stay hidden.
+ */
+export const isTauri = () => typeof internals()?.invoke === 'function';
 
 /** Windows publishes through a DirectShow source filter (ADR-0016). */
 export const isWindows = () => /windows/i.test(navigator.userAgent);
-
 /** Linux publishes into a v4l2loopback device (ADR-0030). */
 export const isLinux = () => /linux/i.test(navigator.userAgent);
 
