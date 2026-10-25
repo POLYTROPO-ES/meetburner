@@ -26,6 +26,13 @@ impl FontId {
     ];
 }
 
+/// How values are drawn: plain glyphs, or one split-flap plate per character (ADR-0036).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlateStyle {
+    None,
+    Flap,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Theme {
     pub background: (u8, u8, u8),
@@ -37,6 +44,8 @@ pub struct Theme {
     pub weight: f32,
     pub radius: f32,
     pub decoration: &'static str,
+    /// `flap` draws every value on plates; `none` draws plain glyphs (ADR-0036).
+    pub plates: PlateStyle,
 }
 
 /// `fullscreen` when no source webcam, `widget` over a webcam (ADR-0006).
@@ -178,6 +187,24 @@ mod tests {
     #[test]
     fn unknown_themes_fall_back_to_classic() {
         assert_eq!(theme("nope", JANUARY), theme("classic", JANUARY));
+    }
+
+    #[test]
+    fn only_splitflap_draws_values_on_plates() {
+        assert_eq!(theme("splitflap", JANUARY).plates, PlateStyle::Flap);
+        assert_eq!(
+            theme("splitflap", JANUARY).background_alt,
+            (0x1e, 0x21, 0x26)
+        );
+        assert_eq!(theme("classic", JANUARY).plates, PlateStyle::None);
+        for (id, preset) in themes_data::THEMES {
+            let expected = if *id == "splitflap" {
+                PlateStyle::Flap
+            } else {
+                PlateStyle::None
+            };
+            assert_eq!(preset.plates, expected, "{id}");
+        }
     }
 
     #[test]

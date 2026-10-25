@@ -7,7 +7,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::camera::fonts::Fonts;
 use crate::camera::frame::{Frame, FPS};
-use crate::camera::renderer::{render, CounterInput};
+use crate::camera::renderer::{render_animated, CounterInput, FlapState};
 use crate::camera::sink::{SinkError, VirtualCameraSink};
 use crate::camera::source::{self, Capture, FrameSource, NoSource, SharedCapture, WebcamSource};
 use crate::camera::theme::Layout;
@@ -22,6 +22,8 @@ pub struct RenderLoop {
     size: Option<(u32, u32)>,
     /// Webcam the current `source` was opened for, and the size it was asked to fill.
     source_key: Option<(String, (u32, u32))>,
+    /// One fall per plated character, kept across ticks (ADR-0037).
+    flaps: FlapState,
 }
 
 impl RenderLoop {
@@ -41,6 +43,7 @@ impl RenderLoop {
             capture,
             size: None,
             source_key: None,
+            flaps: FlapState::default(),
         }
     }
 
@@ -65,7 +68,13 @@ impl RenderLoop {
         } else {
             None
         };
-        let frame = render(input, &self.fonts, now_ms, background.as_ref());
+        let frame = render_animated(
+            input,
+            &self.fonts,
+            now_ms,
+            background.as_ref(),
+            &mut self.flaps,
+        );
         self.sink.send(&frame)
     }
 
@@ -223,7 +232,7 @@ fn create_sink() -> Box<dyn VirtualCameraSink> {
 mod tests {
     use super::*;
     use crate::camera::frame::{Frame, FRAME_HEIGHT, FRAME_WIDTH};
-    use crate::camera::renderer::{DisplayConfig, Labels};
+    use crate::camera::renderer::{render, BackgroundMode, BackgroundStyle, DisplayConfig, Labels};
     use crate::camera::sink::RecordingSink;
 
     fn input() -> CounterInput {
@@ -374,5 +383,47 @@ mod tests {
             render_loop.capture().lock().unwrap().error.is_some(),
             "the preview learns why there is no video"
         );
+    }
+
+    /// A stopped split-flap counter: the text only depends on the rate, so the frames of one
+    /// fall are comparable (ADR-0037).
+    fn plated(rate_per_ms: f64) -> CounterInput {
+        let mut plated = input();
+        plated.rate_per_ms = rate_per_ms;
+        plated.end_at = Some(1_060_000);
+        plated.display.theme = "splitflap".into();
+        plated.display.background = BackgroundStyle {
+            mode: BackgroundMode::Solid,
+            ..BackgroundStyle::default()
+        };
+        plated
+    }
+
+    #[test]
+    fn the_render_loop_keeps_the_plate_state_between_ticks() {
+        let sink = RecordingSink::default();
+        let observer = sink.clone();
+        let fonts = Fonts::load_system().expect("fonts");
+        let mut render_loop = RenderLoop::new(Fonts::load_system().expect("fonts"), Box::new(sink));
+        let changed = plated(0.011);
+
+        render_loop.tick(&plated(0.01), 1_060_000).expect("tick");
+        render_loop
+            .tick(&changed, 1_060_000)
+            .expect("tick: the fall starts");
+        render_loop
+            .tick(&changed, 1_060_080)
+            .expect("tick: mid-fall");
+        render_loop
+            .tick(&changed, 1_060_160)
+            .expect("tick: the fall ends");
+
+        let frames = observer.frames();
+        let settled = render(&changed, &fonts, 1_060_160, None);
+        assert_ne!(
+            frames[2], settled,
+            "the plates still fall a frame later: the loop kept the state"
+        );
+        assert_eq!(frames[3], settled, "the fall ends on the new value");
     }
 }
