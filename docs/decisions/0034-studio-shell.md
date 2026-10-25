@@ -44,3 +44,25 @@ column of their own, and a single primary action always reachable.
   editor fits a 1280×720 window without scrolling.
 - Three pure helpers (default, clamp, stored value) are unit tested; the shell itself is verified by
   building and screenshotting the app.
+
+## Amendment (2026-10-25): camera options under the preview, wider editor
+
+Reviewing the built shell, the camera group made the editor column scroll and sat away from the
+picture it changes. Changes:
+
+- The camera options moved to a panel **under the preview**: resolution, card mirror and the
+  driver are always there; the webcam and the image mirror appear with video; the long notes fold
+  under "Camera notes". Statuses and errors stay visible.
+- The stage is a size container capped at 48 % of the window height and never taller than its
+  width allows, so the panel always fits below it at any window size.
+- Without video the card always fills the frame, so its move/resize handle and the Fill frame /
+  Back to card buttons are hidden; the turn handle stays.
+- The editor column defaults to 40 % (30–60 %, at least 380 px), stored under a new key so the old
+  narrow width does not stick. Its rows are dense: meeting fields in two rows, one row per
+  participant, a Show / Font / Size / Colour table for the six texts, the background in one row and
+  its sliders in another. Below 440 px of column width the rows fold (container queries).
+- The desktop window opens at 1280×720 (minimum 960×600) and the workspace only stacks below
+  900 px.
+
+Measured at 1280×720: the page never scrolls and the editor overflows by its last 10 px of padding;
+at 1536×816 it fits entirely.

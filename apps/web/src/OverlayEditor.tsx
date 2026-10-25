@@ -1,9 +1,10 @@
-import { useRef, type KeyboardEvent, type PointerEvent } from 'react';
+import { useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import {
   defaultOverlayRect,
   effectiveOverlay,
   fillsFrame,
   FULL_FRAME,
+  hasVideoBackground,
   moveOverlay,
   resizeOverlay,
   resolveTheme,
@@ -75,7 +76,16 @@ export function OverlayEditor({
   const rect = effectiveOverlay(display, camera);
   // One button for the two states: cover the frame, or go back to a card on it.
   const full = fillsFrame(rect);
+  // Without video the counter always fills the frame, so there is nothing to move or resize.
+  const placeable = hasVideoBackground(camera);
   const radius = styleFor(display, resolveTheme(display.theme, new Date(now))).background.radius;
+  const state = !camera.video
+    ? t(lang, 'overlayOnlyCounter')
+    : !placeable
+      ? t(lang, 'overlayPickWebcam')
+      : full
+        ? t(lang, 'overlayStateFull')
+        : `${t(lang, 'overlayStateCard')} ${Math.round(rect.w * 100)}% × ${Math.round(rect.h * 100)}%`;
 
   const start = (mode: Drag['mode']) => (event: PointerEvent<HTMLElement>) => {
     event.preventDefault();
@@ -173,8 +183,15 @@ export function OverlayEditor({
 
   return (
     <div className="overlay-editor">
-      <p className="muted">{t(lang, 'overlayHint')}</p>
-      <div ref={stage} className="overlay-stage" style={{ aspectRatio: `${camera.width} / ${camera.height}` }}>
+      <div className="stage-fit" style={{ '--ratio': camera.width / camera.height } as CSSProperties}>
+      <div
+        ref={stage}
+        className="overlay-stage"
+        style={{
+          aspectRatio: `${camera.width} / ${camera.height}`,
+          width: `min(100cqw, calc(100cqh * ${camera.width / camera.height}))`,
+        }}
+      >
         {stream && (
           <video
             className="overlay-video"
@@ -198,11 +215,11 @@ export function OverlayEditor({
         )}
         <div
           ref={card}
-          className="overlay-card"
-          tabIndex={0}
+          className={placeable ? 'overlay-card' : 'overlay-card fixed'}
+          tabIndex={placeable ? 0 : undefined}
           role="group"
           aria-label={t(lang, 'overlayPosition')}
-          onKeyDown={keyDown}
+          onKeyDown={placeable ? keyDown : undefined}
           style={{
             left: `${rect.x * 100}%`,
             top: `${rect.y * 100}%`,
@@ -211,8 +228,8 @@ export function OverlayEditor({
             borderRadius: `${radius}px`,
             transform: `rotate(${rotation}deg)`,
           }}
-          onPointerDown={start('move')}
-          {...handlers}
+          onPointerDown={placeable ? start('move') : undefined}
+          {...(placeable ? handlers : {})}
         >
           <CounterView
             meeting={meeting}
@@ -239,34 +256,36 @@ export function OverlayEditor({
           >
             ⟳
           </span>
-          <span
-            className="overlay-handle"
-            aria-hidden="true"
-            onPointerDown={start('resize')}
-            {...handlers}
-          />
+          {placeable && (
+            <span
+              className="overlay-handle"
+              aria-hidden="true"
+              onPointerDown={start('resize')}
+              {...handlers}
+            />
+          )}
         </div>
       </div>
-      <div className="row">
-        <button
-          type="button"
-          onClick={() => onRect(full ? defaultOverlayRect(camera.width, camera.height) : FULL_FRAME)}
-        >
-          {full ? t(lang, 'overlayToCard') : t(lang, 'overlayFill')}
-        </button>
-        {display.overlay !== null && (
-          <button type="button" className="ghost" onClick={() => onRect(null)}>
-            {t(lang, 'overlayReset')}
-          </button>
-        )}
       </div>
-      <p className="muted">
-        {full
-          ? camera.source === null
-            ? t(lang, 'overlayNoWebcam')
-            : t(lang, 'overlayStateFull')
-          : `${t(lang, 'overlayStateCard')} ${Math.round(rect.w * 100)}% × ${Math.round(rect.h * 100)}%`}
-      </p>
+      <div className="stage-bar">
+        {placeable && (
+          <>
+            <button
+              type="button"
+              onClick={() => onRect(full ? defaultOverlayRect(camera.width, camera.height) : FULL_FRAME)}
+            >
+              {full ? t(lang, 'overlayToCard') : t(lang, 'overlayFill')}
+            </button>
+            {display.overlay !== null && (
+              <button type="button" className="ghost" onClick={() => onRect(null)}>
+                {t(lang, 'overlayReset')}
+              </button>
+            )}
+          </>
+        )}
+        <span className="muted">{state}</span>
+        <span className="muted stage-hint">{t(lang, placeable ? 'overlayHint' : 'overlayTurnHint')}</span>
+      </div>
     </div>
   );
 }

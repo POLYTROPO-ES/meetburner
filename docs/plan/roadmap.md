@@ -44,7 +44,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [x] One configuration surface: the card is placed, resized and turned on the camera frame and the style block edits that same card, so Layout is derived instead of chosen (ADR-0032)
 - [x] Only counter or video with a live preview: the mode is an explicit switch, the camera options appear with video, and a preview that cannot open the webcam only shows a message (ADR-0033)
 - [x] Studio shell for the setup page: fixed header and footer, collapsible editor column, draggable splitter, the counter always in view (ADR-0034)
-- [ ] Compact style table in the editor column so 1280×720 needs no scrolling
+- [x] Compact editor and camera options under the preview, so 1280×720 needs (almost) no scrolling (ADR-0034 amendment)
 - [~] Packaging in CI: Windows NSIS + MSI, portable one-file exe and zip, Linux `.deb` + AppImage (`.github/workflows/release.yml`, ADR-0025, ADR-0026); pending the first green dry run
 - **Done when:** installers build in CI for Windows and Linux.
 

@@ -70,17 +70,24 @@ Everything you type stays in the browser's local storage on that device. There i
 
 ## Placing the card on the camera (desktop)
 
+The window has the settings on the left (Meeting, Participants, Counter style) and the camera
+on the right, so the counter stays in view while you edit it. Drag the bar between the two
+columns to give either one more room; the app remembers the width.
+
 Above the preview pick **Only counter** or **Add video background**:
 
 - **Only counter** publishes the counter alone; the webcam never opens, even if one is
-  remembered.
-- **Add video background** shows the camera options (webcam, resolution, mirrors) and the
-  chosen webcam as the video behind the card.
+  remembered. The counter fills the frame, so it can only be turned.
+- **Add video background** adds the webcam and its mirror options under the preview, and shows
+  the chosen webcam as the video behind the card.
 
-The preview is the only place the card is configured: drag it to move it, drag its corner to
-resize it, drag the round handle at its top to turn it. **Fill frame** makes the card cover the
-whole frame (the camera then shows the counter alone) and **Back to card** returns it to a
-corner card; **Reset position** appears once you have placed it by hand.
+Under the preview are the camera options: resolution, mirroring, the driver buttons and, folded
+under **Camera notes**, the longer explanations.
+
+With video, the preview is the only place the card is placed: drag it to move it, drag its
+corner to resize it, drag the round handle at its top to turn it. **Fill frame** makes the card
+cover the whole frame and **Back to card** returns it to a corner card; **Reset position**
+appears once you have placed it by hand.
 
 If the preview cannot open the webcam — another app is using it, or the system denies access —
 a message appears over the frame. The counter and the virtual camera keep working: pick another
@@ -88,7 +95,7 @@ webcam or switch back to **Only counter**.
 
 ## Virtual camera (Windows)
 
-1. Open the desktop app and scroll to **Camera**.
+1. Open the desktop app; the camera options are under the preview.
 2. Press **Register webcam for meets** once per Windows account. It writes a per-user `HKCU`
    registration, so no administrator prompt appears. The app also replaces an older driver with
    the one bundled in the build.

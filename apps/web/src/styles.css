@@ -46,58 +46,73 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button.ghost { background: transparent; }
 label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.9rem; color: var(--muted); }
 
-/* Setup */
+/* Share page: a centred column (ShareView) */
+.setup { max-width: 960px; margin: 0 auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
+.brand { display: flex; align-items: center; gap: 0.75rem; }
+.brand h1 { margin: 0; }
+.tagline { margin: 0; font-weight: 600; color: var(--accent); }
+
+/* Setup: editor on the left, the counter always in view (ADR-0034) */
 .app-shell { height: 100vh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: var(--bg); }
 .app-header {
-  display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0.9rem;
+  display: flex; align-items: center; gap: 1rem; padding: 0.3rem 0.9rem;
   border-bottom: 1px solid var(--border); background: var(--panel-2, var(--panel));
 }
-.app-header .brand { display: flex; align-items: center; gap: 0.6rem; }
-.app-header h1 { margin: 0; font-size: 1.05rem; }
-.app-header .tagline { margin: 0; font-size: 0.75rem; }
+.app-header .brand { gap: 0.6rem; }
+.app-header h1 { font-size: 1.05rem; }
+.app-header .tagline { font-size: 0.75rem; }
 .app-header .language { flex-direction: row; align-items: center; gap: 0.35rem; margin-left: auto; }
 .header-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 .chip { font-size: 0.75rem; padding: 0.2rem 0.55rem; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); white-space: nowrap; }
 .workspace { display: grid; min-height: 0; }
-.side-pane { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.6rem 0.75rem; overflow-y: auto; min-height: 0; }
-.group { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); padding: 0 0.65rem; }
-.group > summary { cursor: pointer; padding: 0.5rem 0; font-weight: 600; font-size: 0.85rem; }
+.field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.9rem; color: var(--muted); }
+.side-pane { container: side / inline-size; display: flex; flex-direction: column; gap: 0.4rem; padding: 0.45rem 0.6rem; overflow-y: auto; min-height: 0; }
+/* The editor and the camera panel are dense: smaller labels and controls than the rest. */
+.side-pane label, .side-pane .field, .camera-panel label, .camera-panel .field { font-size: 0.78rem; gap: 0.1rem; }
+.side-pane input, .side-pane select, .side-pane button,
+.camera-panel input, .camera-panel select, .camera-panel button { padding: 0.18rem 0.4rem; font-size: 0.85rem; }
+.group { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); padding: 0 0.6rem; }
+.group > summary { cursor: pointer; padding: 0.25rem 0; font-weight: 600; font-size: 0.85rem; }
 .group > summary::marker { color: var(--muted); }
-.group > *:not(summary) { margin-bottom: 0.6rem; }
-.group .grid.compact { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; }
-.preview-pane { display: flex; flex-direction: column; gap: 0.6rem; padding: 0.7rem 0.9rem; min-height: 0; overflow: hidden; background: var(--bg); }
-.preview-pane .overlay-editor { flex: 1; min-height: 0; }
-.preview-pane .overlay-stage { max-height: 100%; }
+.group > *:not(summary) { margin-bottom: 0.45rem; }
+.group-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.group-head p { margin: 0; font-size: 0.75rem; }
+.group-head button { flex: none; white-space: nowrap; }
+.meeting-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem 0.5rem; }
+.meeting-grid .span-2 { grid-column: span 2; }
+.meeting-grid select, .meeting-grid input { width: 100%; min-width: 0; }
+.meeting-grid .row { flex-wrap: nowrap; gap: 0.3rem; }
+.meeting-grid .row > input { flex: 1 1 0; width: auto; }
+.meeting-grid .row > input[type='checkbox'], .meeting-grid .row > button { flex: none; }
+.preview-pane { container-type: inline-size; display: flex; flex-direction: column; gap: 0.5rem; padding: 0.6rem 0.9rem; min-height: 0; overflow: hidden; background: var(--bg); }
 .splitter { cursor: col-resize; background: var(--border); border: 0; }
 .splitter:hover, .splitter:focus-visible { background: var(--accent); }
 .app-footer {
   display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
-  padding: 0.55rem 0.9rem; border-top: 1px solid var(--border); background: var(--panel-2, var(--panel));
+  padding: 0.35rem 0.9rem; border-top: 1px solid var(--border); background: var(--panel-2, var(--panel));
 }
+.app-footer button { padding: 0.35rem 0.85rem; }
 .app-footer .row { margin-left: auto; }
-@media (max-width: 1100px) {
-  .workspace { grid-template-columns: 1fr !important; }
-  .splitter { display: none; }
-  .app-shell { height: auto; min-height: 100vh; }
-  .side-pane, .preview-pane { overflow: visible; }
-}
-.intro h2 { font-size: 1.6rem; background: linear-gradient(90deg, #ff4b24, #ffb52e); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
-.participants { list-style: none; padding: 0; margin: 0 0 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
-/* Three short rows per person: the editor column is narrow, five columns would not fit. */
-.participant {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: 'name remove' 'role role' 'salary rate';
-  gap: 0.3rem 0.4rem;
-  align-items: center;
-}
-.participant > input:first-child { grid-area: name; }
-.participant > button { grid-area: remove; }
-.participant > select { grid-area: role; }
-.participant > input[type='number'] { grid-area: salary; }
-.participant .rate { grid-area: rate; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
 .app-footer a { color: var(--muted); }
+/* Web only: links and the signing note stay small, left of the actions. */
+.footer-links { order: -1; font-size: 0.72rem; line-height: 1.3; }
+.footer-links .muted { margin: 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+.participants { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+/* One row per person; a narrow editor column folds it into three short rows. */
+.participant { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.5fr) 5.5rem auto auto; gap: 0.3rem; align-items: center; }
+.participant > input, .participant > select { width: 100%; min-width: 0; }
+.participant > button { padding: 0.2rem 0.45rem; }
+.participant .rate { color: var(--muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+@container side (max-width: 440px) {
+  .meeting-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .participant { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'name remove' 'role role' 'salary rate'; }
+  .participant > input:first-child { grid-area: name; }
+  .participant > button { grid-area: remove; }
+  .participant > select { grid-area: role; }
+  .participant > input[type='number'] { grid-area: salary; }
+  .participant .rate { grid-area: rate; }
+}
 .share-link { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .share-link input { flex: 1; min-width: 16rem; }
 /* Linux camera setup: the modprobe line must wrap inside the panel (ADR-0030) */
@@ -117,45 +132,76 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
 }
 
 .checkbox { flex-direction: row; align-items: center; gap: 0.5rem; }
-.mode-switch { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
-.camera-options { display: flex; flex-direction: column; gap: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
-.style-pick { min-width: 16rem; }
-.preview { margin: 0; display: flex; flex-direction: column; gap: 0.3rem; width: 100%; }
+.mode-switch { flex: none; display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
+.preview { margin: 0; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+/* Camera options sit under the preview they affect (ADR-0033, ADR-0034). */
+.camera-panel { flex: none; display: flex; flex-direction: column; gap: 0.4rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+.camera-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.4rem 0.75rem; align-items: end; }
+.camera-fields select { width: 100%; min-width: 0; }
+.camera-fields .checkbox { font-size: 0.8rem; gap: 0.3rem; }
+.camera-driver { font-size: 0.78rem; }
+.camera-driver .muted { margin: 0; }
+.camera-error { margin: 0; color: #fca5a5; font-size: 0.8rem; }
+.camera-help > summary { cursor: pointer; font-size: 0.78rem; color: var(--muted); }
+.camera-help p { font-size: 0.78rem; }
 
-/* Counter style controls: one row per text element, plus the background (ADR-0029) */
-.style-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; align-items: start; margin-top: 1rem; }
-.style-groups h3 { margin: 0 0 0.5rem; font-size: 1rem; }
-.style-mode { align-self: end; }
-.style-bg-colors { display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap; }
-.style-bg-colors > label { flex: 1 1 9rem; }
-.style-groups input[type='color'] { width: 2.6rem; height: 2.2rem; padding: 0.15rem; }
-.style-elements { display: flex; flex-direction: column; gap: 0.75rem; }
-.style-element { display: grid; grid-template-columns: 6rem minmax(0, 1.1fr) minmax(0, 1fr) auto; gap: 0.5rem; align-items: end; }
-/* Name on top, its visibility checkbox under it, so the row keeps its four columns. */
-.style-element-name { display: flex; flex-direction: column; gap: 0.15rem; font-weight: 600; }
-.style-element-name .checkbox { font-size: 0.8rem; font-weight: 400; gap: 0.25rem; }
-.style-element label { font-size: 0.8rem; }
-.style-element select { width: 100%; }
-.style-element input[type='range'] { width: 100%; }
-.style-color { display: flex; align-items: center; gap: 0.25rem; }
-.style-color label.checkbox { gap: 0.25rem; }
-.style-color button { padding: 0.35rem 0.5rem; line-height: 1; }
-@media (max-width: 720px) {
-  .style-element { grid-template-columns: 1fr 1fr; }
-  .style-element-name { grid-column: 1 / -1; }
+/* Counter style: one table row per text element, then the background (ADR-0029, ADR-0034) */
+.style-pick-row { display: flex; gap: 0.5rem; align-items: flex-end; }
+.style-pick-row label { flex: 1 1 0; min-width: 0; }
+.style-pick-row select { width: 100%; }
+.style-pick-row button { flex: none; }
+.style-groups { display: flex; flex-direction: column; gap: 0.35rem; }
+.style-table { display: flex; flex-direction: column; gap: 0.1rem; }
+.style-row { display: grid; grid-template-columns: 5.6rem 3.2rem minmax(0, 1fr) minmax(0, 1.1fr) 3.6rem; gap: 0.4rem; align-items: center; font-size: 0.8rem; }
+.style-head { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); white-space: nowrap; }
+.style-row > input[type='checkbox'] { justify-self: center; }
+.style-row select { width: 100%; min-width: 0; }
+.style-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.style-size { display: flex; align-items: center; gap: 0.3rem; min-width: 0; }
+.style-size input[type='range'] { flex: 1; min-width: 0; }
+.style-value { width: 2.4rem; text-align: right; color: var(--muted); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.style-color { display: flex; align-items: center; gap: 0.2rem; }
+.style-color input[type='color'] { width: 1.7rem; height: 1.4rem; padding: 0.05rem; }
+.style-color button { padding: 0.1rem 0.35rem; line-height: 1; }
+.style-bg .bg-mode { grid-column: span 2; }
+.style-sliders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
+.style-sliders input[type='range'] { width: 100%; }
+@container side (max-width: 440px) {
+  .style-head { display: none; }
+  .style-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; row-gap: 0.2rem; }
+  .style-row .style-name { grid-column: span 2; }
+  .style-bg .style-name { grid-column: 1 / -1; }
+  .style-bg .bg-mode { grid-column: auto; }
+  .style-sliders { grid-template-columns: 1fr; }
 }
 
-/* The one place to place the card: drag it to move, its corner to resize, the handle to turn */
-.overlay-editor { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; width: 100%; }
+/* The one place to place the card: drag it to move, its corner to resize, the handle to turn.
+   `display: contents` lets the stage and its bar flex directly inside the preview pane. */
+.overlay-editor { display: contents; }
+/* The stage fills the room the panels leave; as a size container it keeps the camera ratio. */
+.stage-fit { flex: 1 1 0; min-height: 0; container-type: size; display: grid; align-items: start; justify-items: start; }
+/* Never taller than the stage needs when the pane width is what limits it. */
+.overlay-editor > .stage-fit { flex: 0 1 48vh; max-height: calc(100cqw / var(--ratio, 1.7778)); }
+.stage-fit > .counter-view.embedded { width: min(100cqw, calc(100cqh * 16 / 9)); }
 .overlay-stage {
   position: relative;
   width: 100%;
-  max-width: 640px;
   background: repeating-conic-gradient(#1a1d24 0% 25%, #14171d 0% 50%) 50% / 24px 24px;
   border: 1px solid #2b2f38;
   border-radius: 8px;
   overflow: hidden;
   touch-action: none;
+}
+.stage-bar { flex: none; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.8rem; }
+.stage-bar .muted { margin: 0; }
+.stage-bar .stage-hint { margin-left: auto; }
+.stage-bar button { padding: 0.25rem 0.55rem; font-size: 0.85rem; }
+@media (max-width: 900px) {
+  .workspace { grid-template-columns: 1fr !important; }
+  .splitter { display: none; }
+  .app-shell { height: auto; min-height: 100vh; }
+  .side-pane, .preview-pane { overflow: visible; }
+  .preview-pane .stage-fit { flex: none; height: min(56vw, 60vh); }
 }
 .overlay-card {
   position: absolute;
@@ -166,6 +212,7 @@ a.button.primary { background: var(--accent); color: #fff; font-weight: 600; }
   transform-origin: center;
 }
 .overlay-card:active { cursor: grabbing; }
+.overlay-card.fixed, .overlay-card.fixed:active { cursor: default; }
 /* The stage clips its overflow, so the card carries its focus ring inside (2.4.7). */
 .overlay-card:focus-visible { outline-offset: -4px; }
 /* The card is the counter: no second border or aspect ratio from the setup preview. */
@@ -326,31 +373,11 @@ button.counter-stop:focus-visible {
 .stats > div[data-el='costPerMinute'] dt { font-size: calc(3.5cqh * var(--el-costPerMinute-size)); color: var(--el-costPerMinute-color, var(--muted)); }
 .stats > div[data-el='costPerMinute'] dd { font-size: min(calc(3.5cqw * var(--el-costPerMinute-size)), calc(7cqh * var(--el-costPerMinute-size))); color: var(--el-costPerMinute-color, var(--text)); }
 
-/* 360 px phones: stack the form, keep every control full width, nothing overflows. */
+/* 360 px phones: the editor folds its rows (container queries above); the header wraps. */
 @media (max-width: 480px) {
   .setup { padding: 1rem; gap: 1.25rem; }
-  /* Brand and language go on separate lines instead of squeezing each other. */
-  .setup-header { flex-direction: column; align-items: stretch; }
-  .setup-header select { width: 100%; }
-  /* One card per participant instead of a five-column row. */
-  .participant {
-    grid-template-columns: 1fr;
-    gap: 0.5rem;
-    padding: 0.75rem;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-  }
-  .participant > input,
-  .participant > select,
-  .participant > button { width: 100%; min-width: 0; }
-  .participant .rate { text-align: left; }
-  .participants + button { width: 100%; }
-  /* Style rows wrap: name, font, size and colour each get their own line. */
-  .style-element { grid-template-columns: 1fr; align-items: stretch; }
-  .style-element-name { grid-column: auto; }
-  .style-bg-colors > label { flex: 1 1 100%; }
-  .style-color button { padding: 0.5rem 0.75rem; }
+  .app-header { flex-wrap: wrap; }
+  .header-chips { order: 3; width: 100%; }
   /* Actions are easier to hit when they span the screen. */
   .app-footer .row > button { flex: 1 1 100%; }
   .share-link input { min-width: 0; }
