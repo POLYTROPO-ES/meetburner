@@ -94,7 +94,7 @@ sessions (22–25 October 2026), 115 chat requests and about 1,700 model calls.
 | Sessions · chat requests · model calls | 2 · 23 · 327 | 4 · 92 · 1,378 |
 | Input tokens | ~84 M, about 93 % read from the prompt cache | ~346 M, about 85–93 % cache hits |
 | Output tokens | 0.52 M | 1.16 M |
-| Billed | **~$30** (GitHub) | **~$10** (DeepSeek) |
+| Billed | **~$60** (GitHub) | **~$6** (DeepSeek) |
 | Estimated from the logs | $33–59; Copilot recorded 5,366 credits (≈ $54 at list price) | $2–6 |
 
 **In total: ~430 M input tokens (mostly cached), 1.7 M output tokens, about $40 billed.** DeepSeek
