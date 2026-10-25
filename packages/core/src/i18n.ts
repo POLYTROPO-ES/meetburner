@@ -68,6 +68,10 @@ const en = {
     'Drag the card to move it, its corner to resize, the handle on top to turn it. The counter follows the card size.',
   overlayRotate: 'Turn the card',
   overlayFill: 'Fill frame',
+  overlayToCard: 'Back to card',
+  overlayStateCard: 'Card size:',
+  overlayStateFull: 'Full frame: the counter fills the camera.',
+  overlayNoWebcam: 'No webcam selected, so the counter fills the frame. Pick a webcam under Camera to put the card over video.',
   overlayReset: 'Reset position',
   cameraResolution: 'Camera resolution',
   cameraResolutionHint:
@@ -199,6 +203,10 @@ const es: Record<MessageKey, string> = {
     'Arrastra la tarjeta para moverla, su esquina para cambiar el tamaño y el tirador de arriba para girarla. El contador se adapta al tamaño de la tarjeta.',
   overlayRotate: 'Girar la tarjeta',
   overlayFill: 'Ocupar el encuadre',
+  overlayToCard: 'Volver a la tarjeta',
+  overlayStateCard: 'Tamaño de la tarjeta:',
+  overlayStateFull: 'Encuadre completo: el contador ocupa la cámara.',
+  overlayNoWebcam: 'No hay webcam elegida, así que el contador ocupa el encuadre. Elige una webcam en Cámara para poner la tarjeta sobre el vídeo.',
   overlayReset: 'Restablecer posición',
   cameraResolution: 'Resolución de la cámara',
   cameraResolutionHint:
