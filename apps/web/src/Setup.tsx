@@ -49,6 +49,7 @@ import {
   type ThemeId,
 } from '@meetburner/core';
 import { CounterView } from './CounterView';
+import { useCameraPreview } from './cameraPreview';
 import { OverlayEditor } from './OverlayEditor';
 import {
   cameraDriverEnsure,
@@ -115,6 +116,9 @@ export function Setup() {
   const cameraReady = isWindows() ? driver?.registered === true : v4l2?.available === true;
   // The camera is live while the app is open, as soon as the backend can publish.
   const cameraError = useCameraSync(cameraInput(meeting, display, lang, camera), hasVirtualCamera() && cameraReady);
+  // "Add video background" shows the chosen webcam in the setup preview (ADR-0033).
+  const sourceName = sources.find((source) => source.id === camera.source)?.name ?? null;
+  const preview = useCameraPreview(hasVirtualCamera() && camera.video && sourceName !== null, sourceName);
 
   useEffect(() => {
     if (!hasVirtualCamera()) return;
@@ -357,8 +361,31 @@ export function Setup() {
 
       <section>
         <h2>{t(lang, 'display')}</h2>
-        <div className="display-settings">
-          <label className="style-pick">
+        <div className="counter-workspace">
+          <div className="counter-preview-column">
+            {hasVirtualCamera() && (
+              <div className="mode-switch" role="radiogroup" aria-label={t(lang, 'modeLabel')}>
+                <label className="checkbox">
+                  <input
+                    type="radio"
+                    name="counter-mode"
+                    checked={!camera.video}
+                    onChange={() => setCamera({ ...camera, video: false })}
+                  />
+                  {t(lang, 'modeOnlyCounter')}
+                </label>
+                <label className="checkbox">
+                  <input
+                    type="radio"
+                    name="counter-mode"
+                    checked={camera.video}
+                    onChange={() => setCamera({ ...camera, video: true })}
+                  />
+                  {t(lang, 'modeVideo')}
+                </label>
+              </div>
+            )}
+            <label className="style-pick">
             {t(lang, 'style')}
             <select value={display.theme} onChange={(e) => updateDisplay({ theme: e.target.value as ThemeId })}>
               {THEME_IDS.map((id) => (
@@ -377,6 +404,8 @@ export function Setup() {
               snapshot={meetingSnapshot(meeting, now)}
               lang={lang}
               now={now}
+              stream={preview.stream}
+              previewError={preview.error}
               rotation={style.rotation}
               onRect={(overlay) => updateDisplay({ overlay })}
               onRotation={(rotation) => saveStyle({ ...style, rotation })}
@@ -394,8 +423,138 @@ export function Setup() {
               />
             </figure>
           )}
-        </div>
-        <div className="style-groups">
+            {hasVirtualCamera() && camera.video && (
+              <div className="camera-options">
+                <h3>{t(lang, 'camera')}</h3>
+                <div className="grid">
+                  <label>
+                    {t(lang, 'cameraSource')}
+                    <select
+                      value={camera.source ?? ''}
+                      onChange={(e) => {
+                        const source = e.target.value === '' ? null : e.target.value;
+                        setCamera({ ...camera, source });
+                      }}
+                    >
+                      <option value="">{t(lang, 'cameraSourceNone')}</option>
+                      {sources.map((source) => (
+                        <option key={source.id} value={source.id}>
+                          {source.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {t(lang, 'cameraResolution')}
+                    <select
+                      value={`${camera.width}x${camera.height}`}
+                      onChange={(e) => {
+                        const [width, height] = e.target.value.split('x').map(Number);
+                        setCamera({ ...camera, width, height });
+                      }}
+                    >
+                      {CAMERA_RATIOS.map((ratio) => (
+                        <optgroup key={ratio} label={ratio}>
+                          {CAMERA_SIZES.filter((size) => size.ratio === ratio).map((size) => (
+                            <option key={`${size.width}x${size.height}`} value={`${size.width}x${size.height}`}>
+                              {size.width}×{size.height}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {camera.source !== null && <p className="muted">{t(lang, 'cameraSourceHint')}</p>}
+                <p className="muted">{t(lang, 'mirrorSource')}</p>
+                <div className="row">
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={display.mirror.sourceH}
+                      onChange={(e) => updateMirror({ sourceH: e.target.checked })}
+                    />
+                    {t(lang, 'mirrorHorizontal')}
+                  </label>
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={display.mirror.sourceV}
+                      onChange={(e) => updateMirror({ sourceV: e.target.checked })}
+                    />
+                    {t(lang, 'mirrorVertical')}
+                  </label>
+                </div>
+                <p className="muted">{t(lang, 'mirrorOverlay')}</p>
+                <div className="row">
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={display.mirror.overlayH}
+                      onChange={(e) => updateMirror({ overlayH: e.target.checked })}
+                    />
+                    {t(lang, 'mirrorHorizontal')}
+                  </label>
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={display.mirror.overlayV}
+                      onChange={(e) => updateMirror({ overlayV: e.target.checked })}
+                    />
+                    {t(lang, 'mirrorVertical')}
+                  </label>
+                </div>
+                <p className="muted">{t(lang, 'cameraResolutionHint')}</p>
+                <p className="muted">{t(lang, 'cameraLiveHint')}</p>
+                {isWindows() && (
+                  <>
+                    {driver?.registered && <p className="muted">{t(lang, 'cameraAlwaysOn')}</p>}
+                    <div className="row">
+                      <button
+                        type="button"
+                        onClick={registerDriver}
+                        disabled={driver === null || driver.registered || !driver.available}
+                      >
+                        {t(lang, 'cameraRegister')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={unregisterDriver}
+                        disabled={driver === null || !driver.registered}
+                      >
+                        {t(lang, 'cameraUnregister')}
+                      </button>
+                    </div>
+                    {driverMessage && <p className="muted">{driverMessage}</p>}
+                    {driverUpdated && <p className="muted">{t(lang, 'cameraDriverUpdated')}</p>}
+                    {driverError && <p className="muted">{driverError}</p>}
+                  </>
+                )}
+                {isLinux() && (
+                  <>
+                    {v4l2 !== null && !v4l2.available && (
+                      <>
+                        <p>{t(lang, 'cameraLinuxMissing')}</p>
+                        <code className="camera-command">
+                          sudo modprobe v4l2loopback exclusive_caps=1 card_label="MeetBurner Camera"
+                        </code>
+                      </>
+                    )}
+                    {v4l2?.available && (
+                      <>
+                        <p>{t(lang, 'cameraLinuxReady')}</p>
+                        <code className="camera-command">{v4l2.device}</code>
+                      </>
+                    )}
+                    <p className="muted">{t(lang, 'cameraLinuxSetup')}</p>
+                  </>
+                )}
+                {cameraError && <p className="muted">{cameraError}</p>}
+              </div>
+            )}
+          </div>
+          <div className="style-column">
+            <div className="style-groups">
           <div>
             <h3>{t(lang, 'styleElements')}</h3>
             <div className="style-elements">
@@ -575,137 +734,9 @@ export function Setup() {
             {t(lang, 'styleReset')}
           </button>
         </div>
+          </div>
+        </div>
       </section>
-
-      {hasVirtualCamera() && (
-        <section>
-          <h2>{t(lang, 'camera')}</h2>
-          <div className="grid">
-            <label>
-              {t(lang, 'cameraSource')}
-              <select
-                value={camera.source ?? ''}
-                onChange={(e) => {
-                  const source = e.target.value === '' ? null : e.target.value;
-                  setCamera({ ...camera, source });
-                }}
-              >
-                <option value="">{t(lang, 'cameraSourceNone')}</option>
-                {sources.map((source) => (
-                  <option key={source.id} value={source.id}>
-                    {source.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t(lang, 'cameraResolution')}
-              <select
-                value={`${camera.width}x${camera.height}`}
-                onChange={(e) => {
-                  const [width, height] = e.target.value.split('x').map(Number);
-                  setCamera({ ...camera, width, height });
-                }}
-              >
-                {CAMERA_RATIOS.map((ratio) => (
-                  <optgroup key={ratio} label={ratio}>
-                    {CAMERA_SIZES.filter((size) => size.ratio === ratio).map((size) => (
-                      <option key={`${size.width}x${size.height}`} value={`${size.width}x${size.height}`}>
-                        {size.width}×{size.height}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-          </div>
-          {camera.source !== null && <p className="muted">{t(lang, 'cameraSourceHint')}</p>}
-          <p className="muted">{t(lang, 'mirrorSource')}</p>
-          <div className="row">
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={display.mirror.sourceH}
-                onChange={(e) => updateMirror({ sourceH: e.target.checked })}
-              />
-              {t(lang, 'mirrorHorizontal')}
-            </label>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={display.mirror.sourceV}
-                onChange={(e) => updateMirror({ sourceV: e.target.checked })}
-              />
-              {t(lang, 'mirrorVertical')}
-            </label>
-          </div>
-          <p className="muted">{t(lang, 'mirrorOverlay')}</p>
-          <div className="row">
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={display.mirror.overlayH}
-                onChange={(e) => updateMirror({ overlayH: e.target.checked })}
-              />
-              {t(lang, 'mirrorHorizontal')}
-            </label>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={display.mirror.overlayV}
-                onChange={(e) => updateMirror({ overlayV: e.target.checked })}
-              />
-              {t(lang, 'mirrorVertical')}
-            </label>
-          </div>
-          <p className="muted">{t(lang, 'cameraResolutionHint')}</p>
-          <p className="muted">{t(lang, 'cameraLiveHint')}</p>
-          {isWindows() && (
-            <>
-              {driver?.registered && <p className="muted">{t(lang, 'cameraAlwaysOn')}</p>}
-              <div className="row">
-                <button
-                  type="button"
-                  onClick={registerDriver}
-                  disabled={driver === null || driver.registered || !driver.available}
-                >
-                  {t(lang, 'cameraRegister')}
-                </button>
-                <button
-                  type="button"
-                  onClick={unregisterDriver}
-                  disabled={driver === null || !driver.registered}
-                >
-                  {t(lang, 'cameraUnregister')}
-                </button>
-              </div>
-              {driverMessage && <p className="muted">{driverMessage}</p>}
-              {driverUpdated && <p className="muted">{t(lang, 'cameraDriverUpdated')}</p>}
-              {driverError && <p className="muted">{driverError}</p>}
-            </>
-          )}
-          {isLinux() && (
-            <>
-              {v4l2 !== null && !v4l2.available && (
-                <>
-                  <p>{t(lang, 'cameraLinuxMissing')}</p>
-                  <code className="camera-command">
-                    sudo modprobe v4l2loopback exclusive_caps=1 card_label="MeetBurner Camera"
-                  </code>
-                </>
-              )}
-              {v4l2?.available && (
-                <>
-                  <p>{t(lang, 'cameraLinuxReady')}</p>
-                  <code className="camera-command">{v4l2.device}</code>
-                </>
-              )}
-              <p className="muted">{t(lang, 'cameraLinuxSetup')}</p>
-            </>
-          )}
-          {cameraError && <p className="muted">{cameraError}</p>}
-        </section>
-      )}
 
       <footer className="setup-footer">
         <p>

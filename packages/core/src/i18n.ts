@@ -64,6 +64,11 @@ const en = {
   mirrorHorizontal: 'Mirror horizontally',
   mirrorVertical: 'Mirror vertically',
   overlayPosition: 'Counter position',
+  modeLabel: 'Camera frame',
+  modeOnlyCounter: 'Only counter',
+  modeVideo: 'Add video background',
+  videoPreviewFailed:
+    'The preview camera could not be opened. Pick another webcam or switch to Only counter; the counter keeps working.',
   overlayHint:
     'Drag the card to move it, its corner to resize, the handle on top to turn it. The counter follows the card size.',
   overlayRotate: 'Turn the card',
@@ -199,6 +204,11 @@ const es: Record<MessageKey, string> = {
   mirrorHorizontal: 'Espejo horizontal',
   mirrorVertical: 'Espejo vertical',
   overlayPosition: 'Posición del contador',
+  modeLabel: 'Encuadre de la cámara',
+  modeOnlyCounter: 'Solo contador',
+  modeVideo: 'Añadir vídeo de fondo',
+  videoPreviewFailed:
+    'No se pudo abrir la cámara de la vista previa. Elige otra webcam o cambia a Solo contador; el contador sigue funcionando.',
   overlayHint:
     'Arrastra la tarjeta para moverla, su esquina para cambiar el tamaño y el tirador de arriba para girarla. El contador se adapta al tamaño de la tarjeta.',
   overlayRotate: 'Girar la tarjeta',

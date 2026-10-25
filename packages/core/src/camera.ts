@@ -50,23 +50,30 @@ export const CAMERA_SIZES: readonly CameraSize[] = [
 export interface CameraSettings {
   width: number;
   height: number;
-  /** Physical webcam to overlay the counter on (M7); null = counter only. */
+  /** Physical webcam to overlay the counter on (M7); null = none chosen yet. */
   source: string | null;
+  /**
+   * "Add video background" (ADR-0033). false publishes the counter alone, whatever `source`
+   * remembers; the camera then never opens the webcam.
+   */
+  video: boolean;
 }
 
-export const DEFAULT_CAMERA: CameraSettings = { width: 1280, height: 720, source: null };
+export const DEFAULT_CAMERA: CameraSettings = { width: 1280, height: 720, source: null, video: false };
 
 const isSupported = (width: unknown, height: unknown): boolean =>
   CAMERA_SIZES.some((size) => size.width === width && size.height === height);
 
-/** Validates untrusted (stored) camera settings. */
+/** Validates untrusted (stored) camera settings. Older settings had no `video`: the source decides. */
 export function normalizeCamera(raw: unknown): CameraSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const supported = isSupported(r.width, r.height);
+  const source = typeof r.source === 'string' && r.source.length > 0 ? r.source : null;
   return {
     width: supported ? (r.width as number) : DEFAULT_CAMERA.width,
     height: supported ? (r.height as number) : DEFAULT_CAMERA.height,
-    source: typeof r.source === 'string' && r.source.length > 0 ? r.source : null,
+    source,
+    video: typeof r.video === 'boolean' ? r.video : source !== null,
   };
 }
 
@@ -78,13 +85,19 @@ export interface CameraLabels {
 }
 
 /**
- * The card the camera actually draws (ADR-0032): the stored rectangle, the built-in corner when
- * the user never moved it, or the whole frame when there is no webcam to sit on.
+ * The card the camera actually draws (ADR-0032, ADR-0033): the stored rectangle, the built-in
+ * corner when the user never moved it, or the whole frame when there is no video behind it.
  */
 export function effectiveOverlay(display: DisplaySettings, camera: CameraSettings): OverlayRect {
   const size = normalizeCamera(camera);
-  if (display.overlay) return display.overlay;
-  return size.source === null ? FULL_FRAME : defaultOverlayRect(size.width, size.height);
+  if (!size.video || size.source === null) return FULL_FRAME;
+  return display.overlay ?? defaultOverlayRect(size.width, size.height);
+}
+
+/** Whether the camera publishes video behind the card. */
+export function hasVideoBackground(camera: CameraSettings): boolean {
+  const size = normalizeCamera(camera);
+  return size.video && size.source !== null;
 }
 
 export interface CameraDisplay {
@@ -158,6 +171,7 @@ export function cameraInput(
     },
     width: size.width,
     height: size.height,
-    source: size.source,
+    // The webcam only opens when the user asked for a video background (ADR-0033).
+    source: size.video ? size.source : null,
   };
 }

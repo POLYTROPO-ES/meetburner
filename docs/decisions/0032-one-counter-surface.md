@@ -1,6 +1,6 @@
 # 0032. One place to configure the counter
 
-- Status: accepted
+- Status: accepted (the camera mode is amended by [ADR-0033](0033-only-counter-or-video.md))
 - Date: 2026-10-24
 
 ## Context

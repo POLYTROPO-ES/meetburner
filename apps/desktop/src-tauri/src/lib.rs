@@ -180,6 +180,12 @@ fn camera_mf_unregister(app: tauri::AppHandle) -> Result<camera::mf::MfStatus, S
 pub fn run() {
     tauri::Builder::default()
         .manage(CameraState::default())
+        // The setup page shows the chosen webcam as the card's background (ADR-0033). WebView2
+        // denies media capture unless the host allows it; the app only ever loads its own UI.
+        .on_permission_request(|_webview, kind| match kind {
+            tauri::webview::PermissionKind::Camera => tauri::webview::PermissionResponse::Allow,
+            _ => tauri::webview::PermissionResponse::Default,
+        })
         .invoke_handler(tauri::generate_handler![
             camera_start,
             camera_update,

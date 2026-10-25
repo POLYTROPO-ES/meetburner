@@ -46,6 +46,7 @@ flowchart LR
 
 - Themes (classic, modern, formal, halloween, christmas, 4 seasons, minimalist) are plain data in `packages/core/src/themes.ts`, shared by the web UI (CSS variables) and the Rust camera renderer.
 - Layout `fullscreen` (the card covers the frame) or `widget` (a card over the source webcam). It is **derived** from the card rectangle by `cameraInput`, never stored, and the setup page no longer asks for it ([ADR-0032](decisions/0032-one-counter-surface.md)).
+- The setup page asks one explicit question instead: **Only counter** or **Add video background** (`CameraSettings.video`). Video mode reveals the camera options under the preview and shows the chosen webcam live behind the card; a preview that cannot open the camera only shows a message ([ADR-0033](decisions/0033-only-counter-or-video.md)).
 - User picks the font and size of the cost and of the time. `CounterView` renders the setup preview and the counter window; the desktop setup page renders the same component inside the card it places on the frame, so preview and output cannot drift ([ADR-0032](decisions/0032-one-counter-surface.md)).
 
 ## Hosting
@@ -57,7 +58,7 @@ Desktop app: GitHub Releases built from `v*` tags by `.github/workflows/release.
 ## Virtual camera (desktop only)
 
 - The counter frame for the camera is rendered **in Rust**, not captured from the webview: no window needed, constant 30 fps, low CPU.
-- Modes: `counter only` (no source webcam, so the card covers the frame) or `overlay` (the card composited on a selected physical webcam). The mode follows the card rectangle ([ADR-0032](decisions/0032-one-counter-surface.md)).
+- Modes: `counter only` (no video behind it, so the card covers the frame) or `overlay` (the card composited on the selected webcam). `CameraSettings.video` decides, and `cameraInput` sends the webcam only in video mode ([ADR-0033](decisions/0033-only-counter-or-video.md)).
 - One producer (the app) and one platform sink per OS. See [ADR-0002](decisions/0002-virtual-camera.md).
 
 ### Implemented pipeline (M4, M5 + producer of M6)

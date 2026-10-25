@@ -25,6 +25,10 @@ interface Props {
   snapshot: MeetingSnapshot;
   lang: Lang;
   now: number;
+  /** Live webcam for the background, or null when there is no video (ADR-0033). */
+  stream: MediaStream | null;
+  /** Why the preview has no video; the counter keeps working regardless. */
+  previewError: string | null;
   /** Rotation in force for the selected style, in degrees. */
   rotation: number;
   /** New card rectangle; `null` restores the built-in corner. */
@@ -58,6 +62,8 @@ export function OverlayEditor({
   snapshot,
   lang,
   now,
+  stream,
+  previewError,
   rotation,
   onRect,
   onRotation,
@@ -169,6 +175,27 @@ export function OverlayEditor({
     <div className="overlay-editor">
       <p className="muted">{t(lang, 'overlayHint')}</p>
       <div ref={stage} className="overlay-stage" style={{ aspectRatio: `${camera.width} / ${camera.height}` }}>
+        {stream && (
+          <video
+            className="overlay-video"
+            autoPlay
+            muted
+            playsInline
+            ref={(element) => {
+              // The stream outlives re-renders; assigning it once per stream is enough.
+              if (element && element.srcObject !== stream) element.srcObject = stream;
+            }}
+            style={{
+              transform: `scaleX(${display.mirror.sourceH ? -1 : 1}) scaleY(${display.mirror.sourceV ? -1 : 1})`,
+            }}
+          />
+        )}
+        {previewError && (
+          <p className="overlay-error" role="status">
+            {t(lang, 'videoPreviewFailed')}
+            <span className="muted"> — {previewError}</span>
+          </p>
+        )}
         <div
           ref={card}
           className="overlay-card"
