@@ -82,6 +82,42 @@ Release assets are public and the footer of [meetburner.com](https://meetburner.
 
 Locally, `npm run build:desktop` writes the NSIS/MSI installers to `apps/desktop/src-tauri/target/release/bundle` and the exe to `target/release`. Step-by-step, including what each file is for: [apps/desktop/README.md](apps/desktop/README.md#install-vs-portable).
 
+## AI usage
+
+MeetBurner was built with AI coding agents: GitHub Copilot Chat in VS Code, agent mode, with the custom
+agents in [.github/agents/](.github/agents/). From the first commit to v0.3.3 that took five chat
+sessions (22–25 October 2026), 115 chat requests and about 1,700 model calls.
+
+| | Claude Opus 5.5 | DeepSeek V4.1 Flash |
+|---|---|---|
+| Access | GitHub Copilot | own DeepSeek API key, added to Copilot as a custom model |
+| Sessions · chat requests · model calls | 2 · 23 · 327 | 4 · 92 · 1,378 |
+| Input tokens | ~84 M, about 93 % read from the prompt cache | ~346 M, about 85–93 % cache hits |
+| Output tokens | 0.52 M | 1.16 M |
+| Billed | **~$60** (GitHub) | **~$6** (DeepSeek) |
+| Estimated from the logs | $33–59; Copilot recorded 5,366 credits (≈ $54 at list price) | $2–6 |
+
+**In total: ~430 M input tokens (mostly cached), 1.7 M output tokens, about $40 billed.** DeepSeek
+V4 Pro was configured but never used.
+
+| Session | Dates | Agent | Model | Requests |
+|---|---|---|---|---|
+| MVP review and first build | 22 Oct | Agent (default) | Opus 5.5 | 13 |
+| Windows companion app, virtual camera | 22–23 Oct | `desktop` | DeepSeek Flash | 29 |
+| Windows app build | 22 Oct | `desktop` | DeepSeek Flash | 2 |
+| GitHub releases for binaries | 23 Oct | `architect` | DeepSeek Flash | 6 |
+| Security check, public release, v0.2–v0.3.3 | 23–25 Oct | `architect` | Opus 5.5 + DeepSeek Flash | 10 + 55 |
+
+How the numbers were obtained: VS Code keeps every chat request in its local session store with the
+model, the output tokens and the size of the last prompt. Each agent request makes several model calls
+(one per tool round) and re-sends the conversation each time, so the total input is reconstructed from
+the prompt sizes and the number of calls. Costs use each provider's list prices (Copilot's model table;
+[DeepSeek pricing](https://api-docs.deepseek.com/quick_start/pricing), peak and off-peak) under a
+cold-cache and a warm-cache assumption. The billed amounts come from the GitHub and DeepSeek dashboards
+and are the reference: DeepSeek's bill is higher than the estimate because background calls (such as
+conversation summaries) and cache misses are not in the logs, and the Copilot bill is lower than its
+credits at list price.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Binaries are code signed through SignPath Foundation once the
