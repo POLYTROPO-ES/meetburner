@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- WiX fragment for the MSI (ADR-0039). Tauri's main.wxs gives the main binary the file key
+     "Path"; this deferred, impersonated action runs the app's own command-line mode before
+     the files are removed. The condition keeps it to a real uninstall (REMOVE=ALL), so a
+     major upgrade never loses the camera registrations. Its exit code is ignored on purpose:
+     a failed cleanup must never block the uninstall. -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <CustomAction
+      Id="UnregisterMeetBurnerCameras"
+      FileKey="Path"
+      ExeCommand="--unregister-cameras"
+      Execute="deferred"
+      Impersonate="yes"
+      Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="UnregisterMeetBurnerCameras" Before="RemoveFiles">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
+    <!-- WiX drops a fragment's section unless something references it, so the custom action
+         alone never reaches the MSI. Tauri renders every id in
+         bundle.windows.wix.componentGroupRefs as a ComponentGroupRef in its always-installed
+         External feature; referencing this empty group pulls the whole fragment in. -->
+    <ComponentGroup Id="UnregisterMeetBurnerCamerasGroup" />
+  </Fragment>
+</Wix>

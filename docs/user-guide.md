@@ -107,6 +107,8 @@ webcam or switch back to **Only counter**.
 3. In your meeting app choose **MeetBurner Camera** as the camera. The counter is live while
    MeetBurner is open, so you can preview it before joining.
 4. **Clean webcam for meets** removes the registration. Uninstalling the app removes it too.
+   The uninstaller cleans the Windows account that runs it; another account keeps its own
+   registration until it presses **Clean webcam for meets** or opens a newer MeetBurner.
 
 On Windows 11 (build 22000 or later) MeetBurner publishes a **second camera**, **MeetBurner
 Camera (Windows 11)**, with the same counter. It uses Media Foundation instead of DirectShow
@@ -199,9 +201,10 @@ Gatekeeper: right-click the app, *Open*, confirm. Do not remove the quarantine a
 you trust the download.
 
 **Uninstall.**
-Windows: *Apps & features*. Portable builds: delete the folder after pressing *Clean webcam for
-meets*. Linux: your package manager, or delete the AppImage. Registration lives in `HKCU`, so a
-Windows uninstall removes it with no leftovers.
+Windows: *Apps & features* (or the Microsoft Store). Portable builds: delete the folder after
+pressing *Clean webcam for meets*. Linux: your package manager, or delete the AppImage.
+Registration lives in `HKCU`, so the Windows uninstaller removes it for the account that runs
+it; other Windows accounts keep their own keys until they press *Clean webcam for meets*.
 
 ## Reporting a problem
 

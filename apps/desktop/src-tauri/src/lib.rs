@@ -199,6 +199,83 @@ fn camera_mf_unregister(app: tauri::AppHandle) -> Result<camera::mf::MfStatus, S
     camera::mf::unregister(mf_dll(&app).as_deref())
 }
 
+/// Command-line mode, decided before any window exists (ADR-0039).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Command {
+    /// Normal start: open the app window.
+    Run,
+    /// Uninstall helper: remove the per-user camera registrations and exit.
+    UnregisterCameras,
+}
+
+/// `--unregister-cameras` anywhere on the command line selects the uninstall mode; every other
+/// argument is ignored (ADR-0039).
+pub fn parse_command<I, S>(args: I) -> Command
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    if args
+        .into_iter()
+        .any(|argument| argument.as_ref() == "--unregister-cameras")
+    {
+        Command::UnregisterCameras
+    } else {
+        Command::Run
+    }
+}
+
+/// What the uninstall mode does with the Windows 11 MF camera (ADR-0039).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MfUnregister {
+    /// The camera is not registered: leave the registry alone.
+    Nothing,
+    /// The camera is registered: run `MB_MfUnregister` against this DLL.
+    Remove(PathBuf),
+}
+
+/// Decides the MF step without touching the registry, so the "nothing registered" path is
+/// testable off Windows (ADR-0008, ADR-0039).
+pub fn mf_unregister_step(registered: bool, dll: Option<&Path>) -> Result<MfUnregister, String> {
+    if !registered {
+        return Ok(MfUnregister::Nothing);
+    }
+    match dll {
+        Some(dll) => Ok(MfUnregister::Remove(dll.to_path_buf())),
+        None => Err(format!(
+            "{} was not found next to the app",
+            camera::mf::DLL_FILE
+        )),
+    }
+}
+
+/// Removes both per-user camera registrations (ADR-0039): the DirectShow driver first, always
+/// (a no-op off Windows and when nothing is registered), then the Windows 11 MF camera when it
+/// is registered. The installers call it as `meetburner.exe --unregister-cameras`.
+pub fn unregister_cameras() -> Result<(), String> {
+    driver::remove_registration()?;
+    // No AppHandle in command-line mode: the DLL is looked up next to the exe.
+    let exe = exe_dir()?;
+    let dll = camera::mf::find(&camera::mf::candidates(None, Some(&exe)));
+    let registered = camera::mf::status(dll.as_deref()).registered;
+    if let MfUnregister::Remove(dll) = mf_unregister_step(registered, dll.as_deref())? {
+        camera::mf::unregister(Some(&dll))?;
+    }
+    Ok(())
+}
+
+/// Exit code for `--unregister-cameras`. The release binary uses the Windows subsystem, so the
+/// installer can only read the exit code; the reason goes to stderr for the NSIS log (ADR-0039).
+pub fn unregister_cameras_cli() -> i32 {
+    match unregister_cameras() {
+        Ok(()) => 0,
+        Err(error) => {
+            eprintln!("MeetBurner: cannot unregister the cameras: {error}");
+            1
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -220,4 +297,79 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running MeetBurner");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn no_arguments_run_the_app() {
+        assert_eq!(parse_command(Vec::<String>::new()), Command::Run);
+        assert_eq!(parse_command(["meetburner.exe"]), Command::Run);
+        assert_eq!(
+            parse_command(["meetburner.exe", "--some-other-flag"]),
+            Command::Run
+        );
+    }
+
+    #[test]
+    fn the_flag_alone_means_unregister() {
+        assert_eq!(
+            parse_command(["meetburner.exe", "--unregister-cameras"]),
+            Command::UnregisterCameras
+        );
+    }
+
+    #[test]
+    fn the_flag_among_other_arguments_means_unregister() {
+        assert_eq!(
+            parse_command(["--first", "--unregister-cameras", "--last"]),
+            Command::UnregisterCameras
+        );
+    }
+
+    #[test]
+    fn an_argument_that_only_looks_like_the_flag_is_ignored() {
+        assert_eq!(
+            parse_command(["meetburner.exe", "--unregister-cameras=1"]),
+            Command::Run
+        );
+        assert_eq!(
+            parse_command(["meetburner.exe", "x--unregister-cameras"]),
+            Command::Run
+        );
+    }
+
+    #[test]
+    fn nothing_registered_leaves_the_registry_alone() {
+        assert_eq!(
+            mf_unregister_step(false, None).expect("nothing to do"),
+            MfUnregister::Nothing
+        );
+        let dll = Path::new("C:\\Apps").join(camera::mf::DLL_FILE);
+        assert_eq!(
+            mf_unregister_step(false, Some(&dll)).expect("nothing to do"),
+            MfUnregister::Nothing,
+            "an unregistered camera must not be touched, even when the DLL exists"
+        );
+    }
+
+    #[test]
+    fn a_registered_camera_removes_the_bundled_dll() {
+        let dll = Path::new("C:\\Apps").join(camera::mf::DLL_FILE);
+        assert_eq!(
+            mf_unregister_step(true, Some(&dll)).expect("remove"),
+            MfUnregister::Remove(dll.clone())
+        );
+    }
+
+    #[test]
+    fn a_registered_camera_without_its_dll_names_the_missing_file() {
+        let error = mf_unregister_step(true, None).expect_err("no DLL to unregister with");
+        assert_eq!(
+            error,
+            format!("{} was not found next to the app", camera::mf::DLL_FILE)
+        );
+    }
 }
