@@ -11,6 +11,8 @@ release contains `MeetBurner_<version>_x64_store-setup.exe` (ADR-0039).
       ADR-0012).
 - [ ] Silent install, silent upgrade and silent uninstall pass on clean Windows 10 and 11 VMs
       (`docs/store/silent-install-checks.md`).
+- [ ] **MeetBurner Camera (Windows 11)** appears in the Windows Camera app on a clean Windows 11 VM
+      (M8 verification; the Store reviewer may test it).
 - [ ] The Store package validation in Partner Center passes.
 - [ ] The "What's new" text in `docs/store/listing.*.md` matches this release.
 - [ ] `docs/store/screenshots/` has the four current images (see its README).

@@ -27,8 +27,10 @@ The Store downloads the signed NSIS installer from a versioned GitHub Release UR
 ## Prerequisites a human must provide (ask, never invent)
 
 1. **Signing route.** Ask which one before task 2:
-   - **Azure Artifact Signing** (~10 USD/month, certificate in the name of Polytropo, OIDC from GitHub Actions, no stored secret).
-     Needs the Azure account, the identity validation, and the names of the account, the endpoint and the certificate profile.
+   - **Azure Artifact Signing** (~10 USD/month, certificate in the name of Polytropo).
+     Needs the Azure account, the identity validation, the names of the account, the endpoint and the
+     certificate profile, and an App Registration secret (the Tauri-documented `artifact-signing-cli`
+     has no OIDC mode).
    - **SignPath Foundation** (free, the publisher shown is "SignPath Foundation", ADR-0027). Needs the approved application and `SIGNPATH_API_TOKEN`.
 2. **The Partner Center company account** (free since May 2026) and the reserved product name "MeetBurner".
 3. **The update policy** (task 7). It changes the privacy statement, so it is the owners' call.
@@ -48,10 +50,10 @@ Done when: the ADR is merged and the roadmap lists M13.
 ### 2. Code signing in `release.yml` — `architect`
 
 - Replace the PFX import (`WINDOWS_CERTIFICATE`) with the chosen route. Since 2023, private keys live in an HSM and cannot be exported to a secret.
-  - **Artifact Signing:** log in with `azure/login` (OIDC, `permissions: id-token: write` on the Windows job only).
-    Sign with Tauri's `bundle.windows.signCommand`, which runs once per file (`%1`).
-    Use the tool that the Tauri "Windows code signing" guide documents for Artifact/Trusted Signing.
-    Verify the current tool name and arguments against that guide before writing them.
+  - **Artifact Signing:** use the Azure App Registration credentials that the Tauri-documented
+    `artifact-signing-cli` requires (`AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`;
+    the CLI has no OIDC mode). Sign with Tauri's `bundle.windows.signCommand`, which runs once per
+    file (`%1`). The tool name and arguments follow the Tauri "Windows code signing" guide.
   - **SignPath:** build unsigned, upload the artifact, submit the signing request through the SignPath GitHub Action, download the signed files.
 - Sign in this order:
   1. `MeetBurnerCamera.dll` and `MeetBurnerMfCamera.dll`, **before** `tauri build`. `build.rs` embeds the DirectShow DLL in the exe (ADR-0026), so it must already be signed when it is embedded.
@@ -159,8 +161,10 @@ Create `docs/store/` with:
   - keywords.
 
   The tone and facts come from `README.md` and `docs/user-guide.md`. Do not promise features from the roadmap that are not done yet (for example, the macOS virtual camera).
-- `screenshots/`: at least 4 PNG captures of the Windows app at 1920×1080 or 1366×768 (the setup page, the counter, the meeting app picker showing "MeetBurner Camera", the overlay).
-  Take them from a real build. Never use mockups.
+- `screenshots/`: at least 4 PNG captures at 1920×1080 or 1366×768 (the setup page, the counter,
+  the meeting app picker showing "MeetBurner Camera", the overlay). Take the app captures from a
+  real build; never use mockups. The overlay may be a clearly labelled schematic until a real
+  overlay capture is available (owner's instruction, 2026-11-23).
 - `certification-notes.md`, pasted into "Notes for certification" in Partner Center. It must explain:
   - what the app does;
   - that **Register webcam for meets** writes a per-user COM registration under HKCU, with no admin rights and no kernel driver;
