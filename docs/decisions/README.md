@@ -54,3 +54,4 @@ Template:
 | [0036](0036-split-flap-style.md) | Split-flap style: values on airport plates | accepted (animation added by 0037) |
 | [0037](0037-split-flap-animation.md) | Split-flap plates actually flip | accepted |
 | [0038](0038-glib-advisory.md) | Accept the glib `VariantStrIter` advisory, do not fork the GTK stack | accepted |
+| [0039](0039-microsoft-store.md) | Microsoft Store: EXE/MSI submission, store build and clean uninstall | accepted |
