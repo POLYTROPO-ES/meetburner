@@ -41,4 +41,6 @@ requested by the user or the person installing or operating it.
 
 Registering the virtual camera writes a per-user COM registration under `HKCU`: no administrator
 rights and no system-wide driver install. *Clean webcam for meets* removes it, and uninstalling
-the app removes it too (ADR-0017, ADR-0020).
+the app removes it too (ADR-0017, ADR-0020, ADR-0039). The uninstaller cleans the account that
+runs it; other Windows accounts keep their per-user keys until they run *Clean webcam for
+meets* or open a newer version.
