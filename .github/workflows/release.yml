@@ -317,13 +317,74 @@ jobs:
           Copy-Item $nsis.FullName (Join-Path 'apps/desktop/src-tauri/target/release/bundle/nsis' $nsis.Name) -Force
           Copy-Item $msi.FullName (Join-Path 'apps/desktop/src-tauri/target/release/bundle/msi' $msi.Name) -Force
 
+      # The Store installer is the same signed exe with the offline WebView2 runtime and the
+      # Polytropo publisher (ADR-0039). `tauri bundle` reuses the signed exe; the normal NSIS
+      # installer is saved and restored so both files survive.
+      - name: Build the Microsoft Store installer
+        run: |
+          $version = '${{ needs.check.outputs.version }}'
+          $route = '${{ steps.route.outputs.route }}'
+          $nsisDir = 'apps/desktop/src-tauri/target/release/bundle/nsis'
+          $normal = Get-ChildItem "$nsisDir/*.exe" | Select-Object -First 1
+          if (-not $normal) { throw 'the normal NSIS installer was not built' }
+          $saved = Join-Path $env:RUNNER_TEMP $normal.Name
+          Copy-Item $normal.FullName $saved -Force
+          Remove-Item $normal.FullName -Force
+          $arguments = @(
+            'run', 'tauri', '-w', '@meetburner/desktop', '--',
+            'bundle', '--bundles', 'nsis',
+            '--config', 'src-tauri/tauri.microsoftstore.conf.json'
+          )
+          if ($route -eq 'artifact-signing') {
+            $arguments += @('--config', (Join-Path $env:RUNNER_TEMP 'artifact-signing.json'))
+          }
+          & npm @arguments
+          if ($LASTEXITCODE -ne 0) { throw 'the Microsoft Store bundle failed' }
+          $store = Get-ChildItem "$nsisDir/*.exe" | Select-Object -First 1
+          if (-not $store) { throw 'the Microsoft Store installer was not built' }
+          Move-Item $store.FullName "MeetBurner_${version}_x64_store-setup.exe" -Force
+          Copy-Item $saved (Join-Path $nsisDir $normal.Name) -Force
+
+      - name: Upload the store installer for SignPath
+        id: upload-store
+        if: steps.route.outputs.route == 'signpath'
+        uses: actions/upload-artifact@v4
+        with:
+          name: meetburner-store-installer-unsigned
+          if-no-files-found: error
+          retention-days: 1
+          path: MeetBurner_*_store-setup.exe
+
+      - name: Sign the store installer (SignPath)
+        if: steps.route.outputs.route == 'signpath'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-store.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: ${{ runner.temp }}/signed-store
+
+      - name: Put the signed store installer back
+        if: steps.route.outputs.route == 'signpath'
+        run: |
+          $signed = Get-ChildItem -Recurse -File "${{ runner.temp }}/signed-store" -Filter '*_store-setup.exe' |
+            Select-Object -First 1
+          if (-not $signed) { throw 'the store installer was not returned by SignPath' }
+          Copy-Item $signed.FullName $signed.Name -Force
+
       - name: Verify the signed application and installers
         if: steps.route.outputs.signed == 'true'
         run: |
           if (-not $env:SIGNTOOL_PATH) { throw 'SIGNTOOL_PATH is not set' }
           $files = @('apps/desktop/src-tauri/target/release/meetburner.exe') +
             @(Get-ChildItem 'apps/desktop/src-tauri/target/release/bundle/nsis/*.exe' | ForEach-Object FullName) +
-            @(Get-ChildItem 'apps/desktop/src-tauri/target/release/bundle/msi/*.msi' | ForEach-Object FullName)
+            @(Get-ChildItem 'apps/desktop/src-tauri/target/release/bundle/msi/*.msi' | ForEach-Object FullName) +
+            @(Get-ChildItem 'MeetBurner_*_store-setup.exe' | ForEach-Object FullName)
           foreach ($file in $files) {
             & $env:SIGNTOOL_PATH verify /pa /v $file
             if ($LASTEXITCODE -ne 0) { throw "$file is not signed" }
@@ -349,6 +410,7 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/msi/*.msi
             MeetBurner_*_x64.exe
             MeetBurner_*_portable_x64.zip
+            MeetBurner_*_store-setup.exe
 
   linux:
     name: Linux (deb, AppImage)
@@ -447,10 +509,43 @@ jobs:
 
       - name: Create the draft release and upload the assets
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --draft --verify-tag --generate-notes \
-            --title "MeetBurner ${{ needs.check.outputs.version }}"
-          gh release upload "$GITHUB_REF_NAME" out/* --clobber
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            # A published release is immutable: a re-run of the tag must not replace the
+            # binaries the Store (or a user) already points at.
+            draft=$(gh release view "$GITHUB_REF_NAME" --json isDraft -q .isDraft)
+            if [ "$draft" != "true" ]; then
+              echo "::error::Release $GITHUB_REF_NAME is already published; bump the version and tag a new release"
+              exit 1
+            fi
+            if gh release view "$GITHUB_REF_NAME" --json assets -q '.assets[].name' | grep -q '_store-setup\.exe$'; then
+              echo "::error::Release $GITHUB_REF_NAME already has a store installer; the Store URL must never change"
+              exit 1
+            fi
+            echo "Updating the existing draft $GITHUB_REF_NAME"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --draft --verify-tag --generate-notes \
+              --title "MeetBurner ${{ needs.check.outputs.version }}"
+          fi
+
+          # --clobber refreshes the normal assets. The Store installer is uploaded without it,
+          # and only when the release has none (checked above): its URL is permanent.
+          shopt -s nullglob
+          normal=()
+          store=()
+          for file in out/*; do
+            case "$file" in
+              *_store-setup.exe) store+=("$file") ;;
+              *) normal+=("$file") ;;
+            esac
+          done
+          if [ ${#normal[@]} -gt 0 ]; then
+            gh release upload "$GITHUB_REF_NAME" "${normal[@]}" --clobber
+          fi
+          if [ ${#store[@]} -gt 0 ]; then
+            gh release upload "$GITHUB_REF_NAME" "${store[@]}"
+          fi
 
       - name: Note the signing status
         env:
@@ -466,6 +561,10 @@ jobs:
 
           - `MeetBurner_*_x64.exe` — one file. The first *Register webcam for meets* writes `MeetBurnerCamera.v<N>.dll` next to the exe and registers that file, because Windows COM loads the filter from a path.
           - `MeetBurner_*_portable_x64.zip` — the same exe plus `resources\MeetBurnerCamera.dll`, already on disk. Nothing is extracted, so antivirus and SmartScreen see a plain application folder. Prefer this one if the single file is flagged: an exe that drops a DLL and registers a COM server matches dropper heuristics.
+
+          ### Microsoft Store
+
+          `MeetBurner_${{ needs.check.outputs.version }}_x64_store-setup.exe` is the same app and version with the WebView2 runtime included, for the Microsoft Store. The Store links to this exact file, so it is never replaced once published; a fix ships as a new version. The Store does not update EXE/MSI apps: update from the Store page or this release page.
           NOTES
           if [ "$SIGNED" = "true" ] && [ "$ROUTE" = "signpath" ]; then
             printf '\n> This build is code signed by SignPath Foundation (ADR-0027).\n' >> notes.md
