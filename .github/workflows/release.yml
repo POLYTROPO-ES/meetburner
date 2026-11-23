@@ -21,8 +21,8 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -75,9 +75,9 @@ jobs:
       signed: ${{ steps.route.outputs.signed }}
       route: ${{ steps.route.outputs.route }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -171,7 +171,7 @@ jobs:
       - name: Upload the camera drivers for SignPath
         id: upload-drivers
         if: steps.route.outputs.route == 'signpath'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: meetburner-camera-drivers-unsigned
           if-no-files-found: error
@@ -245,7 +245,7 @@ jobs:
       - name: Upload the executable for SignPath
         id: upload-exe
         if: steps.route.outputs.route == 'signpath'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: meetburner-exe-unsigned
           if-no-files-found: error
@@ -283,7 +283,7 @@ jobs:
       - name: Upload the installers for SignPath
         id: upload-installers
         if: steps.route.outputs.route == 'signpath'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: meetburner-installers-unsigned
           if-no-files-found: error
@@ -348,7 +348,7 @@ jobs:
       - name: Upload the store installer for SignPath
         id: upload-store
         if: steps.route.outputs.route == 'signpath'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: meetburner-store-installer-unsigned
           if-no-files-found: error
@@ -401,7 +401,7 @@ jobs:
           Copy-Item 'apps/desktop/src-tauri/target/release/resources/*.dll' (Join-Path $stage 'resources')
           Compress-Archive -Path (Join-Path $stage '*') -DestinationPath "MeetBurner_${version}_portable_x64.zip"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           if-no-files-found: error
@@ -417,8 +417,8 @@ jobs:
     needs: check
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -435,7 +435,7 @@ jobs:
       - run: npm ci
       - name: Build the bundles
         run: npm run build:desktop -- --bundles deb,appimage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux
           if-no-files-found: error
@@ -448,8 +448,8 @@ jobs:
     needs: check
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -463,7 +463,7 @@ jobs:
       - run: npm ci
       - name: Build the universal DMG
         run: npm run build:desktop -- --target universal-apple-darwin --bundles dmg
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos
           if-no-files-found: error
@@ -482,17 +482,17 @@ jobs:
     steps:
       # Only the final artifacts: the unsigned DLL/exe/installer archives that SignPath uses
       # as input must never become release assets.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: windows
           path: dist/windows
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: linux
           path: dist/linux
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: macos
           path: dist/macos
