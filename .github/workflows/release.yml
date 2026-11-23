@@ -51,14 +51,29 @@ jobs:
     name: Windows (NSIS, MSI, portable)
     needs: check
     runs-on: windows-latest
+    # `actions: read` lets the SignPath action download the uploaded unsigned artifact.
+    permissions:
+      contents: read
+      actions: read
     defaults:
       run:
         shell: pwsh
     env:
-      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      SIGNING_ROUTE: ${{ vars.SIGNING_ROUTE }}
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+      SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+      SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+      SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_ARTIFACT_SIGNING_ENDPOINT: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+      AZURE_ARTIFACT_SIGNING_ACCOUNT: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+      AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE: ${{ vars.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
     outputs:
-      signed: ${{ steps.signing.outputs.signed }}
+      signed: ${{ steps.route.outputs.signed }}
+      route: ${{ steps.route.outputs.route }}
     steps:
       - uses: actions/checkout@v4
 
@@ -75,59 +90,244 @@ jobs:
 
       - run: npm ci
 
-      - name: Build the DirectShow driver
+      # No PFX: since June 2023 a code-signing key lives in an HSM. The route is a repository
+      # variable (ADR-0027, ADR-0039); forks and dry runs without credentials stay unsigned.
+      # The order is fixed: DLLs before `tauri build` (build.rs embeds the DirectShow DLL),
+      # then the exe, then the installers built from that signed exe.
+      - name: Choose the signing route
+        id: route
+        run: |
+          $route = $env:SIGNING_ROUTE
+          if (-not $route) { $route = 'unsigned' }
+          if ($route -eq 'signpath') {
+            $missing = @(
+              $env:SIGNPATH_API_TOKEN,
+              $env:SIGNPATH_ORGANIZATION_ID,
+              $env:SIGNPATH_PROJECT_SLUG,
+              $env:SIGNPATH_SIGNING_POLICY_SLUG,
+              $env:SIGNPATH_ARTIFACT_CONFIGURATION_SLUG
+            ) | Where-Object { -not $_ }
+            if ($missing) {
+              Write-Host '::warning::SIGNING_ROUTE=signpath but the SignPath settings are incomplete: building unsigned'
+              $route = 'unsigned'
+            }
+          }
+          if ($route -eq 'artifact-signing') {
+            $missing = @(
+              $env:AZURE_CLIENT_ID,
+              $env:AZURE_CLIENT_SECRET,
+              $env:AZURE_TENANT_ID,
+              $env:AZURE_ARTIFACT_SIGNING_ENDPOINT,
+              $env:AZURE_ARTIFACT_SIGNING_ACCOUNT,
+              $env:AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE
+            ) | Where-Object { -not $_ }
+            if ($missing) {
+              Write-Host '::warning::SIGNING_ROUTE=artifact-signing but the Azure settings are incomplete: building unsigned'
+              $route = 'unsigned'
+            }
+          }
+          if ($route -notin @('signpath', 'artifact-signing', 'unsigned')) {
+            Write-Host "::warning::Unknown SIGNING_ROUTE '$route': building unsigned"
+            $route = 'unsigned'
+          }
+          "route=$route" >> $env:GITHUB_OUTPUT
+          if ($route -eq 'unsigned') {
+            "signed=false" >> $env:GITHUB_OUTPUT
+          } else {
+            "signed=true" >> $env:GITHUB_OUTPUT
+          }
+          Write-Host "Signing route: $route"
+
+      - name: Locate signtool
+        if: steps.route.outputs.signed == 'true'
+        run: |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe not found in the Windows SDK' }
+          "SIGNTOOL_PATH=$($signtool.FullName)" >> $env:GITHUB_ENV
+
+      - name: Build the camera drivers
         run: |
           cmake -S native/vcam-windows -B native/vcam-windows/build -A x64
           if ($LASTEXITCODE -ne 0) { throw 'cmake configure failed' }
           cmake --build native/vcam-windows/build --config Release
           if ($LASTEXITCODE -ne 0) { throw 'cmake build failed' }
 
-      - name: Import the code signing certificate
-        id: signing
-        run: |
-          if (-not $env:WINDOWS_CERTIFICATE) {
-            Write-Host 'WINDOWS_CERTIFICATE is not set: building unsigned'
-            "signed=false" >> $env:GITHUB_OUTPUT
-          } else {
-            $pfx = Join-Path $env:RUNNER_TEMP 'meetburner.pfx'
-            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
-            $secure = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
-            $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $secure
-            "MEETBURNER_PFX=$pfx" >> $env:GITHUB_ENV
-            "MEETBURNER_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
-            "signed=true" >> $env:GITHUB_OUTPUT
-          }
+      - name: Install artifact-signing-cli
+        if: steps.route.outputs.route == 'artifact-signing'
+        run: cargo install artifact-signing-cli --locked
 
-      - name: Sign the drivers
-        if: steps.signing.outputs.signed == 'true'
+      - name: Sign the camera drivers (Azure Artifact Signing)
+        if: steps.route.outputs.route == 'artifact-signing'
         run: |
-          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
-            Sort-Object FullName -Descending | Select-Object -First 1
-          if (-not $signtool) { throw 'signtool.exe not found in the Windows SDK' }
-          & $signtool.FullName sign /fd sha256 /td sha256 /tr http://timestamp.digicert.com `
-            /f $env:MEETBURNER_PFX /p $env:WINDOWS_CERTIFICATE_PASSWORD `
+          artifact-signing-cli -e $env:AZURE_ARTIFACT_SIGNING_ENDPOINT `
+            -a $env:AZURE_ARTIFACT_SIGNING_ACCOUNT `
+            -c $env:AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE `
+            -d MeetBurner `
             native/vcam-windows/build/Release/MeetBurnerCamera.dll `
             native/vcam-windows/build/Release/MeetBurnerMfCamera.dll
-          if ($LASTEXITCODE -ne 0) { throw 'signtool failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'artifact-signing-cli failed for the camera drivers' }
 
-      - name: Build the app and the installers
+      - name: Upload the camera drivers for SignPath
+        id: upload-drivers
+        if: steps.route.outputs.route == 'signpath'
+        uses: actions/upload-artifact@v4
+        with:
+          name: meetburner-camera-drivers-unsigned
+          if-no-files-found: error
+          retention-days: 1
+          path: |
+            native/vcam-windows/build/Release/MeetBurnerCamera.dll
+            native/vcam-windows/build/Release/MeetBurnerMfCamera.dll
+
+      # The SignPath artifact configuration must describe a <zip-file> that signs every
+      # PE file in the archive; the same configuration is reused for the three requests.
+      - name: Sign the camera drivers (SignPath)
+        if: steps.route.outputs.route == 'signpath'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-drivers.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: ${{ runner.temp }}/signed-drivers
+
+      - name: Put the signed camera drivers back
+        if: steps.route.outputs.route == 'signpath'
         run: |
-          if ($env:MEETBURNER_THUMBPRINT) {
-            $config = Join-Path $env:RUNNER_TEMP 'sign.json'
-            @{
-              bundle = @{
-                windows = @{
-                  certificateThumbprint = $env:MEETBURNER_THUMBPRINT
-                  digestAlgorithm = 'sha256'
-                  timestampUrl = 'http://timestamp.digicert.com'
-                }
-              }
-            } | ConvertTo-Json -Depth 5 | Set-Content $config -Encoding utf8
-            npm run build:desktop -- --bundles nsis,msi --config $config
-          } else {
-            npm run build:desktop -- --bundles nsis,msi
+          $signed = Get-ChildItem -Recurse -File "${{ runner.temp }}/signed-drivers" -Filter '*.dll'
+          foreach ($name in @('MeetBurnerCamera.dll', 'MeetBurnerMfCamera.dll')) {
+            $file = $signed | Where-Object Name -eq $name | Select-Object -First 1
+            if (-not $file) { throw "$name was not returned by SignPath" }
+            Copy-Item $file.FullName "native/vcam-windows/build/Release/$name" -Force
           }
+
+      - name: Verify the signed camera drivers
+        if: steps.route.outputs.signed == 'true'
+        run: |
+          if (-not $env:SIGNTOOL_PATH) { throw 'SIGNTOOL_PATH is not set' }
+          foreach ($dll in @('MeetBurnerCamera.dll', 'MeetBurnerMfCamera.dll')) {
+            & $env:SIGNTOOL_PATH verify /pa /v "native/vcam-windows/build/Release/$dll"
+            if ($LASTEXITCODE -ne 0) { throw "$dll is not signed" }
+          }
+
+      - name: Build the app and the installers (unsigned)
+        if: steps.route.outputs.route == 'unsigned'
+        run: |
+          npm run build:desktop -- --bundles nsis,msi
           if ($LASTEXITCODE -ne 0) { throw 'tauri build failed' }
+
+      - name: Build the app and the installers (Azure Artifact Signing)
+        if: steps.route.outputs.route == 'artifact-signing'
+        run: |
+          $config = Join-Path $env:RUNNER_TEMP 'artifact-signing.json'
+          @{
+            bundle = @{
+              windows = @{
+                signCommand = "artifact-signing-cli -e $env:AZURE_ARTIFACT_SIGNING_ENDPOINT -a $env:AZURE_ARTIFACT_SIGNING_ACCOUNT -c $env:AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE -d MeetBurner %1"
+              }
+            }
+          } | ConvertTo-Json -Depth 5 | Set-Content $config -Encoding utf8
+          npm run build:desktop -- --bundles nsis,msi --config $config
+          if ($LASTEXITCODE -ne 0) { throw 'tauri build failed' }
+
+      # SignPath signs after the fact, so this route builds and signs in three requests.
+      - name: Build the executable (SignPath)
+        if: steps.route.outputs.route == 'signpath'
+        run: |
+          npm run build:desktop -- --no-bundle
+          if ($LASTEXITCODE -ne 0) { throw 'tauri build failed' }
+
+      - name: Upload the executable for SignPath
+        id: upload-exe
+        if: steps.route.outputs.route == 'signpath'
+        uses: actions/upload-artifact@v4
+        with:
+          name: meetburner-exe-unsigned
+          if-no-files-found: error
+          retention-days: 1
+          path: apps/desktop/src-tauri/target/release/meetburner.exe
+
+      - name: Sign the executable (SignPath)
+        if: steps.route.outputs.route == 'signpath'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-exe.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: ${{ runner.temp }}/signed-exe
+
+      - name: Put the signed executable back
+        if: steps.route.outputs.route == 'signpath'
+        run: |
+          $signed = Get-ChildItem -Recurse -File "${{ runner.temp }}/signed-exe" -Filter 'meetburner.exe' |
+            Select-Object -First 1
+          if (-not $signed) { throw 'meetburner.exe was not returned by SignPath' }
+          Copy-Item $signed.FullName 'apps/desktop/src-tauri/target/release/meetburner.exe' -Force
+
+      - name: Build the installers from the signed executable (SignPath)
+        if: steps.route.outputs.route == 'signpath'
+        run: |
+          npm run tauri -w @meetburner/desktop -- bundle --bundles nsis,msi
+          if ($LASTEXITCODE -ne 0) { throw 'tauri bundle failed' }
+
+      - name: Upload the installers for SignPath
+        id: upload-installers
+        if: steps.route.outputs.route == 'signpath'
+        uses: actions/upload-artifact@v4
+        with:
+          name: meetburner-installers-unsigned
+          if-no-files-found: error
+          retention-days: 1
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+            apps/desktop/src-tauri/target/release/bundle/msi/*.msi
+
+      - name: Sign the installers (SignPath)
+        if: steps.route.outputs.route == 'signpath'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-installers.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: ${{ runner.temp }}/signed-installers
+
+      - name: Put the signed installers back
+        if: steps.route.outputs.route == 'signpath'
+        run: |
+          $signed = Get-ChildItem -Recurse -File "${{ runner.temp }}/signed-installers"
+          $nsis = $signed | Where-Object Extension -eq '.exe' | Select-Object -First 1
+          $msi = $signed | Where-Object Extension -eq '.msi' | Select-Object -First 1
+          if (-not $nsis) { throw 'the NSIS installer was not returned by SignPath' }
+          if (-not $msi) { throw 'the MSI installer was not returned by SignPath' }
+          Copy-Item $nsis.FullName (Join-Path 'apps/desktop/src-tauri/target/release/bundle/nsis' $nsis.Name) -Force
+          Copy-Item $msi.FullName (Join-Path 'apps/desktop/src-tauri/target/release/bundle/msi' $msi.Name) -Force
+
+      - name: Verify the signed application and installers
+        if: steps.route.outputs.signed == 'true'
+        run: |
+          if (-not $env:SIGNTOOL_PATH) { throw 'SIGNTOOL_PATH is not set' }
+          $files = @('apps/desktop/src-tauri/target/release/meetburner.exe') +
+            @(Get-ChildItem 'apps/desktop/src-tauri/target/release/bundle/nsis/*.exe' | ForEach-Object FullName) +
+            @(Get-ChildItem 'apps/desktop/src-tauri/target/release/bundle/msi/*.msi' | ForEach-Object FullName)
+          foreach ($file in $files) {
+            & $env:SIGNTOOL_PATH verify /pa /v $file
+            if ($LASTEXITCODE -ne 0) { throw "$file is not signed" }
+          }
 
       - name: Assemble the portable builds
         run: |
@@ -218,10 +418,22 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
     steps:
+      # Only the final artifacts: the unsigned DLL/exe/installer archives that SignPath uses
+      # as input must never become release assets.
       - uses: actions/download-artifact@v4
         with:
-          path: dist
-          merge-multiple: true
+          name: windows
+          path: dist/windows
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+          path: dist/linux
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos
+          path: dist/macos
 
       - name: Checksums
         run: |
@@ -240,9 +452,10 @@ jobs:
             --title "MeetBurner ${{ needs.check.outputs.version }}"
           gh release upload "$GITHUB_REF_NAME" out/* --clobber
 
-      - name: Note an unsigned build
+      - name: Note the signing status
         env:
           SIGNED: ${{ needs.windows.outputs.signed }}
+          ROUTE: ${{ needs.windows.outputs.route }}
         run: |
           gh release view "$GITHUB_REF_NAME" --json body -q .body > notes.md
           cat >> notes.md <<'NOTES'
@@ -252,9 +465,13 @@ jobs:
           Both files are the same `meetburner.exe`. Pick one:
 
           - `MeetBurner_*_x64.exe` — one file. The first *Register webcam for meets* writes `MeetBurnerCamera.v<N>.dll` next to the exe and registers that file, because Windows COM loads the filter from a path.
-          - `MeetBurner_*_portable_x64.zip` — the same exe plus `resources\MeetBurnerCamera.dll`, already on disk. Nothing is extracted, so antivirus and SmartScreen see a plain application folder. Prefer this one if the single file is flagged: an unsigned exe that drops a DLL and registers a COM server matches dropper heuristics.
+          - `MeetBurner_*_portable_x64.zip` — the same exe plus `resources\MeetBurnerCamera.dll`, already on disk. Nothing is extracted, so antivirus and SmartScreen see a plain application folder. Prefer this one if the single file is flagged: an exe that drops a DLL and registers a COM server matches dropper heuristics.
           NOTES
-          if [ "$SIGNED" != "true" ]; then
+          if [ "$SIGNED" = "true" ] && [ "$ROUTE" = "signpath" ]; then
+            printf '\n> This build is code signed by SignPath Foundation (ADR-0027).\n' >> notes.md
+          elif [ "$SIGNED" = "true" ] && [ "$ROUTE" = "artifact-signing" ]; then
+            printf '\n> This build is code signed with an Azure Artifact Signing certificate (ADR-0039).\n' >> notes.md
+          else
             printf '\n> This build is not code signed. Windows SmartScreen warns the first time; choose *More info*, then *Run anyway*.\n' >> notes.md
           fi
           printf '\n> The macOS build is not signed or notarized yet: Gatekeeper blocks it on first launch. Right-click the app, choose *Open*, then confirm. The virtual camera is not part of the macOS build (ADR-0028).\n' >> notes.md
