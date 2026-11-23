@@ -1,6 +1,6 @@
 # 0027. Public source under MIT, binaries signed by SignPath Foundation
 
-- Status: accepted (SignPath application pending)
+- Status: accepted (SignPath application pending; Azure Artifact Signing fallback added by 0039)
 - Date: 2026-10-23
 
 ## Context
@@ -42,3 +42,13 @@ that each artifact was built by CI from an open repository, and signs for free.
   registry would break origin verification.
 - SignPath can reject the application at its discretion. Fallback: Azure Trusted Signing
   (~10 USD/month, OIDC, still no stored secret).
+
+## Amendment — 2026-11-23
+
+`release.yml` now carries the Azure Artifact Signing route as a second implementation, selected
+with the repository variable `SIGNING_ROUTE=artifact-signing` (ADR-0039). The signing order, the
+`signtool verify` check and the rule that a build without credentials stays unsigned do not
+change. SignPath remains the primary route; the alternative only means the workflow can be
+switched without being rewritten. Note that the Tauri-documented `artifact-signing-cli`
+authenticates with an App Registration secret, not OIDC, so that route stores one client secret
+(`AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`/`AZURE_TENANT_ID`) instead of none.
