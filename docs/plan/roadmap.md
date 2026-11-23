@@ -135,7 +135,7 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 - [ ] Clean uninstall: `meetburner.exe --unregister-cameras` plus the NSIS and MSI hooks (task 5)
 - [ ] Silent install, silent upgrade and silent uninstall checked on clean Windows 10 and 11 VMs (task 6, manual)
 - [x] Update policy: no in-app check; users update from the Store page or GitHub (task 7, ADR-0039)
-- [ ] Privacy page at `https://meetburner.com/privacy` in English and Spanish, linked from the web footer (task 8)
+- [x] Privacy page at `https://meetburner.com/privacy` in English and Spanish, linked from the web footer (task 8)
 - [ ] Store listing, screenshots, certification notes and IARC answers under `docs/store/` (task 9)
 - [ ] Partner Center submission (task 10, human)
 
