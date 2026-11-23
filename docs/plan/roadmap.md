@@ -129,14 +129,14 @@ Status legend: `[x]` done, `[~]` scaffolded, `[ ]` todo. Each milestone lists th
 
 ### M13. Microsoft Store — `msstore` with `architect`, `desktop`, `web`
 - [x] ADR-0039, this roadmap section and the `msstore` agent file (task 1)
-- [ ] Windows code signing in `release.yml`: SignPath and Azure Artifact Signing routes, unsigned fallback and `signtool verify` (task 2; needs credentials)
-- [ ] Store build config `tauri.microsoftstore.conf.json`: offline WebView2 and the `Polytropo` publisher (task 3)
-- [ ] `MeetBurner_<version>_x64_store-setup.exe` in the release, with the asset refused once it exists (task 4)
-- [ ] Clean uninstall: `meetburner.exe --unregister-cameras` plus the NSIS and MSI hooks (task 5)
-- [ ] Silent install, silent upgrade and silent uninstall checked on clean Windows 10 and 11 VMs (task 6, manual)
+- [~] Windows code signing in `release.yml`: SignPath and Azure Artifact Signing routes, unsigned fallback and `signtool verify` (task 2; the workflow is ready, a signed dry run needs credentials)
+- [x] Store build config `tauri.microsoftstore.conf.json`: offline WebView2 and the `Polytropo` publisher (task 3)
+- [~] `MeetBurner_<version>_x64_store-setup.exe` in the release, with the asset refused once it exists (task 4; the step is in `release.yml`, a real tag still needs task 2)
+- [x] Clean uninstall: `meetburner.exe --unregister-cameras` plus the NSIS and MSI hooks (task 5; the VM check is task 6)
+- [ ] Silent install, silent upgrade and silent uninstall checked on clean Windows 10 and 11 VMs (task 6, manual; commands in `docs/store/silent-install-checks.md`)
 - [x] Update policy: no in-app check; users update from the Store page or GitHub (task 7, ADR-0039)
 - [x] Privacy page at `https://meetburner.com/privacy` in English and Spanish, linked from the web footer (task 8)
-- [ ] Store listing, screenshots, certification notes and IARC answers under `docs/store/` (task 9)
+- [x] Store listing, screenshots, certification notes and IARC answers under `docs/store/` (task 9)
 - [ ] Partner Center submission (task 10, human)
 
 ## Maintenance
