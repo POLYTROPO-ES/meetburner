@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="MeetBurner privacy notice: no account, no telemetry, no analytics and no crash reporting. English and Spanish."
+    />
+    <meta name="theme-color" content="#171717" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Privacy · Privacidad – MeetBurner</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #171717;
+        --panel: #202020;
+        --text: #f5efe6;
+        --muted: #b9b1a7;
+        --accent: #ff6a18;
+        --accent-soft: #ffb52e;
+        --line: #353535;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 16px;
+        line-height: 1.65;
+      }
+
+      a {
+        color: var(--accent);
+        text-underline-offset: 0.15em;
+      }
+
+      a:hover,
+      a:focus-visible {
+        color: var(--accent-soft);
+      }
+
+      .wrap {
+        max-width: 44rem;
+        margin: 0 auto;
+        padding: 1.5rem 1.25rem 3rem;
+      }
+
+      .top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.5rem 1.25rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .brand {
+        color: var(--text);
+        font-size: 1.1rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .brand:hover,
+      .brand:focus-visible {
+        color: var(--accent);
+      }
+
+      .lang-nav {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .lang-nav a {
+        text-decoration: none;
+      }
+
+      .lang-nav a:hover,
+      .lang-nav a:focus-visible {
+        text-decoration: underline;
+      }
+
+      .block + .block {
+        margin-top: 2.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--line);
+      }
+
+      h1 {
+        margin: 1.75rem 0 0.25rem;
+        font-size: clamp(1.7rem, 4vw, 2.2rem);
+        line-height: 1.2;
+      }
+
+      .updated {
+        margin: 0 0 1.5rem;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      p,
+      li {
+        margin: 0 0 0.9rem;
+      }
+
+      ul {
+        margin: 0 0 1rem;
+        padding-left: 1.25rem;
+      }
+
+      li {
+        margin-bottom: 0.55rem;
+      }
+
+      strong {
+        color: #fff;
+      }
+
+      code {
+        padding: 0.1rem 0.35rem;
+        border-radius: 0.3rem;
+        background: var(--panel);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+        font-size: 0.92em;
+      }
+
+      .contact {
+        margin: 1.5rem 0 0;
+        padding: 1rem 1.25rem;
+        border: 1px solid var(--line);
+        border-radius: 0.75rem;
+        background: var(--panel);
+      }
+
+      .contact p:last-child,
+      .back:last-child {
+        margin-bottom: 0;
+      }
+
+      .back {
+        margin-top: 2rem;
+        font-size: 0.95rem;
+      }
+
+      @media (max-width: 480px) {
+        .wrap {
+          padding: 1.25rem 1rem 2.5rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <nav class="top" aria-label="Language / Idioma">
+        <a class="brand" href="/">MeetBurner</a>
+        <p class="lang-nav">
+          <a href="#en" lang="en" hreflang="en">English</a> ·
+          <a href="#es" lang="es" hreflang="es">Español</a>
+        </p>
+      </nav>
+
+      <section class="block" id="en" lang="en">
+        <h1>Privacy notice</h1>
+        <p class="updated">Last updated: 23 November 2026.</p>
+
+        <p>
+          MeetBurner is a live meeting-cost counter. It runs at <a href="/">meetburner.com</a> and
+          as a Windows and Linux desktop app; on macOS there is no virtual camera.
+        </p>
+
+        <ul>
+          <li>
+            <strong>No account.</strong> You do not sign in, and MeetBurner collects nothing about
+            you: no telemetry, no analytics and no crash reporting.
+          </li>
+          <li>
+            <strong>The web app stays in your browser.</strong> Settings are stored in the
+            browser's local storage on that device. The app is served from Cloudflare Pages, and
+            that is the only network request it makes.
+          </li>
+          <li>
+            <strong>Share links carry the data in the link.</strong> A share link carries the
+            meeting summary in the URL fragment (<code>#/share?...</code>), which browsers do not
+            send to a server.
+          </li>
+          <li>
+            <strong>The desktop app talks to no network service.</strong> The source webcam is used
+            only locally; camera frames travel through local shared memory between the app and the
+            virtual-camera driver.
+          </li>
+          <li>
+            <strong>The virtual camera is a per-user registration.</strong>
+            <em>Register webcam for meets</em> writes a per-user COM registration under
+            <code>HKCU</code>, with no administrator rights and no kernel driver.
+            <em>Clean webcam for meets</em> removes it. Uninstalling the app removes it for the
+            Windows account that runs the uninstaller; other accounts can use
+            <em>Clean webcam for meets</em>.
+          </li>
+          <li>
+            <strong>No in-app update check.</strong> The desktop app does not check for updates.
+            Users update from the Microsoft Store page or from the
+            <a href="https://github.com/POLYTROPO-ES/meetburner/releases" target="_blank" rel="noreferrer"
+              >GitHub releases page</a
+            >.
+          </li>
+        </ul>
+
+        <div class="contact">
+          <p>
+            Questions or problems: open an issue on the
+            <a href="https://github.com/POLYTROPO-ES/meetburner/issues" target="_blank" rel="noreferrer"
+              >MeetBurner issue tracker</a
+            >.
+          </p>
+          <p>
+            Signing details are in the
+            <a
+              href="https://github.com/POLYTROPO-ES/meetburner/blob/main/docs/code-signing-policy.md"
+              target="_blank"
+              rel="noreferrer"
+              >code signing policy</a
+            >.
+          </p>
+        </div>
+
+        <p class="back"><a href="/">Measure your own meeting →</a></p>
+      </section>
+
+      <section class="block" id="es" lang="es">
+        <h1>Aviso de privacidad</h1>
+        <p class="updated">Última actualización: 23 de noviembre de 2026.</p>
+
+        <p>
+          MeetBurner es un contador de coste de reuniones en directo. Funciona en
+          <a href="/">meetburner.com</a> y como aplicación de escritorio para Windows y Linux; en
+          macOS no hay cámara virtual.
+        </p>
+
+        <ul>
+          <li>
+            <strong>Sin cuenta.</strong> No inicias sesión y MeetBurner no recoge nada sobre ti: sin
+            telemetría, sin analíticas y sin informes de fallos.
+          </li>
+          <li>
+            <strong>La aplicación web se queda en tu navegador.</strong> Los ajustes se guardan en
+            el almacenamiento local del navegador en ese dispositivo. La aplicación se sirve desde
+            Cloudflare Pages, y esa es la única petición de red que hace.
+          </li>
+          <li>
+            <strong>Los enlaces para compartir llevan los datos en el propio enlace.</strong> Un
+            enlace para compartir lleva el resumen de la reunión en el fragmento de la URL
+            (<code>#/share?...</code>), que los navegadores no envían a ningún servidor.
+          </li>
+          <li>
+            <strong>La aplicación de escritorio no se comunica con ningún servicio de red.</strong>
+            La webcam de origen se usa solo localmente; los fotogramas de la cámara viajan por
+            memoria compartida local entre la aplicación y el controlador de cámara virtual.
+          </li>
+          <li>
+            <strong>La cámara virtual es un registro por usuario.</strong>
+            <em>Register webcam for meets</em> escribe un registro COM por usuario en
+            <code>HKCU</code>, sin permisos de administrador y sin controlador de kernel.
+            <em>Clean webcam for meets</em> lo elimina. Desinstalar la aplicación lo elimina para la
+            cuenta de Windows que ejecuta el desinstalador; las demás cuentas pueden usar
+            <em>Clean webcam for meets</em>.
+          </li>
+          <li>
+            <strong>Sin comprobación de actualizaciones en la aplicación.</strong> La aplicación de
+            escritorio no comprueba si hay actualizaciones. Las actualizaciones se descargan desde
+            la página de Microsoft Store o desde la
+            <a href="https://github.com/POLYTROPO-ES/meetburner/releases" target="_blank" rel="noreferrer"
+              >página de versiones de GitHub</a
+            >.
+          </li>
+        </ul>
+
+        <div class="contact">
+          <p>
+            Si tienes preguntas o problemas, abre una incidencia en el
+            <a href="https://github.com/POLYTROPO-ES/meetburner/issues" target="_blank" rel="noreferrer"
+              >gestor de incidencias de MeetBurner</a
+            >.
+          </p>
+          <p>
+            Los detalles de la firma están en la
+            <a
+              href="https://github.com/POLYTROPO-ES/meetburner/blob/main/docs/code-signing-policy.md"
+              target="_blank"
+              rel="noreferrer"
+              >política de firma de código</a
+            >.
+          </p>
+        </div>
+
+        <p class="back"><a href="/">Mide tu propia reunión →</a></p>
+      </section>
+    </div>
+  </body>
+</html>

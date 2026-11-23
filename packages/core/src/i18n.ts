@@ -145,6 +145,7 @@ const en = {
   sourceCode: 'Source code',
   downloads: 'Downloads',
   codeSigningPolicy: 'Code signing policy',
+  privacy: 'Privacy',
   codeSigningPolicyNote:
     'Free code signing provided by SignPath.io, certificate by SignPath Foundation. Application pending: current builds are unsigned.',
 } as const;
@@ -295,6 +296,7 @@ const es: Record<MessageKey, string> = {
   sourceCode: 'Código fuente',
   downloads: 'Descargas',
   codeSigningPolicy: 'Firma de código',
+  privacy: 'Privacidad',
   codeSigningPolicyNote:
     'Firma de código gratuita a cargo de SignPath.io, certificado de SignPath Foundation. Solicitud en trámite: las versiones actuales no están firmadas.',
 };

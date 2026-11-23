@@ -81,6 +81,7 @@ const ELEMENT_SCALE_STEP = 5;
 const REPO_URL = 'https://github.com/POLYTROPO-ES/meetburner';
 const RELEASES_URL = 'https://github.com/POLYTROPO-ES/meetburner/releases';
 const SIGNING_POLICY_URL = 'https://github.com/POLYTROPO-ES/meetburner/blob/main/docs/code-signing-policy.md';
+const PRIVACY_URL = 'https://meetburner.com/privacy';
 
 export function Setup() {
   const [meeting, setMeeting] = useMeeting();
@@ -851,6 +852,10 @@ export function Setup() {
               {' · '}
               <a href={SIGNING_POLICY_URL} target="_blank" rel="noreferrer">
                 {t(lang, 'codeSigningPolicy')}
+              </a>
+              {' · '}
+              <a href={PRIVACY_URL} target="_blank" rel="noreferrer">
+                {t(lang, 'privacy')}
               </a>
             </p>
             <p className="muted">{t(lang, 'codeSigningPolicyNote')}</p>
